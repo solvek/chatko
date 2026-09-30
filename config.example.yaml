@@ -1,0 +1,60 @@
+# chatko configuration example. Copy to config/chatko.yaml and edit.
+# Secrets are never stored here: ${NAME} is replaced with the environment variable NAME (see .env.example).
+
+# Installation admins, by identity (<kind>:<id>).
+admins: ["telegram:123456789"]
+
+# Extension instances. The key is the instance name; `type` selects the extension.
+extensions:
+  tg:
+    type: telegram
+    bot_token: ${TELEGRAM_BOT_TOKEN}
+
+  kyiv:                            # one instance = one hub node
+    type: meshtastic
+    # Virtual node: a meshtasticd container (TCP API inside the Docker network only).
+    connection: { tcp: "meshtasticd-kyiv:4403" }
+    # Physical node instead: { serial: /dev/ttyUSB0 } | { ble: "AA:BB:CC:DD:EE:FF" } | { tcp: "192.168.1.50:4403" }
+    long_name: chatko
+    short_name: CHKO               # up to 4 characters
+    mqtt:                          # required for a virtual node, optional for a physical one
+      host: mqtt.example.org       # the Kyiv community broker, our own Mosquitto, or any other
+      port: 8883
+      tls: true
+      username: ${KYIV_MQTT_USER}
+      password: ${KYIV_MQTT_PASSWORD}
+      root_topic: msh/EU_868
+    channels:
+      - name: LongFast             # index 0: the public primary channel of the mesh
+        psk: AQ==
+      - name: family
+        psk: ${MESH_FAMILY_PSK}    # base64, 16 or 32 bytes
+    min_send_interval_s: 4
+
+  briar:
+    type: briar
+    api: http://briar:7000
+    auth_token: ${BRIAR_AUTH_TOKEN}
+
+groups:
+  family:
+    membership: { ext: tg, chat: -1001234567890 }
+    legs:
+      - { ext: tg, chat: -1001234567890 }
+      - { ext: briar, name: "Family" }
+      - { ext: kyiv, delivery: dm }                        # default: PKI DMs to members' linked nodes
+      - { ext: kyiv, channel: family, delivery: channel }  # via gateways that know the channel
+
+  street:
+    membership: { ext: tg, chat: -1009876543210 }
+    legs:
+      - { ext: tg, chat: -1009876543210 }
+      - { ext: kyiv }                                      # delivery: dm
+
+# Where members manage their account and receive system messages and feeds.
+control_surfaces: [tg]
+
+# One-way copies of a channel into the control surface of the listed members.
+feeds:
+  - source: { ext: kyiv, channel: LongFast }
+    to: ["telegram:123456789", "telegram:555000111"]

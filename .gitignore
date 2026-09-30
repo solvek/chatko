@@ -1,0 +1,23 @@
+# Secrets and runtime state
+.env
+config/
+data/
+*.db
+*.db-journal
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Editors
+.idea/
+.vscode/
+.obsidian/
