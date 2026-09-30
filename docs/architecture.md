@@ -114,9 +114,13 @@ Key types:
 Rules for extension authors:
 - Never block the event loop. Wrap thread-based client libraries (e.g. `meshtastic`'s `TCPInterface`)
   in an adapter that bridges to asyncio with `loop.call_soon_threadsafe`. The Meshtastic adapter is the
-  only client of its node, sends admin messages one at a time, and owns reconnection: the node closes
-  the connection when it reboots or when another client connects, and the library's own reconnect
-  must not race with the adapter's (spike S2, D25).
+  only client of its node and owns reconnection: the node closes the connection when it reboots or
+  when another client connects, and the library's own reconnect must not race with the adapter's
+  (spike S2, D25). It sends admin messages one at a time and waits for each response, matches ACKs and
+  NAKs to sent packets by request id itself (the library drops a response handler after the first
+  response, which is the node's implicit ACK), and takes node keys from the node database it reads on
+  connect and from its own `add_contact` calls, not from the library's node cache, which also takes
+  keys from NodeInfo the node rejected (D26).
 - Talk to the external system through a small internal port (e.g. `TelegramApi`, `BriarApi`), so that
   the extension logic is tested against a fake of that port.
 - Drop the hub's own posts before calling `hub.submit`.

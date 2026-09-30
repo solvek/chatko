@@ -128,15 +128,23 @@ for `channel` delivery, but `dm` delivery would need our own PKI, NodeInfo, ACK 
 - Each node has its own node id, key pair and long/short name. A virtual node also has **one MQTT
   connection** (host, port, TLS, user, password, root topic). The broker is fully configurable: the
   Kyiv community broker, our own Mosquitto, or any other.
+- The hub node's identity: the node id is fixed by the MAC address in `meshtasticd`'s YAML (in
+  `config/`). The key pair is made by the node when a region is first set and kept in its volume,
+  unless the config sets `private_key` (a secret in `.env`); then the hub provisions it and the key
+  survives a lost volume or a move to another server (D26). This matters because members' radios pin
+  the hub's public key: with a new key, direct messages between the hub and every radio that knew the
+  old one fail until that radio is given the new key (spike S2). The hub logs its public key at start.
 - The node's channels and their PSKs are set in the config, and the hub provisions the node from it. The
   admin gives the PSK (a channel URL or QR code from the Meshtastic app) to the people who should have it.
   Removing someone from a channel means a new PSK on all radios.
 - Provisioning (D25) goes through the node's admin API over the same connection the hub uses for
-  messages: names, region, `ignore_mqtt` off, the MQTT client, and each channel with uplink and downlink
-  on. It writes only what differs from the node's current settings, one admin message at a time, and
-  reconnects when the node reboots (a `meshtasticd` reboot ends the process; its container restarts it).
-  `meshtasticd`'s own YAML sets only the simulated radio, the MAC address (which fixes the node id) and
-  logging.
+  messages: names, region, `ignore_mqtt` off, the private key if configured, the MQTT client, each
+  channel with uplink and downlink on, and the configured `contacts` (below). It writes only what
+  differs from the node's current settings, sends one admin message at a time and waits for the node's
+  response to each (the node drops the oldest when more than 4 wait, D26), and reconnects when the node
+  reboots (a commit always reboots it; a `meshtasticd` reboot ends the process and its container
+  restarts it). `meshtasticd`'s own YAML sets only the simulated radio, the MAC address (which fixes
+  the node id) and logging.
 - A channel is matched over MQTT by its **name** (the topic `<root>/2/e/<name>/<gateway>` and the
   envelope carry it; the packet carries only a hash), then decrypted with its PSK. A private channel must
   have the same name and PSK on the hub's node and on every radio.
@@ -161,13 +169,42 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
 | Endpoint | Out | In | Needs (virtual node) | Airtime |
 |---|---|---|---|---|
 | `channel` | one broadcast on the private channel | any text on that channel | at least one gateway **that has this channel** (name + PSK) with uplink and downlink. Other people's gateways don't know our channel, so this means our own internet-connected node(s), or a trusted gateway operator who adds our channel | 1 packet per message |
-| `dm` with a list of node ids | a PKI direct message to every listed node | a direct message to the hub's node from a listed node | any gateway that forwards PKI direct messages over MQTT **(verify for the Kyiv mesh: broker policy and gateway firmware)**. The hub's node and the person's node must know each other's public keys, which travel in NodeInfo on the primary channel **(verify)** | 1 packet per listed node |
+| `dm` with a list of node ids | a PKI direct message to every listed node | a direct message to the hub's node from a listed node | any gateway that forwards PKI direct messages over MQTT **(verify for the Kyiv mesh: broker policy and gateway firmware)**. The hub's node and the person's node must know each other's public keys (below) | 1 packet per listed node, plus an ACK and its ACK |
 
 - A node listed in several `dm` endpoints: its direct messages go to the first of them in the config;
   the routing script can send them elsewhere. Direct messages from nodes not listed anywhere are logged
   and dropped.
-- `dm` messages ask for an acknowledgement. Without an ACK the hub retries later, when the node is heard
-  again.
+- **Keys for `dm`.** A text direct message needs the public keys on both sides: the hub's node refuses
+  to send without the person's key, and radios drop old channel-encrypted direct texts. Keys travel in
+  NodeInfo on the primary channel (each node broadcasts it 30 s after boot and every 3 h), and a node
+  that cannot decrypt a direct message answers with a NAK after which the sender's node sends it its
+  NodeInfo at once. Asking a node for its NodeInfo works only now and then: a node answers at most once
+  per 10 minutes, and once per 12 hours to the same asker (spike S2). So the config may give the
+  public key of each `dm` node (`contacts`), which the hub adds to its node as a favorite contact. A
+  listed node whose key the hub's node learned by itself is made a favorite too: favorites are saved at
+  once (other learned keys are written at most once a minute and can be lost on a restart) and are
+  never evicted from the node database (which fills up with the nodes of a busy primary channel).
+- **Key pinning.** A node keeps the first key it learned for a node and ignores NodeInfo with another
+  key. When a person resets their radio, the hub's node keeps the old key: the radio answers the hub's
+  direct messages with NAK `NO_CHANNEL` (with `PKI_UNKNOWN_PUBKEY` while it does not know the hub yet),
+  and its NodeInfo with the new key reaches the hub but is dropped by the node. The hub posts an admin
+  notice; the admin puts the new key into `contacts`, which replaces the pinned one. The same happens
+  on every radio if the hub's key changes, hence `private_key` (§6.1).
+- **ACKs.** `dm` messages ask for an acknowledgement, and ACKs come back through MQTT. Only an ACK from
+  the listed node means delivered. The hub's own node also reports an "implicit" ACK as soon as the
+  broker echoes the packet back, which only means the broker has it; a text that got not even that was
+  dropped by the node (e.g. sent too soon, §6.3). Without the real ACK the node publishes the packet
+  twice more (about 7.5 s apart) and gives up after about 23 s; the hub then retries later, when the
+  node is heard again (D26).
+- ACKs and NodeInfo are channel packets on the **primary** channel, while direct messages go under the
+  MQTT topic `<root>/2/e/PKI/…`. So `dm` needs uplink and downlink on the primary channel of the hub's
+  node, and one direct message is three packets on MQTT: the message, the ACK, and a short ACK of the
+  ACK.
+- On a real mesh, a gateway uploads packets it can decode (channel texts, ACKs, NodeInfo) from a radio
+  to a broker on a public address only if that radio has **"OK to MQTT"** on. It is off by default, so
+  members turn it on, like "Ignore MQTT" off below. A gateway downlinks a direct message only if it
+  knows both the hub's node and the person's node, and it learns the hub's node only through MQTT
+  downlink on the primary channel **(verify on the Kyiv mesh, S04)**.
 - Both kinds can be used in one group. Then a person with a node on both gets the message twice, unless
   the routing script skips `dm` for nodes recently heard on the channel (`last_heard`, §9.5).
 - With a physical hub node (later), both kinds work within its radio range without any gateway.
@@ -178,8 +215,11 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
   limit, such as `EU_868` in Ukraine, is set for the first time, so many radios have it on. Setup
   instructions for members say to turn it off. How common it is on the Kyiv relays is **(verify: ask the
   Kyiv community, S04)**.
-- Relaying routers of the mesh forward packets of unknown channels without decrypting them (the default
-  rebroadcast mode is `ALL`) **(verify)**, so a private-channel packet still travels over foreign relays.
+- Relays forward packets of channels they do not know without decrypting them, so a private-channel
+  packet still travels over foreign relays. This holds for the default rebroadcast mode `ALL` and for
+  `CORE_PORTNUMS_ONLY` (the default of the `ROUTER` role). Nodes set to `LOCAL_ONLY` or `KNOWN_ONLY`
+  (and `CLIENT_HIDDEN` nodes by default) drop them, and relay a direct message only if they know its
+  sender or receiver (firmware 2.7.26 source, spike S2).
 - Research idea, not planned: publish private-channel packets under the topic of a channel that foreign
   gateways do downlink (e.g. `LongFast`), so they carry our encrypted packets too. It depends on
   firmware behaviour and broker policy, and could be seen as abusing the public network.
@@ -193,14 +233,17 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
   ✂️ reaction).
 - Non-text content goes out as a placeholder: `NatAda: [photo] caption`.
 - The hub sends no faster than one packet every few seconds per node (configurable), to be a good
-  neighbour on a busy mesh.
+  neighbour on a busy mesh. The interval is per hub node (all its endpoints together) and at least 2 s:
+  the node silently drops a text from the hub that comes sooner (spike S2).
+- A direct message carries 12 bytes more than a channel packet (PKI), so it holds at most about
+  220 bytes of text (a channel packet about 230); the 200-byte limit fits both.
 
 ### 6.4 Authors
 
 A Meshtastic message carries the sender's node id and, once NodeInfo was heard, the node's long and
-short name. The author label comes from these (§8). Until NodeInfo is heard, only the node id
-(`!c4a7b002`) is known: the Python library then shows a placeholder name `Meshtastic b002`, which is not
-the node's name and is not used as one.
+short name (a direct message also carries the sender's public key). The author label comes from these
+(§8). Until NodeInfo is heard, only the node id (`!c4a7b002`) is known: the Python library then shows a
+placeholder name `Meshtastic b002`, which is not the node's name and is not used as one.
 
 ### 6.5 Feeds
 
@@ -451,14 +494,14 @@ So:
 
 Two files in `config/`, both edited only by the admin and reloaded on change:
 
-- `chatko.yaml`: extensions (with channels and PSKs, `dm` node lists), groups, sources,
+- `chatko.yaml`: extensions (with channels and PSKs, `dm` node lists and node keys), groups, sources,
   people, the admin notice endpoint, later peers. See [`config.example.yaml`](../config.example.yaml).
 - `routing.py`: the routing script (§9). Optional; without it the defaults are used. See
   [`routing.example.py`](../routing.example.py).
 
 If a new version is invalid, the hub keeps the previous one and reports the error as an admin notice.
-Secrets (tokens, passwords, PSKs) come from environment variables (`${VAR}` in YAML, values in `.env`),
-never from the files.
+Secrets (tokens, passwords, PSKs, the hub node's private key) come from environment variables
+(`${VAR}` in YAML, values in `.env`), never from the files.
 
 The hub never writes these files. SQLite holds only runtime state: messages, the outbox, transport ids
 and fingerprints for de-duplication, when nodes were last heard, accounts already seen.
@@ -476,8 +519,11 @@ and fingerprints for de-duplication, when nodes were last heard, accounts alread
   no authentication, so it stays inside the Docker network. `meshtasticd` containers need a restart
   policy, because a node reboot ends the process.
 - Volumes: `config/` (chatko.yaml, routing.py, meshtasticd configs) and `data/` (SQLite, Briar and
-  meshtasticd state, including node keys). Secrets live in `.env`. `config/` and `data/` are backed up
-  daily.
+  meshtasticd state: settings, the node database with members' keys, and the node's own key unless
+  `private_key` is set). Secrets live in `.env`. `config/` and `data/` are backed up daily.
+- `docker stop` kills `meshtasticd` after 10 s (it does not exit on `SIGTERM`) without saving, so
+  whatever the node learned but has not saved yet is lost (learned keys are saved at most once a
+  minute); the hub keeps what it needs as favorites or in its own state (§6.2).
 - Hosting candidate: Oracle Cloud Always Free (Ampere A1, ARM64). Oracle reclaims Always Free instances
   that look idle for 7 days. A Pay As You Go account keeps the free limits and is not reclaimed.
 

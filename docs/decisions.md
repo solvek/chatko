@@ -238,3 +238,32 @@ the `meshtasticd` YAML, which lives in `config/`. The hub is the only API client
 Meshtastic app are overwritten at the next start. The admin inspects the node through the hub's logs, or
 stops the hub first. The `meshtasticd` containers need a restart policy. Members' radios need "Ignore
 MQTT" off (design.md §6.2), which goes into the setup instructions for members.
+
+## D26. Meshtastic `dm`: keys from the config, delivery by the node's ACK
+Spike S2, part 2 (`meshtasticd` 2.7.26) showed that a text direct message needs the public keys on
+both sides, and that a node pins the first key it learns for another node and ignores NodeInfo with a
+different one. Keys travel in NodeInfo, which a node sends at most once per 10 minutes and answers to
+the same asker once per 12 hours, and keys learned in a node's first minute after start are not saved.
+So a reset radio gets a new key that the hub's node ignores, and a hub node that loses its volume gets
+a new key that every radio ignores. The hub's node reports an "implicit" ACK as soon as the broker
+echoes a packet back, and a real ACK only when the destination answers; it retries twice and gives up
+after about 23 s. It silently drops a text that comes less than 2 s after the previous one, and the
+oldest of more than 4 admin messages waiting in its queue.
+**Decision:**
+- Each `meshtastic` instance may set `private_key` (a secret in `.env`); the hub provisions it, so the
+  hub node's identity survives a lost volume or a move to another server. Recommended for production.
+- Each instance may list `contacts`: node id → public key. The hub adds them to its node with
+  `add_contact`, which stores them as favorites (saved at once, never evicted) and replaces a pinned
+  key. A `dm` node whose key the hub's node learned by itself is made a favorite as well.
+- A `dm` delivery counts as delivered only on an ACK from the destination node. `MAX_RETRANSMIT` is
+  retried when the node is heard again; the key NAKs (`PKI_SEND_FAIL_PUBLIC_KEY`,
+  `PKI_UNKNOWN_PUBKEY`) are retried after the nodes exchange NodeInfo; `NO_CHANNEL`, or a NodeInfo whose
+  key differs from the pinned one, posts an admin notice about a key mismatch. A text without even the
+  implicit ACK was dropped by the node and is retried.
+- The adapter sends admin messages one at a time and waits for each response (this replaces the pause
+  of D25), keeps at least 2 s between the texts of one hub node, and matches ACKs and NAKs to packets
+  itself: the library forgets a response handler after the first response (the implicit ACK), and its
+  node cache takes keys from NodeInfo that the node rejected.
+**Consequences:** two more config keys and one more secret. A key change is a config edit, since the
+hub has no commands (D22). The hub logs its node's public key at start, so the admin can hand it to
+members. Members need "OK to MQTT" on and "Ignore MQTT" off (design.md §6.2).

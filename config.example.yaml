@@ -15,6 +15,7 @@ extensions:
     long_name: chatko
     short_name: CHKO               # up to 4 characters
     region: EU_868                 # the hub sets it and keeps ignore_mqtt off (design.md §6.1)
+    private_key: ${MESH_KYIV_PRIVATE_KEY}  # optional, base64, 32 bytes: keeps the node's identity if its volume is lost
     mqtt:                          # required for a virtual node
       host: mqtt.example.org       # the Kyiv community broker, our own Mosquitto, or any other
       port: 8883
@@ -27,7 +28,9 @@ extensions:
         psk: AQ==
       - name: family
         psk: ${MESH_FAMILY_PSK}    # base64, 16 or 32 bytes; give it to people as a channel URL/QR code
-    min_send_interval_s: 4
+    contacts:                      # optional: public keys of members' nodes (base64, from the Meshtastic app)
+      "!a1b2c3d4": "<public key of !a1b2c3d4>"
+    min_send_interval_s: 4         # per hub node; at least 2 (the node drops texts that come sooner)
 
   briar:                           # groups are made with `briarctl` (the hub is their creator)
     type: briar

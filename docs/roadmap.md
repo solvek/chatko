@@ -47,7 +47,7 @@ Escalate instead of looping: if a session fails at the same problem twice, resta
 |---|---|---|---|---|---|
 | S01 | 0 | Spike S1: Briar relay on 3 phones (*with owner*) | Opus 5.5 | medium | done |
 | S02 | 0 | Spike S2a: local Meshtastic lab, channel messages | Opus 5.5 | high | done |
-| S03 | 0 | Spike S2b: PKI direct messages, keys, ACKs, persistence, provisioning | Opus 5.5 | xhigh | todo |
+| S03 | 0 | Spike S2b: PKI direct messages, keys, ACKs, persistence, provisioning | Opus 5.5 | xhigh | done |
 | S04 | 0 | Spike S2c: Kyiv broker, read-only; questions for the Kyiv community | Sonnet 5.5 | medium | todo |
 | S05 | 0 | Spike S3a: build and run briar-headless, contacts API with a phone | Opus 5.5 | high | todo |
 | S06 | 0 | Spike S3b: private-group internals of Briar, read/post/join patch plan | Opus 5.5 | xhigh | todo |
@@ -100,11 +100,13 @@ public key in the Python API; how keys are learned (NodeInfo) and how long it ta
 `(from, id)` stability; node identity across restarts. Provisioning from code is already answered in
 S02 (D25); check whether waiting for each admin response replaces the 1 s pause. Build on `lab/` and
 read the firmware source where behaviour is unclear. Done when: all S2 checkboxes except the Kyiv and
-hardware ones are answered.
+hardware ones are answered. Result: spikes.md S2 part 2, D26.
 
 **S04. Kyiv broker.** A read-only client receives `LongFast` text. Draft (in Ukrainian, for the owner to
-send) the questions to the Kyiv community: PKI topic policy, downlink, gateway firmware, and whether
-relays and gateways run with "Ignore MQTT" on (design.md §6.2). Done when:
+send) the questions to the Kyiv community: PKI topic policy, downlink, gateway firmware, whether
+relays and gateways run with "Ignore MQTT" on, whether gateways downlink `LongFast` (a gateway learns
+the hub's node only that way, and downlinks a direct message only if it knows both nodes), and how
+many radios have "OK to MQTT" on (design.md §6.2, spike S2 part 2). Done when:
 receiving works, the questions are sent, and design.md §6.2 notes what is still waiting for an answer.
 
 **S05. briar-headless, part 1.** Build `x86LinuxJar` (and `aarch64LinuxJar`) from upstream, note the JDK;
@@ -182,9 +184,9 @@ locally. Done when: two groups work independently, foreign groups are left, labe
 
 **S19. Adapter.** A `MeshApi` port and its fake; an adapter that bridges the thread-based
 `TCPInterface` to asyncio (serial and BLE later, D20, without changing the port); provisioning of the
-hub's node from the config (names, region, `ignore_mqtt`, channels, PSKs, MQTT; D25), reconnection
-after node reboots. Done when: the adapter is tested against the lab
-from S02.
+hub's node from the config (names, region, `ignore_mqtt`, private key, channels, PSKs, MQTT,
+contacts; waiting for each admin response; D25, D26), reconnection after node reboots, ACKs and NAKs
+matched by request id. Done when: the adapter is tested against the lab from S02 and S03.
 
 **S20. Channel endpoints.** `channel` endpoints, splitting into ≤ 200-byte parts with at most 3 parts and
 truncation, placeholders for non-text, per-node send interval, de-duplication across gateways, drop own
@@ -192,7 +194,9 @@ packets, authors from NodeInfo, `LongFast` as a source, last-heard tracking. Don
 and §6.4 are covered by tests.
 
 **S21. DM endpoints.** `dm` endpoints with node lists: out to every listed node, in from listed nodes
-(first endpoint wins), ACK handling and retry when the node is heard again. Done when: design.md §6.2 is
+(first endpoint wins), the delivery states of D26 (the node's ACK, not the implicit one; retry when
+the node is heard again or after a key exchange), listed nodes kept as favorites, key-mismatch admin
+notices, at least 2 s between texts. Done when: design.md §6.2 is
 covered by tests.
 
 **S22. Lab integration.** Opt-in integration tests with the docker lab (Mosquitto, two `meshtasticd`),

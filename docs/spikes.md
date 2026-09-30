@@ -103,13 +103,13 @@ Steps and answers needed:
   `linux/arm64` images exist.
 - [x] A private-channel message radio → hub arrives through MQTT and is visible via `TCPInterface`
   (portnum, from, channel index, packet id); hub → radio in the opposite direction.
-- [ ] A PKI direct message radio → hub and hub → radio. Does the Python API expose `pki_encrypted`
+- [x] A PKI direct message radio → hub and hub → radio. Does the Python API expose `pki_encrypted`
   and the sender's `public_key` on received packets?
-- [ ] How the two nodes learn each other's public keys over MQTT (NodeInfo on the primary channel),
+- [x] How the two nodes learn each other's public keys over MQTT (NodeInfo on the primary channel),
   and how long it takes after a restart. Can the hub request NodeInfo from a member's node?
-- [ ] ACKs for direct messages sent through MQTT: does the hub get them?
-- [ ] De-duplication fields: are `(from, id)` stable across gateways?
-- [ ] The node identity (node id, keys) persists across container restarts (volume).
+- [x] ACKs for direct messages sent through MQTT: does the hub get them?
+- [x] De-duplication fields: are `(from, id)` stable across gateways?
+- [x] The node identity (node id, keys) persists across container restarts (volume).
 - [x] Setting channels, PSKs, names and MQTT settings from code or config files, so the hub can
   provision its node.
 - [ ] Read-only connection to the Kyiv broker: `LongFast` text messages are received. Broker policy
@@ -224,9 +224,153 @@ hub → radio gave the same picture with the roles swapped (`from = 3299323905 =
 for unknown nodes, not the node's name, so the extension must not use it as an author name. How and when
 NodeInfo is learned is part 2 (S03).
 
-Left for part 2 (S03): PKI direct messages, key learning, ACKs, `(from, id)` across gateways, node
-identity across restarts. Left for S04: the Kyiv broker. The `ignore_mqtt` default on Kyiv radios and
-relays is a question for the Kyiv community (S04).
+Left for S04: the Kyiv broker. The `ignore_mqtt` default on Kyiv radios and relays is a question for
+the Kyiv community (S04).
+
+**Result, part 2 (2026-09-30, session S03; the same versions):**
+- PKI direct messages work radio → hub and hub → radio through MQTT (topic
+  `<root>/2/e/PKI/<gateway>`). The receiver's packet has `pkiEncrypted = True` and `publicKey` = the
+  sender's key (base64), plus `from`, `id`, `wantAck` and `viaMqtt`. A text direct message needs a
+  known key on **both** sides: the sender refuses to send without the receiver's key (NAK
+  `PKI_SEND_FAIL_PUBLIC_KEY`), and a receiver drops old channel-encrypted text DMs ("Rejecting legacy
+  DM").
+- ACKs come back through MQTT. The sender's API client gets two ACKs: an **implicit** one from its
+  own node as soon as the broker echoes the packet back (it only means "the broker has it"), and the
+  real one from the destination (`from` = the destination node). Without the real ACK the firmware
+  publishes the packet twice more (about 7.5 s apart) and gives up with NAK `MAX_RETRANSMIT` after
+  about 23 s. Other NAKs: `PKI_UNKNOWN_PUBKEY` (the receiver does not know our key) and `NO_CHANNEL`
+  (the receiver cannot decrypt, e.g. it has another key for us).
+- `(from, id)` is stable: other gateways publish the same packet with their own `gateway_id`, topic
+  and a lower `hop_limit`, and the hub's node hands it to the API client once. The sender picks the
+  id: the firmware for radio packets, the Python library for the hub's (22 random bits and a 10-bit
+  counter), so ids are not unique forever; de-duplicate within a time window.
+- Keys travel in NodeInfo on the primary channel: each node broadcasts it 30 s after boot and every
+  3 h. A node that knows a key keeps it (**key pinning**): a NodeInfo with another key is dropped.
+  Other ways a key arrives: a node that cannot decrypt a direct message answers with NAK
+  `PKI_UNKNOWN_PUBKEY`, and the sender's firmware then sends its NodeInfo to it at once; the admin
+  message `add_contact` stores a node with its key (overriding a pinned one) as a favorite. The hub
+  **can** ask a node for its NodeInfo, but the node answers only if it has not sent NodeInfo for
+  10 minutes (longer on a busy mesh) and has not answered this hub within 12 hours.
+- Identity: the node id comes from `MACAddress` in the YAML; the key pair lives in the volume and
+  survives restarts and re-created containers. It can be set through the admin API
+  (`security.private_key`; the firmware derives the public key), which restored the hub's identity
+  after its volume was wiped: members' pinned keys still matched. Keys **learned** from NodeInfo are
+  written to disk at most once a minute, and not at all in the first minute after start, and
+  `docker stop` kills `meshtasticd` after 10 s without saving: keys learned at boot were lost on
+  every restart. Keys stored with `add_contact` are saved at once.
+- The lost admin messages of part 1 are explained: the node queues packets for itself in a queue of 4
+  and drops the oldest when it is full. Waiting for each admin message's response (under 50 ms)
+  replaces the 1 s pause; a fresh node was provisioned in 2.2 s instead of about 10 s.
+- The node drops a text from its API client that comes less than 2 s after the previous one. The
+  NAK meant for the client (`RATE_LIMIT_EXCEEDED`) is addressed to node 0 and goes out to MQTT
+  instead, so the client sees nothing (a firmware bug worth reporting upstream).
+
+Details:
+
+*Scripts* (`lab/`, all through `labkit.py`): `spike_dm.py` (keys, direct messages both ways, the rate
+limit, duplicates from made-up gateways; `--offline` stops the radio), `spike_keys.py` (`show`,
+`learn`, `contact`), `spike_admin.py` (admin messages back to back versus one at a time).
+`provision.py` now waits for each admin response, sets lab private keys and exchanges contacts.
+
+*Direct message, one run each way* (`spike_dm.py`):
+
+| Where | Field | radio → hub | Notes |
+|---|---|---|---|
+| MQTT envelope | topic, `channel_id` | `msh/lab/2/e/PKI/!c4a7b002`, `PKI` | the sender publishes; no channel name |
+| | `packet.channel` | `0` | no channel hash for PKI |
+| | `want_ack`, `pki_encrypted` | true, true | |
+| | payload | `encrypted`, 43 bytes for 25 characters | 12 bytes more than a channel packet |
+| receiver | `pkiEncrypted`, `publicKey` | `True`, the radio's key | |
+| | `fromId` | `!c4a7b002` | the key was known, so the node was too |
+| | `wantAck`, `viaMqtt`, `transportMechanism` | `True`, `True`, `TRANSPORT_MQTT` | |
+| | `channel` | absent (0) | |
+| | latency | 0.15 s (hub → radio 0.25 s) | |
+| sender | ACK/NAK | implicit ACK (`from` = own node) and ACK from the destination, both within 0.3 s | |
+
+The ACK is a routing packet on the primary channel, e.g. `msh/lab/2/e/LongFast/!c4a7b001` from the
+hub to the radio, 13 bytes; for a text DM it asks for an ACK itself, and the original sender answers
+with a hop-limit-0 ACK. So one direct message is three packets on MQTT, and the primary channel
+needs uplink **and** downlink on both nodes for ACKs to flow.
+
+*Radio offline* (`spike_dm.py --offline`, the radio container stopped): the hub published the packet
+at +0.2 s, +7.8 s and +15.3 s, got an implicit ACK after each, and NAK `MAX_RETRANSMIT` (from its
+own node) at +23.0 s. Implicit ACKs from MQTT do not stop the retransmissions
+(`ReliableRouter::sniffReceived`). Nothing is delivered when the radio comes back.
+
+*Rate limit* (`spike_dm.py`): of two direct texts 0.5 s apart, the second got no ACK, NAK or MQTT
+publication. The hub's log: "Rate limit portnum 1", "Alloc an err=38,to=0x0", "Packet received
+with to: of 0!", and a routing packet to `0x0` appeared on `LongFast`
+(`PhoneAPI::handleToRadioPacket` calls `sendRoutingErrorResponse` with the client packet's `from`,
+which is 0). Positions, waypoints, alerts and telemetry from the client are limited to one per
+10 s and dropped without any NAK.
+
+*Duplicates* (`spike_dm.py`): the radio's DM was published again under the made-up gateways
+`!c4a7b0f1` (hop limit 2) and `!c4a7b0f2` (hop limit 1). The hub's API client saw the packet once,
+with the original hop limit 3.
+
+*Key learning* (`spike_keys.py learn`, after the nodes had exchanged NodeInfo):
+
+| Step | What the hub's client got |
+|---|---|
+| the hub forgets the radio (`remove_by_nodenum`), sends a DM | NAK `PKI_SEND_FAIL_PUBLIC_KEY` from its own node, 0.1 s |
+| the hub sends its NodeInfo to the radio with `want_response` | no answer: the radio had sent NodeInfo < 10 min before; its log shows "Update Node Pubkey" for the hub, then nothing. In a second run, 10 min after the radio's last NodeInfo: the answer came at once, and the next DM got an ACK |
+| the hub adds the radio's key with `add_contact`, sends a DM | ACK from the radio |
+| the radio forgets the hub; the hub sends a DM | NAK `PKI_UNKNOWN_PUBKEY` from the radio, 0.3 s; the hub's firmware sent its NodeInfo to the radio right after ("PKI decrypt failure, send a NodeInfo") |
+| the hub sends the DM again | ACK from the radio |
+
+The throttles, from the firmware: a node sends its own NodeInfo at most once per 10 minutes, scaled
+up with the number of nodes online (`NodeInfoModule::allocReply`), and remembers this across restarts
+(`prefs/transmit_history.dat`): after a quick restart the 30 s boot broadcast is skipped. A reply to
+a NodeInfo request is also suppressed if the node answered the same requester within 12 hours
+(kept in memory). The NodeInfo sent after `PKI_UNKNOWN_PUBKEY` uses a 60 s throttle instead. A node
+that hears a decoded packet from an unknown node sends that node its NodeInfo and asks for a reply
+("Heard new node on ch. N"), unless its node database is full. A heartbeat with `nonce = 1` from the
+API client makes the node broadcast its NodeInfo (asking for replies) on the 60 s path.
+
+*Persistence* (`docker compose restart`, then `spike_keys.py show`): node ids and own keys stayed the
+same. The peers' keys, learned at +30 s, were gone after every restart: `NodeDB::updateUser` saves
+only if the last save was more than a minute ago, and `lastNodeDbSave` starts at 0, so nothing
+learned in the first minute is written until some later save. A key learned at 80 s of uptime, and
+a contact added with `add_contact`, survived. `docker stop` took 10 s and ended with exit code 137:
+`meshtasticd` runs as PID 1 and does not exit on `SIGTERM`, so it is killed without saving.
+
+*A member's radio with a new key* (the radio's volume wiped and the radio provisioned again; the hub
+still had the old key as a favorite): a fresh node has **no** key pair until a region is set ("Generate
+new PKI keys"). Then: radio → hub NAK `PKI_SEND_FAIL_PUBLIC_KEY` (the fresh radio knew nothing); hub
+→ radio first `PKI_UNKNOWN_PUBKEY` (and the hub's NodeInfo taught the radio the hub's key), then
+`NO_CHANNEL` (radio's log: "PKC decrypt attempted but failed!"). The radio's NodeInfo with the new key
+was dropped by the hub ("Public Key mismatch, dropping NodeInfo", only in the node's log), **but** the
+hub's API client still received that NodeInfo, and the library's `nodesByNum` then showed the new key
+although the node kept the old one: the library's node cache is not the node's database.
+`add_contact` with the new key fixed it at once.
+
+*The hub's volume lost* (the hub's key set from the lab config, the radio holding it as a favorite):
+after `provision.py --only hub --no-contacts` on the wiped hub, the hub had the same public key. The
+radio's first DM got NAK `PKI_UNKNOWN_PUBKEY` from the hub (its node database was empty), the radio's
+firmware sent its NodeInfo, and from then on DMs worked both ways with no action on the radio.
+
+*Admin messages* (`spike_admin.py`, `Logging: LogLevel: debug` on the hub): 10 `get_config`
+requests back to back got 5 responses, and the log had 5 lines "fromRadioQ full, drop oldest!"
+(`Router::enqueueReceivedMessage`, `MAX_RX_FROMRADIO = 4`). One at a time, waiting for each
+response: 10 of 10, 9–47 ms each over two runs. Every admin message with `want_response` gets a
+response (a routing packet with `NONE`, or data); `commit_edit_settings` always reboots the node 7 s
+later.
+
+*Firmware facts relevant to a real mesh* (read in `MQTT.cpp`, `Router.cpp`, `NodeDB.cpp`; to be
+checked on the Kyiv mesh in S04 and S23):
+- A gateway uploads a packet from another node that it can decode (channel texts, ACKs, NodeInfo)
+  to a broker on a public address only if the sender has "OK to MQTT" (`lora.config_ok_to_mqtt`)
+  on, which is **off** by default. PKI direct messages it cannot decode are uploaded regardless.
+- Relays forward packets they cannot decode (other channels, other nodes' DMs) in the rebroadcast
+  modes `ALL` (the default) and `CORE_PORTNUMS_ONLY` (the default of `ROUTER`). `LOCAL_ONLY` (the
+  default of `CLIENT_HIDDEN`) and `KNOWN_ONLY` drop them, except DMs whose sender or receiver they
+  know (`RoutingModule::handleReceivedProtobuf`).
+- A gateway downlinks a PKI packet only if one of its channels has downlink on, and only if the
+  packet is addressed to it or it knows **both** the sender and the receiver in its node database.
+  The hub's NodeInfo reaches a gateway only through MQTT downlink on the primary channel.
+- When the node database is full (`MaxNodes`, 200 in the lab YAML), the oldest nodes without a key
+  are evicted first, then the oldest others; favorites (every `add_contact`) and ignored nodes never.
+- A virtual node has no clock: `lastHeard` and `rxTime` are absent. The hub uses its own clock.
 
 ## S3. briar-headless build and API
 

@@ -24,9 +24,15 @@ Meshtastic LoRa channels. A hub copies every message to all the other places.
   any gateway that forwards them, one packet per node), or as one broadcast on a private group channel
   (needs a gateway that knows the channel, in practice your own). A hub within radio range can use a
   physical node instead and needs no gateway.
-- **Radios must not ignore MQTT.** Messages from a cloud hub reach the air through MQTT, and a radio
-  with "Ignore MQTT" on drops them (and does not relay them). Meshtastic turns this setting on by
-  default when the region is set to `EU_868`, so members turn it off on their radios.
+- **Radios must not ignore MQTT, and must allow it.** Messages from a cloud hub reach the air through
+  MQTT, and a radio with "Ignore MQTT" on drops them (and does not relay them). Meshtastic turns this
+  setting on by default when the region is set to `EU_868`, so members turn it off on their radios.
+  Members also turn "OK to MQTT" on (it is off by default): without it, gateways on a public broker do
+  not pass their messages and acknowledgements on to the hub.
+- **Direct messages to radios need keys on both sides.** Meshtastic encrypts a direct message with the
+  receiver's key, and a node keeps the first key it learns for another node. When a member resets
+  their radio, the admin puts its new key into the config. Keep the hub's own key in the config
+  (`private_key`), so that it never changes, even if the hub's data is lost.
 - **Removing a person from the mirrors is not instant.** Membership follows the Telegram group. To remove
   someone from a Meshtastic channel, set a new channel key on all radios. Briar cannot remove a member
   from a private group, and deleting the contact does not cut them off (they still sync through other

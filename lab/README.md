@@ -30,14 +30,24 @@ uv run lab/provision.py
 uv run lab/spike_channel.py
 ```
 
-`provision.py` sets names, region `EU_868` (with `ignore_mqtt` off), the MQTT client (broker
-`mosquitto`, root `msh/lab`, encrypted, uplink and downlink on both channels) and the private channel
-`Family` at index 1. It is idempotent; the first run reboots each node once. `spike_channel.py` sends a
-text on `Family` radio → hub and hub → radio, prints the MQTT envelopes and the received packet fields,
-and exits non-zero if either direction fails.
+```bash
+uv run lab/spike_dm.py
+```
+
+`provision.py` sets names, region `EU_868` (with `ignore_mqtt` off), a private key, the MQTT client
+(broker `mosquitto`, root `msh/lab`, encrypted, uplink and downlink on both channels) and the private
+channel `Family` at index 1, in one settings transaction per node, waiting for the node's response to
+each admin message. Then it gives each node the other one's public key as a contact, so direct
+messages work at once. It is idempotent; a run that changes settings reboots the node once.
+`--only hub|radio` provisions one node (e.g. after wiping its volume), `--no-contacts` leaves key
+discovery to NodeInfo.
+
+`spike_channel.py` sends a text on `Family` radio → hub and hub → radio; `spike_dm.py` sends direct
+messages both ways and records ACKs and NAKs. Both print the MQTT envelopes and the received packet
+fields, and exit non-zero if a direction fails.
 
 Stop the lab with `docker compose -f lab/docker-compose.yml down`; add `-v` to wipe the nodes' state
-(node keys, settings, node database).
+(settings, node database; `provision.py` gives the nodes their lab keys back).
 
 ## Files
 
@@ -46,16 +56,32 @@ Stop the lab with `docker compose -f lab/docker-compose.yml down`; add `-v` to w
   radio; `General: MACAddress` fixes the node id (its last 4 bytes). Set `Logging: LogLevel: debug` to
   see why a packet is dropped.
 - `mosquitto/mosquitto.conf`: an anonymous listener, fine for the lab only.
-- `provision.py`, `spike_channel.py`: spike scripts, not chatko code. The findings are in
-  [docs/spikes.md](../docs/spikes.md) (S2).
+- `provision.py`: provisions both nodes (see above).
+- `spike_channel.py`, `spike_dm.py`, `spike_keys.py`, `spike_admin.py`: spike scripts, not chatko
+  code. `spike_dm.py --offline` also stops the radio to see the retries; `spike_keys.py show|learn|
+  contact` shows the node databases, forgets and re-learns keys, or adds a key with `add_contact`;
+  `spike_admin.py` sends admin messages back to back and one at a time.
+- `labkit.py`: helpers the scripts share (connecting, recording packets and MQTT envelopes,
+  waiting for admin responses).
+
+The findings are in [docs/spikes.md](../docs/spikes.md) (S2).
 
 ## Pitfalls found in the spike
 
 - Setting a region with a duty-cycle limit (`EU_868`) for the first time makes the firmware turn
   `lora.ignore_mqtt` on. The node then drops (and does not relay) every packet that crossed MQTT.
   `provision.py` writes the LoRa config a second time to turn it off.
-- Admin messages sent back to back are partly lost; `provision.py` pauses 1 s between them.
+- The node keeps at most 4 packets addressed to itself in a queue and drops the oldest, so admin
+  messages sent back to back are partly lost. `provision.py` waits for each message's response.
 - A node reboot (after settings change) ends the `meshtasticd` process; the compose restart policy
   brings it back. Keep `restart: unless-stopped`.
 - `meshtasticd` serves one API client at a time: a new TCP connection closes the previous one. Running
   the `meshtastic` CLI against a node kicks off whatever else is connected to it.
+- Nodes pin keys. After wiping one node's volume (`docker compose rm -sf radio`, `docker volume rm
+  chatko-lab_radio-data`), provision it with `--only radio`: the lab private key gives it its old
+  public key back. Without it, the other node keeps the old key; `spike_keys.py contact hub` (or
+  `contact radio`) replaces it.
+- Keys learned from NodeInfo in a node's first minute are not saved, and `docker stop` kills
+  `meshtasticd` after 10 s without saving. The contacts that `provision.py` adds are saved at once.
+- A node sends at most one text per 2 s from its API client and drops the rest without telling the
+  client. Scripts pause before each text.
