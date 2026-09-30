@@ -8,8 +8,8 @@
   as well.
 - **Code quality is a hard requirement**: clean architecture, `mypy --strict`, `ruff`, tests for every
   behaviour, coverage gates. Read [docs/architecture.md](docs/architecture.md) before writing code, and
-  keep to its dependency rule: the core never imports an extension, and extensions import only
-  `chatko.extension_api`.
+  keep to its dependency rule: the core never imports an extension, extensions import only
+  `chatko.extension_api`, and routing scripts import only `chatko.routing_api`.
 - **No network is special.** Telegram, Meshtastic and Briar are extensions. Don't put
   network-specific logic in the core.
 - Record significant decisions in `docs/decisions.md` (append-only). Keep `docs/design.md` (behaviour)
@@ -23,7 +23,7 @@
 - `docs/spikes.md`: phase-0 experiments and their results. Record results there.
 - `docs/roadmap.md`: the plan by working session, with the model and effort for each. Mark sessions
   done there.
-- `config.example.yaml`, `.env.example`: configuration format.
+- `config.example.yaml`, `routing.example.py`, `.env.example`: configuration format.
 
 ## Current state
 - Design phase; no code yet. Phase 0 (spikes S1–S3) is in progress (spike S1, Briar relay, is done),
@@ -39,6 +39,13 @@
   project, `~/Projects/Chatway` (a Telegram ⇄ Meshtastic router for Android). Its
   `docs/meshtastic-notes.md` (MQTT topics, packet format, crypto) and `docs/similar-projects.md` are
   useful references.
-- mr-tbot/mesh-api was evaluated and rejected as a base (decision D2).
+- mr-tbot/mesh-api was evaluated and rejected as a base (D2), and re-evaluated with the same result (D19).
+- v1 scope (D20): one hub in the cloud that syncs a Briar group, a Telegram group and Meshtastic
+  (a channel or DMs to several nodes) through a virtual node. Routing is an admin-written Python script
+  (D16), and so is author labelling (D21). The hub only relays: no member management, commands or
+  control surface (D22); channels, PSKs, `dm` node lists and optional people are in the config. The
+  hub's Briar account creates the Briar groups; the admin manages contacts, groups and invitations with
+  `briarctl`, a separate command-line tool outside chatko's architecture (D24). A
+  physical node and several hubs (e.g. a home Raspberry Pi) are later (D17).
 - The default MQTT broker is the Kyiv community broker, but each Meshtastic extension instance can use
   any broker. The owner will have hardware gateway nodes later.

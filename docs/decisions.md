@@ -108,3 +108,117 @@ cut-off is done by re-creating the group's Briar leg (dissolve, create, invite t
 **Consequences:** the briar-headless patch needs no remove-member endpoint; `DELETE /v1/groups/{groupId}`
 (dissolve) is required. Re-creating a Briar leg loses its history on members' phones and needs every
 member to reach the hub directly once to accept the new invitation.
+
+## D16. Routing is a Python script; the YAML declares what exists
+Fixed rules ("mirror all legs of a group", feeds as a separate feature) are not flexible enough: the
+owner wants to route between any endpoints (several Briar groups, a broadcast to one member), and later
+between several hubs.
+**Decision:** `chatko.yaml` stays declarative (extensions, groups, legs, sources, admins, peers).
+Routing is `config/routing.py`: a pure function `route(message, ctx) → targets` that imports only the
+public `chatko.routing_api`. The core ships a default router (`mirror`: all other legs of the group)
+used when there is no script, and as the fallback when the script raises. The core always enforces the
+invariants against echoes and duplicates (own posts, source endpoint, at most once per target,
+transport-id and optional fingerprint de-duplication). Feeds become routes from a source to members.
+**Consequences:** a second public, versioned API (`routing_api`) next to `extension_api`, with its own
+test kit for admins. The script is trusted code, like the config. `FeedSource` and the `feeds:` section
+disappear; sources are endpoints outside groups. The script has no I/O, so all delivery still goes
+through the outbox.
+
+## D17. Room for several cooperating hubs
+A likely setup is a cloud hub plus a hub at home without internet (Briar on the local Wi-Fi, a physical
+Meshtastic node), connected through the mesh and through late Briar syncs.
+**Decision:** not built in v1, but the design keeps room: messages carry a fingerprint (original author
+label + normalized text), the config will list peer hubs and their accounts, messages from a peer are
+parsed to their original author, and endpoints shared with a peer de-duplicate by fingerprint.
+**Consequences:** the message model and the routing API include the author label, the fingerprint and
+"relayed by a peer" from the start. Fingerprint collisions on short repeated texts are a known risk,
+decided when the second hub is built.
+
+## D18. The hub is an ordinary member of Briar groups
+Managing Briar group membership from the hub (creating groups, inviting, re-creating them to cut
+someone off) is complex, needs a bigger briar-headless patch, and makes the hub the only creator, so
+members sync with it only.
+**Decision:** people create and run Briar private groups in the Briar app. The hub joins them as a
+member, accepting invitations only from contacts the admin added, and the admin lists them in the
+config as endpoints. The hub can be in any number of Briar groups. Linking a Briar author to a member
+is optional and only changes the label, by posting a code into a group. This supersedes the
+membership parts of D6 and D15.
+**Consequences:** the briar-headless patch shrinks to listing groups, accepting invitations, reading
+and posting. Who can read a Briar group is outside chatko's control. The hub syncs a group with its
+creator, and with other members only if they are its contacts and reveal it, so the README explains
+how to add the hub as a contact.
+
+## D19. mesh-api re-evaluated; D2 and D3 stand
+The owner asked again whether to build on mr-tbot/mesh-api for its many extensions (Signal among them)
+and whether the cloud hub needs a virtual node at all. On 2026-09-30 the core was one 9 561-line file
+with no tests; extensions receive a plain string (`send_message(message: str)`), so the model is a star
+around the mesh; one Telegram chat per extension; routing is JSON only; there are no groups, members,
+outbox or cross-path de-duplication, and no virtual node. Its extensions are thin (Telegram 284 lines,
+Signal 226 lines over signal-cli-rest-api). Publishing to MQTT without `meshtasticd` is feasible for
+`channel` delivery, but `dm` would need our own PKI, NodeInfo, ACKs and retries.
+**Decision:** keep our own hub (D2) and `meshtasticd` for virtual nodes (D3). Reuse external daemons
+the way mesh-api does (e.g. signal-cli-rest-api for a later Signal extension).
+**Consequences:** what mesh-api lacks (routing, identities, outbox, several hubs) is exactly our core.
+Porting one of its extensions costs about one session.
+
+## D20. v1 scope: one cloud hub with a virtual Meshtastic node
+The owner wants the first working result to be a cloud hub that keeps a Briar group, a Telegram group
+and Meshtastic (a channel or DMs to several nodes) in sync.
+**Decision:** v1 implements only the virtual node (`meshtasticd` over TCP). A physical hub node (D13)
+and several hubs (D17) are later work. The connection setting and the adapter port stay general so
+that serial, BLE and TCP to a real radio can be added without changing the extension logic.
+**Consequences:** no serial/BLE code, tests or hardware sessions in v1. A home hub waits for the physical
+node and for the answer on briar-headless LAN sync.
+
+## D21. Author labels come from the routing script, with a Latin default
+The owner wants the author signature to be as programmable as routing.
+**Decision:** the default author label is the member's nick; an unlinked author gets `~` and a 2–6
+character Latin form of the name their network gives, made by the nick generator (not unique, not
+stored). The routing script may define `label(author, target, ctx)` to replace this, per network or per
+target, and can call `default_label`. Member records, nicks, node linking and PSK hand-out stay as
+designed: they give a stable name per person, but relaying does not depend on them.
+**Consequences:** unlinked Meshtastic nodes no longer show their short name (`~BC1`) by default. Labels
+still count towards network limits, and the core trims them where needed.
+
+## D22. The hub relays only; no member management in v1
+The owner wants the simplest useful hub: a message arrives somewhere and is routed to other endpoints.
+Managing people (Telegram as a membership source, member records, nicks in SQLite, a control surface
+with `/nick`, `/mesh` and `/briar` commands, handing out PSKs, linking nodes by code) is not needed for
+that.
+**Decision:** v1 has no members, membership sources, control surface or commands. Who may write is
+decided in each network (Telegram group admins, the Briar group creator, whoever has the channel PSK) and
+in the config (`dm` node lists, Briar contacts). Channels and PSKs are set in the config. An optional
+`people` section maps a label to accounts in several networks; otherwise the label is generated from the
+network's display name (D21). Admin notices go into one configured endpoint. This supersedes D4 and the
+member parts of D9 and D21; the rest of D9 (every network is an extension) stands.
+**Consequences:** the core shrinks to endpoints, routing, labels, outbox and config; the extension API
+has one protocol (`EndpointProvider`). SQLite holds only runtime state. Impersonation is possible where a
+network allows it (a stranger named like a person gets a similar label); a script can mark accounts not
+in `people`. A web UI or commands can be added later as new protocols.
+
+## D23. The hub makes no Briar contacts; people add it to their groups
+The owner wants Briar to work like Telegram: a person creates the group and adds the hub, and the hub
+has no logic for contacts.
+**Decision:** the hub never adds contacts. Briar still needs the person and the hub to be contacts
+before an invitation, and a contact at a distance is made by both sides adding each other's link, so the
+admin does the hub's side once per person by hand through briar-headless's REST API (documented in the
+README). The hub accepts every group invitation automatically, posts an admin notice with the group id,
+and ignores groups that are not in the config. This replaces the configured `contacts` of D18.
+**Consequences:** less hub code. The hub syncs a group only with the creator by default, so messages
+between the group and the hub pass through the creator's phone; more contacts (made by hand) and
+"Reveal contacts" remove that bottleneck. Any contact the admin made can put the hub into a group, which
+is harmless because unlisted groups are ignored.
+
+## D24. The hub's Briar account creates the groups; `briarctl` manages it, outside chatko
+With a person as the creator (D23), the hub syncs a Briar group only through that person's phone. A
+creator that is online all the time is what keeps a Briar group alive, and only the cloud hub is.
+**Decision:** the hub's Briar account creates the groups. Contacts, groups, invitations and
+re-creating a group are done by `briarctl`, a separate command-line tool that calls the
+`briar-headless` REST API. It is not a chatko extension, shares no code with chatko and is kept apart by
+an `import-linter` contract. The chatko `briar` extension stays a relay: it reads and posts in the groups
+listed in `chatko.yaml`. Joining a group made by someone else stays possible through
+`briarctl invitation accept`. This supersedes D18 and D23 on who creates groups and who adds contacts;
+the hub still does not manage members inside chatko (D22).
+**Consequences:** the briar-headless patch again needs create, invite, members and dissolve (D6), used
+only by `briarctl`. One more small program to build and test (session S27). Cutting someone off works as
+in D15: dissolve, create, invite, then change the endpoint in the config.

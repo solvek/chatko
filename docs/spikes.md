@@ -128,9 +128,13 @@ Steps and answers needed:
 - [ ] Build `x86LinuxJar` (and `aarch64LinuxJar`) from the current upstream; the JDK version needed.
 - [ ] Run it in Docker with a persistent data volume and a non-interactive account creation.
 - [ ] Contacts API end to end with a phone: exchange links, `ContactAddedEvent`, private messages both
-  ways over the WebSocket.
+  ways over the WebSocket. Confirm that a contact at a distance needs **both** sides to add the other's
+  link, and write down the exact `curl` calls the admin will use (D23).
 - [ ] Read `PrivateGroupManager`, `GroupInvitationManager` and how the Android app uses them. List the
-  methods for the patch (§7.4 of the design), and check whether removing a member is supported.
+  methods for the patch (§7.4 of the design): create, list, members, invite, dissolve, invitations from
+  others, read and post (D24).
+- [ ] Does `briar-headless` include Briar's LAN (Wi-Fi) transport, so a hub without internet can sync
+  with phones on the same network? Not needed for v1; it decides the future home hub (D17).
 - [ ] Upstream contribution rules for briar-headless (code style, tests, merge request process).
 
 **Result:** _not run yet._

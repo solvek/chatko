@@ -1,9 +1,6 @@
 # chatko configuration example. Copy to config/chatko.yaml and edit.
 # Secrets are never stored here: ${NAME} is replaced with the environment variable NAME (see .env.example).
 
-# Installation admins, by identity (<kind>:<id>).
-admins: ["telegram:123456789"]
-
 # Extension instances. The key is the instance name; `type` selects the extension.
 extensions:
   tg:
@@ -14,47 +11,60 @@ extensions:
     type: meshtastic
     # Virtual node: a meshtasticd container (TCP API inside the Docker network only).
     connection: { tcp: "meshtasticd-kyiv:4403" }
-    # Physical node instead: { serial: /dev/ttyUSB0 } | { ble: "AA:BB:CC:DD:EE:FF" } | { tcp: "192.168.1.50:4403" }
+    # Later (not in v1): a physical node: { serial: /dev/ttyUSB0 } | { ble: "AA:BB:CC:DD:EE:FF" } | { tcp: "192.168.1.50:4403" }
     long_name: chatko
     short_name: CHKO               # up to 4 characters
-    mqtt:                          # required for a virtual node, optional for a physical one
+    mqtt:                          # required for a virtual node
       host: mqtt.example.org       # the Kyiv community broker, our own Mosquitto, or any other
       port: 8883
       tls: true
       username: ${KYIV_MQTT_USER}
       password: ${KYIV_MQTT_PASSWORD}
       root_topic: msh/EU_868
-    channels:
+    channels:                      # the hub provisions its node with these
       - name: LongFast             # index 0: the public primary channel of the mesh
         psk: AQ==
       - name: family
-        psk: ${MESH_FAMILY_PSK}    # base64, 16 or 32 bytes
+        psk: ${MESH_FAMILY_PSK}    # base64, 16 or 32 bytes; give it to people as a channel URL/QR code
     min_send_interval_s: 4
 
-  briar:
+  briar:                           # groups are made with `briarctl` (the hub is their creator)
     type: briar
     api: http://briar:7000
     auth_token: ${BRIAR_AUTH_TOKEN}
 
 groups:
   family:
-    membership: { ext: tg, chat: -1001234567890 }
     legs:
       - { ext: tg, chat: -1001234567890 }
-      - { ext: briar, name: "Family" }
-      - { ext: kyiv, delivery: dm }                        # default: PKI DMs to members' linked nodes
-      - { ext: kyiv, channel: family, delivery: channel }  # via gateways that know the channel
+      - { ext: briar, group: "<Briar group id>" }          # printed by `briarctl group create`
+      - { ext: kyiv, channel: family }                      # broadcast on the private channel
+      - { ext: kyiv, dm: ["!a1b2c3d4", "!0badc0de"] }       # PKI direct messages to these nodes
 
   street:
-    membership: { ext: tg, chat: -1009876543210 }
     legs:
       - { ext: tg, chat: -1009876543210 }
-      - { ext: kyiv }                                      # delivery: dm
+      - { ext: briar, group: "<another Briar group id>" }  # any number of Briar groups
+      - { ext: kyiv, dm: ["!a1b2c3d4"] }
 
-# Where members manage their account and receive system messages and feeds.
-control_surfaces: [tg]
+# Endpoints outside any group. Their messages go only where routing.py sends them.
+sources:
+  longfast: { ext: kyiv, channel: LongFast }
+  owner: { ext: tg, chat: 123456789 }                        # the owner's private chat with the bot
 
-# One-way copies of a channel into the control surface of the listed members.
-feeds:
-  - source: { ext: kyiv, channel: LongFast }
-    to: ["telegram:123456789", "telegram:555000111"]
+# Where the hub posts admin notices: errors, foreign Telegram groups.
+admin_notices:
+  to: owner
+  new_accounts: false              # true: a notice for every account seen for the first time (to fill `people`)
+
+# Optional: one label per human across networks. Everyone else gets a label generated from their name.
+people:
+  NatAda: ["telegram:111111111", "meshtastic:!a1b2c3d4", "briar:<author id>"]
+
+# Where each message goes and how authors are labelled: config/routing.py (see routing.example.py).
+# Without it, every message goes to all other legs of its group.
+routing: routing.py
+
+# Later (several hubs): other chatko installations and their accounts, so their relays are recognized.
+# peers:
+#   home: ["meshtastic:!0badf00d", "briar:<author id>"]

@@ -2,7 +2,7 @@
 
 How to build chatko in a series of AI-assisted working sessions. A **session** is one conversation with
 a coding agent (Claude Code) that starts with an empty context, has one goal, and ends with a result that
-can be checked and committed. The phases are those of [design.md §13](design.md#13-plan).
+can be checked and committed. The phases are those of [design.md §12](design.md#12-plan).
 
 ## How to run a session
 
@@ -50,34 +50,31 @@ Escalate instead of looping: if a session fails at the same problem twice, resta
 | S03 | 0 | Spike S2b: PKI direct messages, keys, ACKs, persistence, provisioning | Opus 5.5 | xhigh | todo |
 | S04 | 0 | Spike S2c: Kyiv broker, read-only; questions for the Kyiv community | Sonnet 5.5 | medium | todo |
 | S05 | 0 | Spike S3a: build and run briar-headless, contacts API with a phone | Opus 5.5 | high | todo |
-| S06 | 0 | Spike S3b: private-group internals of Briar, patch plan | Opus 5.5 | xhigh | todo |
+| S06 | 0 | Spike S3b: private-group internals of Briar, read/post/join patch plan | Opus 5.5 | xhigh | todo |
 | S07 | 0 | Phase 0 wrap-up: all (verify) answered, design and roadmap revised | Opus 5.5 | high | todo |
 | S08 | 1 | Project skeleton, tooling and CI | Sonnet 5.5 | high | todo |
-| S09 | 1 | Domain model and nick generator | Opus 5.5 | high | todo |
-| S10 | 1 | Extension API and contract test suite design | Fable 5.1 | xhigh | todo |
-| S11 | 1 | Inbound router and outbox worker | Opus 5.5 | high | todo |
-| S12 | 1 | Membership, identity and nick services, event bus | Opus 5.5 | high | todo |
-| S13 | 1 | Command service and feed service | Sonnet 5.5 | high | todo |
-| S14 | 1 | SQLite repositories and migrations | Sonnet 5.5 | high | todo |
-| S15 | 1 | Configuration: models, `${ENV}`, hot reload, `check-config` | Sonnet 5.5 | high | todo |
-| S16 | 1 | Extension discovery, composition root, `chatko run`, fake extension end to end | Opus 5.5 | high | todo |
-| S17 | 1 | Phase 1 review | Opus 5.5 | xhigh | todo |
-| S18 | 2 | Telegram: port, legs, allowed chats | Opus 5.5 | high | todo |
-| S19 | 2 | Telegram: membership source and control surface | Opus 5.5 | high | todo |
-| S20 | 2 | Telegram live test with two groups (*with owner*) | Sonnet 5.5 | medium | todo |
-| S21 | 3 | Meshtastic: asyncio adapter over the `meshtastic` library, node provisioning | Opus 5.5 | xhigh | todo |
-| S22 | 3 | Meshtastic: `channel` legs, splitting, rate limit, de-duplication | Opus 5.5 | high | todo |
-| S23 | 3 | Meshtastic: `dm` legs, ACKs and retries, choice between modes | Opus 5.5 | xhigh | todo |
-| S24 | 3 | Meshtastic: `/mesh` linking, channel QR codes, default group, feeds | Sonnet 5.5 | high | todo |
-| S25 | 3 | Meshtastic lab integration tests, radio ⇄ Telegram | Opus 5.5 | high | todo |
-| S26 | 3 | Field test on the Kyiv mesh (*with owner*, needs a gateway or hardware) | Sonnet 5.5 | medium | todo |
-| S27 | 4 | briar-headless fork: private-group API (Kotlin) | Opus 5.5 | xhigh | todo |
-| S28 | 4 | briar-headless Docker image; upstream merge request | Sonnet 5.5 | high | todo |
-| S29 | 4 | Briar extension: port, legs, own-post filter | Opus 5.5 | high | todo |
-| S30 | 4 | Briar extension: `/briar` linking, invitations, replace and remove | Opus 5.5 | high | todo |
-| S31 | 4 | Three-network test: Briar ⇄ Telegram ⇄ Meshtastic (*with owner*) | Sonnet 5.5 | medium | todo |
-| S32 | 5 | Production deployment, backups, operations docs | Sonnet 5.5 | high | todo |
-| S33 | 5 | Release review: security, code, docs | Fable 5.1 | high | todo |
+| S09 | 1 | Domain model and label generator | Opus 5.5 | high | todo |
+| S10 | 1 | Extension API, routing API and contract test suite design | Fable 5.1 | xhigh | todo |
+| S11 | 1 | Inbound pipeline, routing invariants and outbox worker | Opus 5.5 | high | todo |
+| S12 | 1 | Routing engine: script loading, defaults, `label` hook, test kit, example script | Opus 5.5 | high | todo |
+| S13 | 1 | SQLite repositories and migrations | Sonnet 5.5 | high | todo |
+| S14 | 1 | Configuration: models, `${ENV}`, people, admin notices, hot reload, `check-config` | Sonnet 5.5 | high | todo |
+| S15 | 1 | Extension discovery, composition root, `chatko run`, fake extension end to end | Opus 5.5 | high | todo |
+| S16 | 1 | Phase 1 review | Opus 5.5 | xhigh | todo |
+| S17 | 2 | Telegram: port, group and private-chat endpoints, allowed chats | Opus 5.5 | high | todo |
+| S18 | 2 | Telegram live test with two groups (*with owner*) | Sonnet 5.5 | medium | todo |
+| S19 | 3 | Meshtastic: asyncio adapter over the `meshtastic` library (TCP to `meshtasticd`), provisioning from the config | Opus 5.5 | xhigh | todo |
+| S20 | 3 | Meshtastic: `channel` endpoints, splitting, rate limit, de-duplication, `LongFast` source | Opus 5.5 | high | todo |
+| S21 | 3 | Meshtastic: `dm` endpoints, ACKs and retries | Opus 5.5 | xhigh | todo |
+| S22 | 3 | Meshtastic lab integration tests, radio ⇄ Telegram | Opus 5.5 | high | todo |
+| S23 | 3 | Field test on the Kyiv mesh (*with owner*, needs a gateway or hardware) | Sonnet 5.5 | medium | todo |
+| S24 | 4 | briar-headless fork: private-group API (Kotlin) | Opus 5.5 | xhigh | todo |
+| S25 | 4 | briar-headless Docker image; upstream merge request | Sonnet 5.5 | high | todo |
+| S26 | 4 | Briar extension: port, endpoints, posts in and out, own-post filter | Opus 5.5 | high | todo |
+| S27 | 4 | `briarctl`: contacts, groups, invitations (command-line tool) | Sonnet 5.5 | high | todo |
+| S28 | 4 | Three-network test in the cloud setup: Briar ⇄ Telegram ⇄ Meshtastic (`channel` and `dm`) (*with owner*) | Sonnet 5.5 | medium | todo |
+| S29 | 5 | Production deployment, backups, operations docs | Sonnet 5.5 | high | todo |
+| S30 | 5 | Release review: security, code, docs | Fable 5.1 | high | todo |
 
 Rough cost profile: about two thirds of the sessions on Opus 5.5, a third on Sonnet 5.5, two on
 Fable 5.1.
@@ -113,9 +110,10 @@ run it in Docker with a data volume and non-interactive account creation; exchan
 private messages both ways over the WebSocket. Done when: the S3 checkboxes 1–3 are answered.
 
 **S06. briar-headless, part 2.** Read `PrivateGroupManager`, `GroupInvitationManager` and how the Android
-app uses them. Write the patch plan: methods, endpoints, events, tests in upstream style; whether a member
-can be removed; the upstream contribution rules. Done when: the S3 checkboxes 4–5 are answered and
-design.md §7.4 matches the plan.
+app uses them. Write the patch plan of design.md §7.4 (D24): create, list, members, invite, dissolve,
+invitations from others, read and post messages, events; tests in upstream style; the upstream
+contribution rules. Check whether `briar-headless` has the LAN transport (for a future home hub, D17).
+Done when: the S3 checkboxes 4–5 are answered and design.md §7.4 matches the plan.
 
 **S07. Phase 0 wrap-up.** Walk through every (verify) in design.md. Record decisions that the spikes
 changed. Re-plan the sessions below if needed. Done when: design.md has no (verify) that affects v1,
@@ -124,111 +122,120 @@ and phase 1 can start.
 ### Phase 1: core
 
 **S08. Skeleton.** `pyproject.toml` with `uv`; packages as in architecture.md §2; `ruff`, `mypy
---strict`, `import-linter` contracts (the dependency rule), `pytest` with branch coverage and the gates
-from architecture.md §6; `pre-commit`; GitHub Actions on Linux, macOS and Windows. Done when: CI passes on
-an empty project and a deliberate forbidden import fails `lint-imports`.
+--strict`, `import-linter` contracts (the dependency rule, including `routing_api`), `pytest` with branch
+coverage and the gates from architecture.md §7; `pre-commit`; GitHub Actions on Linux, macOS and Windows.
+Done when: CI passes on an empty project and a deliberate forbidden import fails `lint-imports`.
 
-**S09. Domain.** `Member`, `Identity`, `IdentityKey`, `Nick` with validation and generator
-(Ukrainian KMU-2010 and Russian transliteration, collisions), `Group`, `LegRef`, `Message`, `Delivery`.
-No I/O. Done when: domain coverage ≥ 95 % and the nick examples of design.md §8 are tests.
+**S09. Domain.** `EndpointRef`, `Group`, `Account`, `Person`, `Message`, `Target`, `Delivery`, the
+fingerprint, and the label generator (Ukrainian KMU-2010 and Russian transliteration, fallbacks). No I/O.
+Done when: domain coverage ≥ 95 % and the label examples of design.md §8 are tests.
 
-**S10. Extension API.** The most expensive decision to change later, hence Fable. Settle `Extension`,
-the capability protocols, `HubContext`, the message, command, reply and delivery types, events that
-extensions can subscribe to, and API versioning. Solve the Telegram membership gap here: the Bot API
-cannot list the members of a group, so a membership source may only know members it has seen
-(`chat_member` updates, messages) and check one identity at a time (`getChatMember`); the
-`MembershipSource` protocol must allow that. Write the contract test suite skeleton in
-`extension_api.testing`. Done when: architecture.md §3 describes the real API, a decision entry records
-it, and the contract suite runs against a stub.
+**S10. Extension and routing APIs.** The most expensive decision to change later, hence Fable. Settle
+`Extension`, `EndpointProvider`, `HubContext`, the message and delivery types, and API versioning (room
+for more protocols later, D22). Settle the routing API (architecture.md §4): `RoutedMessage`,
+`RoutingContext`, targets, `mirror`, `label`/`default_label`, the fingerprint, and room for peer hubs
+(D17). Write the contract test suite skeleton in `extension_api.testing`. Done when: architecture.md §3
+and §4 describe the real APIs, a decision entry records them, and the contract suite runs against a stub.
 
-**S11. Routing.** Ports (repositories, clock, ids), in-memory fakes next to them, `InboundRouter`
-(dedup, author, group, persistence, one outbox row per other leg), `OutboxWorker` (due rows, `deliver`,
-backoff, restart safety). Done when: the rules of design.md §10 are tests.
+**S11. Pipeline.** Ports (repositories, clock, ids), in-memory fakes next to them, `InboundPipeline`
+(own posts, transport-id dedup, person lookup, fingerprint, persistence, labels, one outbox row per
+target), `RoutingInvariants` (design.md §9.3) with property-style tests, `OutboxWorker` (due rows,
+`deliver`, backoff, restart safety). The router is a stub that calls `mirror`. Done when: design.md §9.1
+and §9.3 are tests.
 
-**S12. Members.** `MembershipService`, `IdentityService` (uniqueness: one node per member, at most one
-Briar identity), `NickService`, the in-process event bus. Done when: membership sync, linking and nick
-changes are tested, including the events they emit.
+**S12. Routing engine.** `RoutingEngine`: load `routing.py` from the config directory, validate it,
+hot-reload it keeping the last good version, fall back to the defaults on errors and post an admin
+notice; the optional `label` hook and `default_label` (design.md §8); `routing_api.testing` (fake
+installation, assertions); `routing.example.py` tested in CI. Done when: design.md §9.2, §9.4 and §9.5
+are tests, and the example script passes its own tests.
 
-**S13. Commands and feeds.** `CommandService` (parsing, authorization, core commands `/start`, `/help`,
-`/me`, `/nick`, extension commands), `FeedService`. Done when: design.md §5.2 core commands and §6.5
-behaviour are tests.
+**S13. Storage.** `aiosqlite` repositories and schema migrations for runtime state (messages, outbox,
+de-duplication, last heard, accounts seen). The same repository tests run against the fakes and SQLite.
+Done when: all repository ports have a SQLite implementation passing the shared tests.
 
-**S14. Storage.** `aiosqlite` repositories and schema migrations. The same repository tests run against
-the fakes and SQLite. Done when: all repository ports have a SQLite implementation passing the shared
-tests.
+**S14. Configuration.** Pydantic models for the core (groups, legs, sources, people, `admin_notices`,
+`routing`, room for `peers`) and hooks for each extension's models; YAML safe load; `${ENV}`
+substitution; reload with `watchfiles`, keeping the last valid config and reporting errors as admin
+notices; `AdminNotifier`; `chatko check-config` (also loads and tests the routing script). Done when:
+`config.example.yaml` validates with fake extensions, and invalid configs give clear errors.
 
-**S15. Configuration.** Pydantic models for the core and hooks for each extension's models; YAML safe
-load; `${ENV}` substitution; reload with `watchfiles`, keeping the last valid config and reporting errors
-to admins; `chatko check-config`. Done when: `config.example.yaml` validates with fake extensions, and
-invalid configs give clear errors.
-
-**S16. Wiring.** Entry-point discovery (`chatko.extensions`), the composition root, `chatko run`,
+**S15. Wiring.** Entry-point discovery (`chatko.extensions`), the composition root, `chatko run`,
 `FakeExtension`. Done when: an end-to-end test runs the hub with two fake extensions and a message crosses
 from one leg to the other through SQLite.
 
-**S17. Phase 1 review.** `/code-review` at high effort, coverage and architecture check, docs in sync
+**S16. Phase 1 review.** `/code-review` at high effort, coverage and architecture check, docs in sync
 with the code. Done when: findings are fixed or recorded as sessions.
 
 ### Phase 2: Telegram
 
-**S18. Telegram legs.** `TelegramApi` port over `aiogram` 3 and its fake; group legs in and out; drop
-the bot's own posts; serve only configured chats, leave others, tell admins (design.md §5.1). Done when:
-the extension passes the contract suite and its coverage is ≥ 85 %.
+**S17. Telegram endpoints.** `TelegramApi` port over `aiogram` 3 and its fake; group and private-chat
+endpoints in and out; the author account and display name; drop the bot's own posts; serve only
+configured chats, leave others and post an admin notice with the chat id (design.md §5). Done when: the
+extension passes the contract suite and its coverage is ≥ 85 %.
 
-**S19. Membership and control surface.** `chat_member` handling, the membership source as settled in
-S10, the control surface (commands as buttons, images for QR codes), Ukrainian texts. Done when:
-design.md §5 is covered by tests.
-
-**S20. Live Telegram test.** *With owner*: a bot from BotFather, two test groups, the hub running
-locally. Done when: two groups work independently, foreign groups are left, nicks and `/me` work.
+**S18. Live Telegram test.** *With owner*: a bot from BotFather, two test groups, the hub running
+locally. Done when: two groups work independently, foreign groups are left, labels look right.
 
 ### Phase 3: Meshtastic
 
-**S21. Adapter.** A `MeshApi` port and its fake; an adapter that bridges the thread-based
-`TCPInterface` (and serial/BLE) to asyncio; provisioning of the hub's node from the config (names,
-channels, PSKs, MQTT). Done when: the adapter is tested against the lab from S02.
+**S19. Adapter.** A `MeshApi` port and its fake; an adapter that bridges the thread-based
+`TCPInterface` to asyncio (serial and BLE later, D20, without changing the port); provisioning of the
+hub's node from the config (names, channels, PSKs, MQTT). Done when: the adapter is tested against the lab
+from S02.
 
-**S22. Channel legs.** `channel` delivery, splitting into ≤ 200-byte parts with at most 3 parts and
+**S20. Channel endpoints.** `channel` endpoints, splitting into ≤ 200-byte parts with at most 3 parts and
 truncation, placeholders for non-text, per-node send interval, de-duplication across gateways, drop own
-packets. Done when: design.md §6.4 is covered by tests.
+packets, authors from NodeInfo, `LongFast` as a source, last-heard tracking. Done when: design.md §6.3
+and §6.4 are covered by tests.
 
-**S23. DM legs.** `dm` delivery to every linked node, ACK handling and retry when the node is heard
-again, the choice between `channel` and `dm` per member. Done when: design.md §6.2 is covered by tests.
+**S21. DM endpoints.** `dm` endpoints with node lists: out to every listed node, in from listed nodes
+(first endpoint wins), ACK handling and retry when the node is heard again. Done when: design.md §6.2 is
+covered by tests.
 
-**S24. Member features.** `/mesh` linking by code, unlinking, channel URLs and QR codes, `~` for unlinked
-nodes, default group and `#group` prefix, feeds. Done when: design.md §6.3 and §6.5 are covered by tests.
+**S22. Lab integration.** Opt-in integration tests with the docker lab (Mosquitto, two `meshtasticd`),
+run nightly in CI. Done when: radio ⇄ Telegram works in the lab with both kinds of endpoint.
 
-**S25. Lab integration.** Opt-in integration tests with the docker lab (Mosquitto, two `meshtasticd`),
-run nightly in CI. Done when: radio ⇄ Telegram works in the lab in both modes.
-
-**S26. Kyiv field test.** *With owner*, once a gateway or a hardware node is available. Done when:
-a message reaches a real radio in `dm` mode (and in `channel` mode, if a gateway knows the channel), and
-the results are in spikes.md.
+**S23. Kyiv field test.** *With owner*, once a gateway or a hardware node is available. Done when:
+a message reaches a real radio through a `dm` endpoint (and a `channel` endpoint, if a gateway knows the
+channel), and the results are in spikes.md.
 
 ### Phase 4: Briar
 
-**S27. Private-group API.** The patch from S06 in our fork of briar-headless, with tests in upstream
-style. Done when: every endpoint of design.md §7.4 works against a phone.
+**S24. Private-group API.** The patch from S06 in our fork of briar-headless (design.md §7.4), with
+tests in upstream style. Done when: every endpoint of design.md §7.4 works against a phone.
 
-**S28. Packaging.** Docker image for the patched briar-headless (amd64, arm64), non-interactive account
+**S25. Packaging.** Docker image for the patched briar-headless (amd64, arm64), non-interactive account
 setup, the compose service; prepare the upstream merge request. Done when: the image runs in the lab and
 the merge request is ready for the owner to submit.
 
-**S29. Briar legs.** `BriarApi` port over `httpx` and `websockets` and its fake; the hub creates each
-group's Briar private group; posts in and out; drop its own posts. Done when: the extension passes the
-contract suite, coverage ≥ 85 %.
+**S26. Briar endpoints.** `BriarApi` port over `httpx` and `websockets` and its fake; the Briar groups
+in `chatko.yaml` as endpoints; posts in and out with author accounts; drop its own posts. No contacts,
+groups or invitations (D24). Done when: design.md §7.1 (the extension's part) and §7.2 are covered by
+tests, the extension passes the contract suite, coverage ≥ 85 %.
 
-**S30. Briar linking.** `/briar` flow (design.md §7.2): pending contact, `ContactAddedEvent`, identity,
-invitations on joining a group, replace and remove, unlinked authors. Done when: §7.2 is covered by tests.
+**S27. briarctl.** The command-line tool of design.md §7.5 as the separate `briarctl` package: its own
+small REST client and fake, plain and `--json` output, an `import-linter` contract that keeps it apart
+from chatko, README steps for making a group with the hub as the creator. Done when: every command is
+tested against the fake and tried once against the lab `briar-headless` with a phone.
 
-**S31. Three networks.** *With owner*: phones, Telegram, the Meshtastic lab or the Kyiv mesh. Done when:
-one group works across all three networks.
+**S28. Three networks.** *With owner*: the cloud setup of D20 (a Briar group made with `briarctl`, a Telegram
+group, Meshtastic in the lab or on the Kyiv mesh). Done when: one group works across all three networks,
+with Meshtastic both as a channel and as DMs to several nodes.
 
 ### Phase 5: release
 
-**S32. Deployment.** Production compose file, daily backup of `config/` and `data/`, a guide for a Linux
+**S29. Deployment.** Production compose file, daily backup of `config/` and `data/`, a guide for a Linux
 VM (Oracle Cloud Always Free as the example), operations section in the README. Done when: the hub runs
 on a server and a restore from backup is tested.
 
-**S33. Release review.** `/security-review`, full code review, docs versus code, the known limitations in
+**S30. Release review.** `/security-review`, full code review, docs versus code, the known limitations in
 the README. Done when: findings are fixed or accepted, and v1 is tagged by the owner.
+
+### Later (not in v1)
+
+Planned as sessions once v1 is released (D17, D20, D22):
+- a physical hub node: serial, BLE and TCP connections in the Meshtastic adapter, tested with hardware;
+- several hubs: `peers` in the config, peer-relayed authors, fingerprint de-duplication on shared
+  endpoints; a home hub on a Raspberry Pi (Briar on the local Wi-Fi, a physical node);
+- a Signal extension over signal-cli-rest-api (D19);
+- a web UI, and commands if they turn out to be needed.
