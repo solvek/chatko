@@ -236,25 +236,34 @@ A member has at most one Briar identity, used for all of their groups.
 **Replacing** (`/briar` with a new link, e.g. after changing phones): the new contact goes through
 steps 1–3, then the old one is unlinked.
 
-**Unlinking** (`/briar remove`): the hub deletes the contact and removes the identity. It also tries to
-remove the account from the Briar groups. Briar may not support removing a member from a private group
-**(verify)**. In that case the old account stays in the groups it joined and can still read them
-through other members. The hub relays its posts as unlinked (`~BriarNick: text`), or ignores them if
-the admin configures that. To really cut it off, the admin re-creates the group. This limitation is
-documented in the README.
+**Unlinking** (`/briar remove`): the hub deletes the contact and removes the identity. Briar cannot
+remove a member from a private group (spike S1), and deleting the contact does not cut the account off:
+it stays in the groups it joined, reads them and posts to them through other members, and the hub still
+receives its posts. The hub relays those posts as unlinked (`~BriarNick: text`), or ignores them if the
+admin configures that. To really cut the account off, the admin re-creates the group's Briar leg: the
+hub dissolves the old Briar group and creates a new one, inviting every linked member. Members who
+learn about the dissolution can no longer post to the old group. The cut-off account may never learn
+about it (it may have no connection to the hub); it can still post to its copy, but nobody receives
+those posts. This limitation is documented in the README.
+
+A Briar group invitation is a private message between the hub and the member, and it is never relayed
+by other members. A member therefore joins a group only once their phone has reached the hub directly
+(over the internet) after the invitation was sent.
 
 ### 7.3 Relay through other members
 
 Private-group messages are signed by their author and sync between **any** two group members that meet
 (Bluetooth or the same Wi-Fi). A message can therefore travel hub → C → B → A while A never goes
-online **(verify, spike S1)**. Conditions:
+online (confirmed by spike S1 in both directions). Conditions:
 
 - A and B are Briar contacts of each other (the easiest way is to add each other once in person with
-  "Add contact nearby"), **and** they reveal that relationship in the group ("Reveal contacts").
-  Otherwise they sync only through the creator. **(verify: is it enough for one of the two to reveal?)**
+  "Add contact nearby"), **and** at least one of them reveals that relationship in the group ("Reveal
+  contacts" in the group's ⋮ menu). Otherwise they sync the group only with the creator, even when
+  they are connected to each other. The `/briar` help text tells members to do both.
 - Not everybody has to be a contact of everybody. Contacts between people who often meet in person are
   enough.
-- Briar runs in the background with Bluetooth on (battery optimization disabled).
+- Briar runs in the background with Bluetooth on (battery optimization disabled). With the screen off,
+  a message crossed between two nearby phones in 1–2 minutes.
 
 Private direct messages cannot be relayed this way: a two-person conversation syncs only between its
 two participants. That is one reason v1 has group messages only.

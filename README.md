@@ -25,12 +25,13 @@ Meshtastic LoRa channels. A hub copies every message to all the other places.
   (needs a gateway that knows the channel, in practice your own). A hub within radio range can use a
   physical node instead and needs no gateway.
 - **Removing a person from the mirrors is not instant.** Membership follows the Telegram group. To remove
-  someone from a Meshtastic channel, set a new channel key on all radios. Briar may not let the hub
-  remove a member from a private group. Then the only remedy is to re-create the Briar group.
+  someone from a Meshtastic channel, set a new channel key on all radios. Briar cannot remove a member
+  from a private group, and deleting the contact does not cut them off (they still sync through other
+  members). The only remedy is to re-create the Briar group.
 - **Briar reaches offline members only through other members.** A member who is never online gets Briar
   messages only if another group member (a Briar contact of theirs) syncs with the hub and later meets
-  them. Direct Briar messages are never relayed like this, which is one reason chatko has group messages
-  only.
+  them, and one of the two has used "Reveal contacts" in the group. Direct Briar messages are never
+  relayed like this, which is one reason chatko has group messages only.
 - **The hub is a single point of failure.** Keep backups of `config/` and `data/`.
 
 ## Documentation

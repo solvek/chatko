@@ -9,8 +9,8 @@ can be checked and committed. The phases are those of [design.md §13](design.md
 Start every session with this prompt, filling in the session id:
 
 ```
-Continue chatko. Read AGENTS.md, docs/roadmap.md and the docs that session <Sxx> needs.
-Do session <Sxx> from docs/roadmap.md. Stop when its "Done when" holds.
+Continue chatko with session <Sxx> from docs/roadmap.md.
+Read AGENTS.md, the roadmap and the docs the session needs. Stop when its "Done when" holds.
 Keep design.md, architecture.md and decisions.md in sync. Mark the session done in the roadmap.
 Do not commit without my permission.
 ```
@@ -45,7 +45,7 @@ Escalate instead of looping: if a session fails at the same problem twice, resta
 
 | # | Phase | Goal | Model | Effort | Status |
 |---|---|---|---|---|---|
-| S01 | 0 | Spike S1: Briar relay on 3 phones (*with owner*) | Opus 5.5 | medium | todo |
+| S01 | 0 | Spike S1: Briar relay on 3 phones (*with owner*) | Opus 5.5 | medium | done |
 | S02 | 0 | Spike S2a: local Meshtastic lab, channel messages | Opus 5.5 | high | todo |
 | S03 | 0 | Spike S2b: PKI direct messages, keys, ACKs, persistence, provisioning | Opus 5.5 | xhigh | todo |
 | S04 | 0 | Spike S2c: Kyiv broker, read-only; questions for the Kyiv community | Sonnet 5.5 | medium | todo |

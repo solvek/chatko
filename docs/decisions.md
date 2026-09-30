@@ -95,3 +95,16 @@ channel is not guaranteed.
 a private channel) are first-class. `dm` is the default.
 **Consequences:** `dm` works through any gateway that forwards PKI direct messages, but costs one packet
 per recipient node. `channel` is cheaper on air but needs a gateway that knows the channel.
+
+## D15. Briar members are cut off by re-creating the group
+Spike S1 (Briar 1.5.20) showed that a private group has no way to remove a member, and that deleting the
+contact does not cut a member off: they keep reading and posting through other members. Dissolving the
+group does stop it for everyone. Relay through other members works, and a "Reveal contacts" by one of
+two members is enough.
+**Decision:** `/briar remove` deletes the contact and the identity and does not try to remove the member
+from groups. Posts from such an account are relayed as unlinked or ignored, as configured. A real
+cut-off is done by re-creating the group's Briar leg (dissolve, create, invite the linked members). The
+`/briar` help tells members to add each other nearby and to reveal their contacts in the group.
+**Consequences:** the briar-headless patch needs no remove-member endpoint; `DELETE /v1/groups/{groupId}`
+(dissolve) is required. Re-creating a Briar leg loses its history on members' phones and needs every
+member to reach the hub directly once to accept the new invitation.
