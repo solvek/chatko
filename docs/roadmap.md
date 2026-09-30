@@ -46,7 +46,7 @@ Escalate instead of looping: if a session fails at the same problem twice, resta
 | # | Phase | Goal | Model | Effort | Status |
 |---|---|---|---|---|---|
 | S01 | 0 | Spike S1: Briar relay on 3 phones (*with owner*) | Opus 5.5 | medium | done |
-| S02 | 0 | Spike S2a: local Meshtastic lab, channel messages | Opus 5.5 | high | todo |
+| S02 | 0 | Spike S2a: local Meshtastic lab, channel messages | Opus 5.5 | high | done |
 | S03 | 0 | Spike S2b: PKI direct messages, keys, ACKs, persistence, provisioning | Opus 5.5 | xhigh | todo |
 | S04 | 0 | Spike S2c: Kyiv broker, read-only; questions for the Kyiv community | Sonnet 5.5 | medium | todo |
 | S05 | 0 | Spike S3a: build and run briar-headless, contacts API with a phone | Opus 5.5 | high | todo |
@@ -97,12 +97,14 @@ arm64); a private-channel message goes radio → hub and hub → radio through M
 
 **S03. Local Meshtastic lab, part 2.** PKI direct messages both ways; `pki_encrypted` and the sender's
 public key in the Python API; how keys are learned (NodeInfo) and how long it takes; ACKs over MQTT;
-`(from, id)` stability; node identity across restarts; setting channels, PSKs and MQTT from code.
-Read the firmware source where behaviour is unclear. Done when: all S2 checkboxes except the Kyiv and
+`(from, id)` stability; node identity across restarts. Provisioning from code is already answered in
+S02 (D25); check whether waiting for each admin response replaces the 1 s pause. Build on `lab/` and
+read the firmware source where behaviour is unclear. Done when: all S2 checkboxes except the Kyiv and
 hardware ones are answered.
 
 **S04. Kyiv broker.** A read-only client receives `LongFast` text. Draft (in Ukrainian, for the owner to
-send) the questions to the Kyiv community: PKI topic policy, downlink, gateway firmware. Done when:
+send) the questions to the Kyiv community: PKI topic policy, downlink, gateway firmware, and whether
+relays and gateways run with "Ignore MQTT" on (design.md §6.2). Done when:
 receiving works, the questions are sent, and design.md §6.2 notes what is still waiting for an answer.
 
 **S05. briar-headless, part 1.** Build `x86LinuxJar` (and `aarch64LinuxJar`) from upstream, note the JDK;
@@ -180,7 +182,8 @@ locally. Done when: two groups work independently, foreign groups are left, labe
 
 **S19. Adapter.** A `MeshApi` port and its fake; an adapter that bridges the thread-based
 `TCPInterface` to asyncio (serial and BLE later, D20, without changing the port); provisioning of the
-hub's node from the config (names, channels, PSKs, MQTT). Done when: the adapter is tested against the lab
+hub's node from the config (names, region, `ignore_mqtt`, channels, PSKs, MQTT; D25), reconnection
+after node reboots. Done when: the adapter is tested against the lab
 from S02.
 
 **S20. Channel endpoints.** `channel` endpoints, splitting into ≤ 200-byte parts with at most 3 parts and

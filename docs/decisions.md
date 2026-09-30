@@ -222,3 +222,19 @@ the hub still does not manage members inside chatko (D22).
 **Consequences:** the briar-headless patch again needs create, invite, members and dissolve (D6), used
 only by `briarctl`. One more small program to build and test (session S27). Cutting someone off works as
 in D15: dissolve, create, invite, then change the endpoint in the config.
+
+## D25. The hub provisions its Meshtastic node over the admin API and is its only client
+Spike S2 (`meshtasticd` 2.7.26) showed that `meshtasticd`'s YAML sets only the hardware (the simulated
+radio), the MAC address (the node id) and logging. Names, region, channels, PSKs and the MQTT client
+live in the node's own settings and are changed through admin messages. `meshtasticd` also serves one
+API client at a time, and it turns `ignore_mqtt` on when `EU_868` is first set, which silently drops
+every packet that crossed MQTT.
+**Decision:** each `meshtastic` extension instance provisions its node from `chatko.yaml` at start (and
+on config reload) through its own TCP connection: names, region, `ignore_mqtt` off, `config_ok_to_mqtt`
+on, the MQTT client, and the channels with uplink and downlink on. It writes only what differs, one
+admin message at a time, and reconnects after the node reboots. The node id is fixed by `MACAddress` in
+the `meshtasticd` YAML, which lives in `config/`. The hub is the only API client of its node.
+**Consequences:** `chatko.yaml` is the single source of truth for the node; changes made with the
+Meshtastic app are overwritten at the next start. The admin inspects the node through the hub's logs, or
+stops the hub first. The `meshtasticd` containers need a restart policy. Members' radios need "Ignore
+MQTT" off (design.md §6.2), which goes into the setup instructions for members.

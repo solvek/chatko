@@ -14,6 +14,7 @@ extensions:
     # Later (not in v1): a physical node: { serial: /dev/ttyUSB0 } | { ble: "AA:BB:CC:DD:EE:FF" } | { tcp: "192.168.1.50:4403" }
     long_name: chatko
     short_name: CHKO               # up to 4 characters
+    region: EU_868                 # the hub sets it and keeps ignore_mqtt off (design.md §6.1)
     mqtt:                          # required for a virtual node
       host: mqtt.example.org       # the Kyiv community broker, our own Mosquitto, or any other
       port: 8883

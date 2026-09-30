@@ -62,6 +62,7 @@ tests/
   contract/          # each extension against extension_api.testing
   integration/       # real SQLite; opt-in docker lab (Mosquitto + meshtasticd, briar-headless)
 routing.example.py   # sample routing script, tested in CI like any other code
+lab/                 # docker compose lab: Mosquitto + two meshtasticd nodes, plus spike scripts
 ```
 
 Built-in extensions are shipped in the same repository and distribution for now, but they are registered
@@ -112,7 +113,10 @@ Key types:
 
 Rules for extension authors:
 - Never block the event loop. Wrap thread-based client libraries (e.g. `meshtastic`'s `TCPInterface`)
-  in an adapter that bridges to asyncio with `loop.call_soon_threadsafe`.
+  in an adapter that bridges to asyncio with `loop.call_soon_threadsafe`. The Meshtastic adapter is the
+  only client of its node, sends admin messages one at a time, and owns reconnection: the node closes
+  the connection when it reboots or when another client connects, and the library's own reconnect
+  must not race with the adapter's (spike S2, D25).
 - Talk to the external system through a small internal port (e.g. `TelegramApi`, `BriarApi`), so that
   the extension logic is tested against a fake of that port.
 - Drop the hub's own posts before calling `hub.submit`.
@@ -167,7 +171,7 @@ tests (whatever the script returns, no echo and no duplicate delivery).
 | Config | `pydantic` v2 models, YAML (`PyYAML`, safe loader), `${ENV}` substitution, `watchfiles` for reload |
 | Storage | SQLite via `aiosqlite`, schema migrations in code |
 | Telegram | `aiogram` 3, wrapped behind the extension's `TelegramApi` port |
-| Meshtastic | official `meshtastic` Python library over TCP to `meshtasticd` (serial, BLE and TCP to a physical node later) |
+| Meshtastic | official `meshtastic` Python library over TCP to `meshtasticd` (serial, BLE and TCP to a physical node later); image `meshtastic/meshtasticd`, tag pinned in the compose files |
 | Briar | `httpx` + `websockets` to `briar-headless` |
 | License | GPL-3.0-or-later |
 

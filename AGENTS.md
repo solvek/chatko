@@ -24,10 +24,12 @@
 - `docs/roadmap.md`: the plan by working session, with the model and effort for each. Mark sessions
   done there.
 - `config.example.yaml`, `routing.example.py`, `.env.example`: configuration format.
+- `lab/`: the local Meshtastic lab (`docker compose`: Mosquitto and two `meshtasticd` nodes) and the
+  spike scripts; see `lab/README.md`.
 
 ## Current state
-- Design phase; no code yet. Phase 0 (spikes S1–S3) is in progress (spike S1, Briar relay, is done),
-  then phase 1 (core). The next session
+- Design phase; no code yet. Phase 0 (spikes S1–S3) is in progress (spike S1, Briar relay, and part 1
+  of spike S2, the local Meshtastic lab in `lab/`, are done), then phase 1 (core). The next session
   is the first one marked `todo` in `docs/roadmap.md`.
 - Development runs locally on the owner's Linux machine. There is no hardware Meshtastic node yet, so
   a second virtual node (`meshtasticd`) plays the member's radio. The production host will be some Linux

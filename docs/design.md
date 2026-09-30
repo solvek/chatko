@@ -131,6 +131,17 @@ for `channel` delivery, but `dm` delivery would need our own PKI, NodeInfo, ACK 
 - The node's channels and their PSKs are set in the config, and the hub provisions the node from it. The
   admin gives the PSK (a channel URL or QR code from the Meshtastic app) to the people who should have it.
   Removing someone from a channel means a new PSK on all radios.
+- Provisioning (D25) goes through the node's admin API over the same connection the hub uses for
+  messages: names, region, `ignore_mqtt` off, the MQTT client, and each channel with uplink and downlink
+  on. It writes only what differs from the node's current settings, one admin message at a time, and
+  reconnects when the node reboots (a `meshtasticd` reboot ends the process; its container restarts it).
+  `meshtasticd`'s own YAML sets only the simulated radio, the MAC address (which fixes the node id) and
+  logging.
+- A channel is matched over MQTT by its **name** (the topic `<root>/2/e/<name>/<gateway>` and the
+  envelope carry it; the packet carries only a hash), then decrypted with its PSK. A private channel must
+  have the same name and PSK on the hub's node and on every radio.
+- `meshtasticd` serves one API client at a time: a new connection drops the previous one. The hub is the
+  only client of its node; the admin does not connect the Meshtastic app or CLI to it while the hub runs.
 - A node has up to 8 channels. Channel 0 is usually the public primary channel of the mesh (e.g.
   `LongFast`), used as a source. The other channels are private group channels with their own PSK.
 - A group may have several Meshtastic legs, even on different instances (brokers).
@@ -160,6 +171,13 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
 - Both kinds can be used in one group. Then a person with a node on both gets the message twice, unless
   the routing script skips `dm` for nodes recently heard on the channel (`last_heard`, §9.5).
 - With a physical hub node (later), both kinds work within its radio range without any gateway.
+- **"Ignore MQTT" must be off** on the person's radio, and on every relay between the gateway and it.
+  A packet from the hub's virtual node is marked "via MQTT", and the mark travels in the LoRa header after
+  a gateway downlinks it. A node with `ignore_mqtt` on drops such a packet before it would show or relay
+  it (spike S2, firmware 2.7.26). The firmware turns `ignore_mqtt` on when a region with a duty-cycle
+  limit, such as `EU_868` in Ukraine, is set for the first time, so many radios have it on. Setup
+  instructions for members say to turn it off. How common it is on the Kyiv relays is **(verify: ask the
+  Kyiv community, S04)**.
 - Relaying routers of the mesh forward packets of unknown channels without decrypting them (the default
   rebroadcast mode is `ALL`) **(verify)**, so a private-channel packet still travels over foreign relays.
 - Research idea, not planned: publish private-channel packets under the topic of a channel that foreign
@@ -180,7 +198,9 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
 ### 6.4 Authors
 
 A Meshtastic message carries the sender's node id and, once NodeInfo was heard, the node's long and
-short name. The author label comes from these (§8).
+short name. The author label comes from these (§8). Until NodeInfo is heard, only the node id
+(`!c4a7b002`) is known: the Python library then shows a placeholder name `Meshtastic b002`, which is not
+the node's name and is not used as one.
 
 ### 6.5 Feeds
 
@@ -449,10 +469,12 @@ and fingerprints for de-duplication, when nodes were last heard, accounts alread
   the hub's `meshtasticd`, and a second `meshtasticd` that plays a person's radio, so both `channel` and
   `dm` endpoints can be tested without hardware. When a hardware node is available, it is tested as a
   person's radio (and later as a physical hub node). `briar-headless` is built locally. A read-only
-  connection to the Kyiv broker is used to receive `LongFast`.
+  connection to the Kyiv broker is used to receive `LongFast`. The Meshtastic lab is in
+  [`lab/`](../lab/README.md) (image `meshtastic/meshtasticd`, pinned tag, amd64 and arm64).
 - **Production:** a Linux server (cloud VM, x86-64 or ARM64), the same compose file. Inbound ports:
   SSH only. Telegram long polling, MQTT and Tor are all outbound. The `meshtasticd` TCP API (4403) has
-  no authentication, so it stays inside the Docker network.
+  no authentication, so it stays inside the Docker network. `meshtasticd` containers need a restart
+  policy, because a node reboot ends the process.
 - Volumes: `config/` (chatko.yaml, routing.py, meshtasticd configs) and `data/` (SQLite, Briar and
   meshtasticd state, including node keys). Secrets live in `.env`. `config/` and `data/` are backed up
   daily.

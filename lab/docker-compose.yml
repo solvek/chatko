@@ -1,0 +1,40 @@
+# Local Meshtastic lab (spike S2): a Mosquitto broker and two virtual nodes without radios.
+#   hub   plays chatko's node         -> TCP API on 127.0.0.1:4403
+#   radio plays a member's radio node -> TCP API on 127.0.0.1:4404
+# The nodes reach each other only through MQTT (SimRadio does not transmit, UDP is off).
+name: chatko-lab
+
+x-meshtasticd: &meshtasticd
+  image: meshtastic/meshtasticd:${MESHTASTICD_TAG:-2.7.26-beta}
+  command: ["meshtasticd", "--config=/etc/meshtasticd/config.yaml", "--fsdir=/var/lib/meshtasticd"]
+  depends_on: [mosquitto]
+  restart: unless-stopped
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    ports:
+      - "127.0.0.1:1883:1883"
+    restart: unless-stopped
+
+  hub:
+    <<: *meshtasticd
+    volumes:
+      - ./meshtasticd/hub.yaml:/etc/meshtasticd/config.yaml:ro
+      - hub-data:/var/lib/meshtasticd
+    ports:
+      - "127.0.0.1:4403:4403"
+
+  radio:
+    <<: *meshtasticd
+    volumes:
+      - ./meshtasticd/radio.yaml:/etc/meshtasticd/config.yaml:ro
+      - radio-data:/var/lib/meshtasticd
+    ports:
+      - "127.0.0.1:4404:4403"
+
+volumes:
+  hub-data:
+  radio-data:
