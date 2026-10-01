@@ -384,6 +384,48 @@ async def test_no_report_without_the_source_instance(rig: OutboxRig) -> None:
     assert rig.state().state is DeliveryState.DELIVERED
 
 
+async def test_a_delivery_to_an_endpoint_no_longer_in_the_config_fails(rig: OutboxRig) -> None:
+    gone = EndpointRef("mesh", "gone.channel")
+    await rig.add("1", (gone, None))
+    await settle()
+
+    assert rig.state().state is DeliveryState.FAILED
+    assert rig.state().last_error == "gone.channel is no longer in the config"
+    assert not rig.mesh.calls
+
+
+async def test_the_report_goes_to_the_source_only_if_it_runs_when_the_delivery_ends(
+    rig: OutboxRig,
+) -> None:
+    rig.mesh.gate.clear()
+    await rig.add("1")
+    await settle()
+    rig.installation = Installation(TOPOLOGY, {"mesh": rig.mesh, "tg": rig.tg}, running={"mesh"})
+    rig.mesh.gate.set()
+    await settle()
+
+    assert rig.state().state is DeliveryState.DELIVERED
+    assert not rig.tg.reports
+
+
+async def test_finish_attempts_waits_for_the_instances_deliveries_in_progress(
+    rig: OutboxRig,
+) -> None:
+    rig.mesh.gate.clear()
+    await rig.add("1")
+    await settle()
+    assert rig.mesh.in_flight == 1
+
+    finishing = asyncio.create_task(rig.worker.finish_attempts("mesh"))
+    await settle()
+    assert not finishing.done()
+    await rig.worker.finish_attempts("tg")  # nothing in progress there
+
+    rig.mesh.gate.set()
+    await asyncio.wait_for(finishing, 1)
+    assert rig.state().state is DeliveryState.DELIVERED
+
+
 async def test_a_failing_report_is_logged_and_ignored(
     rig: OutboxRig, caplog: pytest.LogCaptureFixture
 ) -> None:

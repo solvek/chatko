@@ -50,3 +50,14 @@ def test_recipients_come_from_the_extensions() -> None:
 def test_a_deduplication_window_must_be_positive() -> None:
     with pytest.raises(ValueError, match=r"family\.tg must be positive"):
         Installation(TOPOLOGY, fingerprint_dedup={FAMILY_TG: timedelta(0)})
+
+
+def test_an_instance_that_is_not_running_gets_no_calls_but_its_recipients_are_known() -> None:
+    rig = Rig()
+    installation = Installation(TOPOLOGY, rig.extensions, running={"tg"})
+
+    assert installation.provider("tg") is rig.extensions["tg"]
+    assert installation.provider("mesh") is None
+    assert not installation.is_running("mesh")
+    assert installation.recipients(FAMILY_RADIO) == ("!a1", "!b2")
+    assert installation.extension_types == {"tg": "fake", "mesh": "fake"}

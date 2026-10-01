@@ -3,9 +3,10 @@
 import logging
 from datetime import datetime
 
+from chatko.application.accounts import NewAccounts
 from chatko.application.history import HubHistory
 from chatko.application.outbox import OutboxWorker
-from chatko.application.pipeline import InboundPipeline
+from chatko.application.pipeline import InboundPipeline, Outcome
 from chatko.application.ports import AdminNotices, Clock
 from chatko.domain import Account, EndpointRef
 from chatko.extension_api import HubContext, InboundMessage
@@ -15,7 +16,8 @@ _log = logging.getLogger("chatko.hub")
 
 class ExtensionHub(HubContext):
     """One per extension instance. It accepts only the instance's own endpoints: a call about
-    another instance's endpoint is logged and ignored."""
+    another instance's endpoint is logged and ignored. The authors of submitted messages and the
+    accounts heard go to `accounts`, if given, for the new-account notice."""
 
     def __init__(
         self,
@@ -26,6 +28,7 @@ class ExtensionHub(HubContext):
         history: HubHistory,
         notices: AdminNotices,
         clock: Clock,
+        accounts: NewAccounts | None = None,
     ) -> None:
         self.instance = instance
         self._pipeline = pipeline
@@ -33,14 +36,20 @@ class ExtensionHub(HubContext):
         self._history = history
         self._notices = notices
         self._clock = clock
+        self._accounts = accounts
 
     async def submit(self, message: InboundMessage) -> None:
-        if self._owns(message.endpoint, "a message"):
-            await self._pipeline.submit(message)
+        if not self._owns(message.endpoint, "a message"):
+            return
+        outcome = await self._pipeline.submit(message)
+        if self._accounts is not None and outcome in (Outcome.ROUTED, Outcome.NOT_ROUTED):
+            await self._accounts.saw(message.author, message.endpoint)
 
     async def heard(self, account: Account, endpoint: EndpointRef | None = None) -> None:
         if endpoint is None or self._owns(endpoint, f"that {account.key} was heard"):
             self._history.hear(account.key, self.now(), endpoint)
+            if self._accounts is not None:
+                await self._accounts.saw(account, endpoint)
 
     async def retry_now(self, endpoint: EndpointRef, recipient: str | None = None) -> None:
         if self._owns(endpoint, "a retry"):

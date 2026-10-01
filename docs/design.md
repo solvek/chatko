@@ -549,8 +549,9 @@ For every incoming message, one at a time, in the order the extensions submit th
    holds back the newer ones, so messages never overtake each other. A failed delivery (including
    an extension error or no answer within 2 minutes) is retried with backoff (10 s, doubling up to
    1 h), or as soon as the extension says the place is reachable again (a radio heard again), and
-   survives a restart. A delivery that still fails when its message is 3 days old is given up.
-   When a delivery ends, the extension of the endpoint the message came from gets a **delivery
+   survives a restart. When an extension instance (re)starts, the rows waiting for it are tried at
+   once. A delivery that still fails when its message is 3 days old is given up, and one to an
+   endpoint that the config no longer has fails. When a delivery ends, the extension of the endpoint the message came from gets a **delivery
    report**, e.g. to mark a message that was cut short (§6.3).
 
 ### 9.2 Targets
@@ -677,14 +678,18 @@ Two files in `config/`, both edited only by the admin and reloaded on change:
   [`routing.example.py`](../routing.example.py).
 
 If a new version is invalid, the hub keeps the previous one and reports the error as an admin notice.
-`chatko check-config` checks both files (and runs the routing script's tests) without starting the hub.
+A valid new version applies while the hub runs: an extension instance whose own section changed is
+restarted (so is one that failed to start), one whose endpoints changed gets the new set without a
+restart, new instances start and removed ones stop, after the deliveries in progress to them end.
+A new routing script takes effect in the same moment as the new config it comes with.
+`chatko run` runs the hub until SIGTERM or Ctrl+C; `chatko check-config` checks both files (and runs the routing script's tests) without starting the hub.
 Beside the sections of the example, the config has `fingerprint_dedup_s` (§9.3: the window per endpoint,
 in seconds) and `retention_days`. Admin notices go through the outbox like any message; notices
 with the same cause are rate-limited together, and the next one says how many were held back.
 Secrets (tokens, passwords, PSKs, the hub node's private key) come from environment variables
 (`${VAR}` in YAML, values in `.env`), never from the files.
 
-The hub never writes these files. SQLite holds only runtime state: messages, the outbox, transport ids
+The hub never writes these files. SQLite (`data/chatko.sqlite3`) holds only runtime state: messages, the outbox, transport ids
 and fingerprints for de-duplication, when nodes were last heard, accounts already seen. Old messages with nothing left to deliver and
 old fingerprints are pruned after the retention (7 days by default).
 

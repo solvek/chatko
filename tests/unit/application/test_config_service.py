@@ -2,7 +2,6 @@ from typing import Any
 
 from chatko.application.config import ConfigError
 from chatko.application.config_service import ConfigOutcome, ConfigService
-from chatko.application.routing import ReloadOutcome
 from chatko.application.testing import InMemoryConfigLoader, RecordingNotices
 from chatko.extension_api.testing import FakeExtension
 
@@ -13,22 +12,9 @@ GOOD: dict[str, Any] = {
 BAD: dict[str, Any] = {"extensions": {"tg": {"type": "nope"}}}
 
 
-class FakeRouting:
-    def __init__(self) -> None:
-        self.reloads = 0
-
-    async def reload(self) -> ReloadOutcome:
-        self.reloads += 1
-        return ReloadOutcome.UNCHANGED
-
-
-def rig(
-    config: dict[str, Any], routing: FakeRouting | None = None
-) -> tuple[ConfigService, InMemoryConfigLoader, RecordingNotices]:
+def rig(config: dict[str, Any]) -> tuple[ConfigService, InMemoryConfigLoader, RecordingNotices]:
     loader, notices = InMemoryConfigLoader(config), RecordingNotices()
-    service = ConfigService(
-        loader=loader, types={"fake": FakeExtension}, notices=notices, routing=routing
-    )
+    service = ConfigService(loader=loader, types={"fake": FakeExtension}, notices=notices)
     return service, loader, notices
 
 
@@ -123,30 +109,3 @@ async def test_a_lost_notice_does_not_break_the_reload() -> None:
     notices.notify = broken  # type: ignore[method-assign]
 
     assert await service.reload() is ConfigOutcome.REFUSED
-
-
-async def test_refresh_reloads_the_config_and_then_the_routing_script() -> None:
-    routing = FakeRouting()
-    service, _, _ = rig(GOOD, routing)
-
-    refresh = await service.refresh()
-
-    assert refresh.config is ConfigOutcome.LOADED
-    assert refresh.routing is ReloadOutcome.UNCHANGED
-    assert routing.reloads == 1
-
-
-async def test_refresh_reloads_the_routing_script_even_if_the_config_is_refused() -> None:
-    routing = FakeRouting()
-    service, _, _ = rig(BAD, routing)
-
-    refresh = await service.refresh()
-
-    assert refresh.config is ConfigOutcome.REFUSED
-    assert routing.reloads == 1
-
-
-async def test_refresh_without_a_routing_engine() -> None:
-    service, _, _ = rig(GOOD)
-
-    assert (await service.refresh()).routing is None

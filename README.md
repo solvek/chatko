@@ -16,7 +16,7 @@ Meshtastic LoRa channels. A hub copies every message to all the other places.
   Without it, every message goes to all the other places of its group.
 - It can forward the mesh's primary Meshtastic chat (e.g. the Kyiv `LongFast`) to selected chats.
 
-> **Status: phase 1 (core).** The project skeleton, tooling, domain model, the extension and routing APIs, the inbound pipeline with the outbox worker, and the routing engine with a test kit for routing scripts are in place; the hub does not run yet. Start with the [design](docs/design.md).
+> **Status: phase 1 (core).** The project skeleton, tooling, domain model, the extension and routing APIs, the inbound pipeline with the outbox worker, the routing engine with a test kit for routing scripts, SQLite storage, the configuration and `chatko run` are in place; no network extension is written yet, so the hub does not reach any network. Start with the [design](docs/design.md).
 
 ## Known limitations
 
@@ -65,6 +65,13 @@ Check a config and its routing script (and run the script's tests, which needs t
 
 ```bash
 uv run chatko check-config --config config/chatko.yaml    # reads .env too
+```
+
+Run the hub (until Ctrl+C or SIGTERM; its state goes to `data/chatko.sqlite3`, and it reloads
+`chatko.yaml` and the routing script when they change):
+
+```bash
+uv run chatko run --config config/chatko.yaml --data data    # reads .env too
 ```
 
 The gates and their limits are in [docs/architecture.md §7](docs/architecture.md#7-quality-gates).

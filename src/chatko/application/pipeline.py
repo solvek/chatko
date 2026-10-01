@@ -71,11 +71,20 @@ class InboundPipeline:
         self._clock = clock
         self._ids = ids
         self._lock = asyncio.Lock()
+        self._handling: set[asyncio.Task[Outcome]] = set()
 
     async def submit(self, inbound: InboundMessage) -> Outcome:
         task = asyncio.create_task(self._submit(inbound))
+        self._handling.add(task)
+        task.add_done_callback(self._handling.discard)
         task.add_done_callback(_log_unexpected_error)
         return await asyncio.shield(task)
+
+    async def drain(self) -> None:
+        """Wait until the messages submitted so far are handled, including those whose `submit`
+        was cancelled. The hub calls it at shutdown, after the extensions have stopped."""
+        while self._handling:
+            await asyncio.wait(set(self._handling))
 
     async def _submit(self, inbound: InboundMessage) -> Outcome:
         async with self._lock:

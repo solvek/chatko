@@ -61,7 +61,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S12 | 1 | Routing engine: script loading, defaults, `label` hook, test kit, example script | Opus 5.5 | high | done |
 | S13 | 1 | SQLite repositories and migrations | Sonnet 5.5 | high | done |
 | S14 | 1 | Configuration: models, `${ENV}`, people, admin notices, hot reload, `check-config` | Sonnet 5.5 | high | done |
-| S15 | 1 | Extension discovery, composition root, `chatko run`, fake extension end to end | Opus 5.5 | high | todo |
+| S15 | 1 | Extension discovery, composition root, `chatko run`, fake extension end to end | Opus 5.5 | high | done |
 | S16 | 1 | Phase 1 review | Opus 5.5 | xhigh | todo |
 | S17 | 2 | Telegram: port, group and private-chat endpoints, allowed chats | Opus 5.5 | high | todo |
 | S18 | 2 | Telegram live test with two groups (*with owner*) | Sonnet 5.5 | medium | todo |
@@ -253,6 +253,15 @@ and the worker read (D37), the outbox worker started before the extensions and s
 `chatko run`; `FakeExtension` (in
 `extension_api.testing` since S10) registered for the test. Done when: an end-to-end test runs the hub with two fake extensions and a message crosses
 from one site to the other through SQLite.
+*Done (D42):* `HubRuntime` (`chatko.application.runtime`) runs the hub over `HubPorts` and is tested
+with the in-memory fakes; `app.run` (`run_hub`, `serve`) is the composition root and `chatko run` its
+command; `NewAccounts` posts the new-account notice; `ConfiguredScriptSource` follows the config's
+`routing`. The worker now starts after the extensions and stops before them, and a reload swaps the
+routing script and the topology in one step (`ConfigService.refresh` is gone). The end-to-end tests
+(`tests/integration/test_hub.py`) run the hub with two `FakeExtension` instances, real files and
+SQLite: a message crossing, deliveries waiting across a restart, a config and a routing script
+changed while it runs, SIGTERM. 676 tests, coverage 99 %. For S16: the pre-existing gaps in
+`application/config.py`, and the KeyboardInterrupt path of `chatko run` (Windows) is untested.
 
 **S16. Phase 1 review.** `/code-review` at high effort, coverage and architecture check, docs in sync
 with the code. Done when: findings are fixed or recorded as sessions.

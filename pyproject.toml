@@ -68,7 +68,10 @@ ignore = ["PLR2004"]
 [tool.ruff.lint.per-file-ignores]
 # Cyrillic letters are data here, not look-alikes of Latin ones.
 # Fake routing scripts in tests keep the hook signatures of the routing API, like the example.
-"tests/**" = ["S101", "ANN", "ARG001", "ARG002", "PLR0913", "RUF001", "RUF002", "RUF003"]
+# Tests write their files in place, also inside async tests (ASYNC240).
+"tests/**" = [
+    "S101", "ANN", "ARG001", "ARG002", "PLR0913", "RUF001", "RUF002", "RUF003", "ASYNC240",
+]
 # The public test kits are test code that ships with the package.
 "src/chatko/*/testing/**" = ["S101", "RUF001"]
 "src/chatko/domain/transliteration.py" = ["RUF001", "RUF002", "RUF003"]

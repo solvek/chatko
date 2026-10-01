@@ -75,7 +75,8 @@ class _Lane:
     queue: deque[Delivery] = field(default_factory=deque)
     ids: set[MessageId] = field(default_factory=set)
     wake: asyncio.Event = field(default_factory=asyncio.Event)
-    busy: bool = False
+    attempt: asyncio.Task[Delivery] | None = None
+    """The attempt in progress."""
     task: asyncio.Task[None] | None = None
 
 
@@ -149,6 +150,18 @@ class OutboxWorker:
             if lane_endpoint == endpoint and recipient in (None, lane_recipient):
                 lane.wake.set()
 
+    async def finish_attempts(self, instance: str) -> None:
+        """Wait until the attempts in progress to the endpoints of `instance` have ended, so that
+        it can be stopped (architecture.md §3.1). Take it out of the installation's running
+        instances first, or new attempts follow."""
+        attempts = [
+            lane.attempt
+            for lane in self._lanes.values()
+            if lane.key[0].instance == instance and lane.attempt is not None
+        ]
+        if attempts:
+            await asyncio.wait(attempts)
+
     async def stop(self) -> None:
         """Stop delivering. The deliveries in progress get `stop_grace` to end."""
         self._state = _State.STOPPED
@@ -157,7 +170,7 @@ class OutboxWorker:
         self._lanes.clear()
         tasks = [lane.task for lane in lanes if lane.task is not None]
         for lane in lanes:
-            if not lane.busy and lane.task is not None:
+            if lane.attempt is None and lane.task is not None:
                 lane.task.cancel()
         if not tasks:
             return
@@ -175,17 +188,17 @@ class OutboxWorker:
                     await self._sleep(lane, head.due_at)
                     continue
                 lane.wake.clear()
-                lane.busy = True
+                lane.attempt = asyncio.ensure_future(self._attempt(head))
                 try:
-                    attempted = await self._attempt(head)
+                    attempted = await lane.attempt
                 except Exception:
                     _log.exception(
                         "the delivery of %s to %s broke", head.message_id, head.destination
                     )
-                    lane.busy = False
                     await self._sleep(lane, self._clock.now() + self._settings.first_retry)
                     continue
-                lane.busy = False
+                finally:
+                    lane.attempt = None
                 if attempted.state is DeliveryState.PENDING:
                     lane.queue[0] = attempted
                 else:
@@ -231,12 +244,14 @@ class OutboxWorker:
                 ended.attempts,
                 f": {ended.last_error}" if ended.last_error else "",
             )
-            await self._report(installation, message, ended)
+            await self._report(message, ended)
         return ended
 
     async def _deliver(
         self, installation: Installation, message: Message, delivery: Delivery
     ) -> DeliveryResult:
+        if not installation.topology.has_endpoint(delivery.endpoint):
+            return Failed(f"{delivery.endpoint.name} is no longer in the config")
         instance = delivery.endpoint.instance
         provider = installation.provider(instance)
         if provider is None:
@@ -270,9 +285,9 @@ class OutboxWorker:
         wait = self._settings.backoff(delivery.attempts) if result.after is None else result.after
         return delivery.retry(now + wait, result.reason)
 
-    async def _report(self, installation: Installation, message: Message, ended: Delivery) -> None:
+    async def _report(self, message: Message, ended: Delivery) -> None:
         source = message.endpoint
-        provider = installation.provider(source.instance)
+        provider = self._installation().provider(source.instance)
         if provider is None:
             return
         result = (

@@ -12,6 +12,7 @@ import asyncio
 from collections.abc import Mapping
 from datetime import timedelta
 
+from chatko.application.accounts import NewAccounts
 from chatko.application.history import HubHistory
 from chatko.application.hub import ExtensionHub
 from chatko.application.installation import Installation
@@ -112,7 +113,7 @@ class Rig:
     def current(self) -> Installation:
         return self.installation
 
-    def hub(self, instance: str) -> ExtensionHub:
+    def hub(self, instance: str, accounts: NewAccounts | None = None) -> ExtensionHub:
         return ExtensionHub(
             instance,
             pipeline=self.pipeline,
@@ -120,6 +121,7 @@ class Rig:
             history=self.history,
             notices=self.notices,
             clock=self.clock,
+            accounts=accounts,
         )
 
     async def start(self) -> None:

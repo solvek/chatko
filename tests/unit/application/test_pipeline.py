@@ -372,6 +372,23 @@ async def test_cancelling_a_submission_does_not_cancel_storing_it() -> None:
     assert rig.history.last_heard(ADA.key, FAMILY_TG) is not None
 
 
+async def test_drain_waits_for_a_submission_whose_caller_was_cancelled() -> None:
+    store = GatedStore()
+    rig = Rig(store=store)
+    submission = asyncio.create_task(rig.pipeline.submit(inbound()))
+    await store.adding.wait()
+    submission.cancel()
+
+    draining = asyncio.create_task(rig.pipeline.drain())
+    await asyncio.sleep(0)
+    assert not draining.done()
+    store.gate.set()
+    await asyncio.wait_for(draining, 1)
+
+    assert len(store.messages) == 1
+    await rig.pipeline.drain()  # nothing left: returns at once
+
+
 async def test_a_copy_that_lost_the_race_to_the_store_is_dropped() -> None:
     class RacingStore(InMemoryStore):
         async def contains(self, endpoint: EndpointRef, transport_id: str) -> bool:

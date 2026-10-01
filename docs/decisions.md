@@ -679,3 +679,44 @@ message and on a timer, and the prunes daily. `aiosqlite` is a runtime dependenc
 snapshots from `Config`, and decides what to do with a `LOADED` outcome while the hub runs. A
 reload that changes an endpoint's name drops its pending state (D34); `ExtensionSetup` equality is
 how S15 knows an instance must be restarted. `PyYAML` and `watchfiles` are runtime dependencies.
+
+## D42. The hub is one application object over its ports; the worker runs inside the extensions' lifetime
+**Status:** accepted (S15).
+- **`HubRuntime` is in the application layer.** It builds the services over `HubPorts` and runs the
+  extension instances, so the whole hub (start, reloads, restarts of instances, stop) is tested with
+  the in-memory fakes. The composition root, `app.run`, only puts the infrastructure under it, watches
+  the files and handles signals. `chatko run` keeps its state in `data/chatko.sqlite3`.
+- **The worker starts after the extensions and stops before them**, the reverse of D37's advice. The
+  worker should call only started instances: started first, it would answer every pending delivery
+  with "not running" and a backoff at each restart. Nothing is lost: every message is stored before
+  its rows are enqueued, and the worker loads the outbox when it starts. Stopping it first also
+  guarantees what §3.1 promises, that no delivery is in progress when an instance stops. While the
+  hub runs, an instance is stopped only after it is out of service (`Installation.running`) and its
+  attempts in progress have ended (`OutboxWorker.finish_attempts`).
+- **`Installation` knows the instances that do not run.** The recipients and types of a constructed
+  instance are known while it starts or restarts, so a message routed meanwhile still gets one row
+  per recipient; only running instances get deliveries and reports. When an instance has started,
+  what waits for it is due at once.
+- **A reload swaps the routing script and the topology in one step of the event loop.** The runtime
+  stops the changed instances, reloads the script, and then, without awaiting, gives the new endpoint
+  sets, constructs the new instances and publishes the new snapshot. A message is never routed by a
+  new script against the old topology or the other way round. This needs the runtime to interleave the
+  two reloads, so `ConfigService.refresh` (D41) is gone and the runtime's `refresh` does it. The
+  script's file follows the config (`ConfiguredScriptSource`), and the watcher moves to a new file.
+- **Deliveries to an endpoint the config no longer has fail** ("… is no longer in the config"), which
+  is how D34's "drops its pending state" happens.
+- **An instance whose `start` raised is tried again with the next config that loads**, not on a
+  timer: by the extension API, `start` raises only when the instance cannot work at all, and what
+  fixes that is a change of its config.
+- **The history is saved every 10 s and at stop**, not after each message as D40 planned. A
+  message's transport id is in SQLite with the message anyway; a crash loses at most 10 s of
+  fingerprints and last-heard times, and the hub saves a transaction per message.
+- **New accounts.** `ExtensionHub` hands the author of every stored message and every account heard
+  to `NewAccounts`, which notes it in the `AccountRegistry` and, with `admin_notices.new_accounts`,
+  tells the admin of a key seen for the first time that belongs to no person (key `account:<key>`).
+
+**Consequences:** the hub runs (`chatko run`), but no extension is registered yet, so a real config
+waits for S17. A change saved in the moment between the start and the watcher's first watch is not
+noticed until the next save, because `watchfiles` does not say when it watches. Extensions get
+`set_endpoints` while they run, and `stop` only after their deliveries ended. Tests may write files
+inside async tests (`ruff`'s `ASYNC240` is off for `tests/`).

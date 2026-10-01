@@ -1,13 +1,11 @@
 """Loading and hot-reloading `chatko.yaml` (docs/design.md §10, architecture.md §5)."""
 
 import logging
-from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any
 
 from chatko.application.config import Config, ConfigError, ExtensionTypes, validate_config
 from chatko.application.ports import AdminNotices, ConfigLoader
-from chatko.application.routing import ReloadOutcome
 
 _log = logging.getLogger("chatko.config")
 
@@ -26,20 +24,6 @@ class ConfigOutcome(StrEnum):
     admin was told."""
 
 
-class ScriptReloader(Protocol):
-    """Reloads the routing script: the `RoutingEngine`."""
-
-    async def reload(self) -> ReloadOutcome: ...
-
-
-@dataclass(frozen=True, slots=True)
-class Refresh:
-    """What `ConfigService.refresh` did; `routing` is `None` without a routing engine."""
-
-    config: ConfigOutcome
-    routing: ReloadOutcome | None
-
-
 class ConfigService:
     """Keeps the last valid `Config`.
 
@@ -47,10 +31,7 @@ class ConfigService:
     be read or is not valid is refused: the previous config stays `current`, `errors` says why and
     the admin gets a notice (key `config:load`), once for each different problem. Reading the same
     content again, valid or not, changes and reports nothing. At start `current` stays `None` after
-    a refusal, and the composition root decides what to do about it.
-
-    `refresh` is what a watcher calls when the config or the routing script may have changed: it
-    reloads the config and then the routing script.
+    a refusal, and the `HubRuntime` does not start.
     """
 
     def __init__(
@@ -59,12 +40,10 @@ class ConfigService:
         loader: ConfigLoader,
         types: ExtensionTypes,
         notices: AdminNotices,
-        routing: ScriptReloader | None = None,
     ) -> None:
         self._loader = loader
         self._types = types
         self._notices = notices
-        self._routing = routing
         self._current: Config | None = None
         self._errors: tuple[str, ...] = ()
         self._last_raw: dict[str, Any] | None = None
@@ -97,11 +76,6 @@ class ConfigService:
         self._current, self._errors, self._reported = config, (), None
         _log.info("the config is loaded")
         return ConfigOutcome.LOADED
-
-    async def refresh(self) -> Refresh:
-        config = await self.reload()
-        routing = None if self._routing is None else await self._routing.reload()
-        return Refresh(config, routing)
 
     async def _refuse(self, problems: tuple[str, ...]) -> ConfigOutcome:
         self._errors = problems
