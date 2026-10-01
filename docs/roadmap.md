@@ -59,7 +59,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S10 | 1 | Extension API, routing API and contract test suite design | Opus 5.5 | xhigh | done |
 | S11 | 1 | Inbound pipeline, routing invariants and outbox worker | Opus 5.5 | high | done |
 | S12 | 1 | Routing engine: script loading, defaults, `label` hook, test kit, example script | Opus 5.5 | high | done |
-| S13 | 1 | SQLite repositories and migrations | Sonnet 5.5 | high | todo |
+| S13 | 1 | SQLite repositories and migrations | Sonnet 5.5 | high | done |
 | S14 | 1 | Configuration: models, `${ENV}`, people, admin notices, hot reload, `check-config` | Sonnet 5.5 | high | todo |
 | S15 | 1 | Extension discovery, composition root, `chatko run`, fake extension end to end | Opus 5.5 | high | todo |
 | S16 | 1 | Phase 1 review | Opus 5.5 | xhigh | todo |
@@ -225,6 +225,8 @@ deliveries in one transaction and refuses a copy; `OutboxRepository.pending` kee
 rows were stored in. Persist the `HubHistory` (last heard, recent fingerprints) and load it at
 start; prune old messages and delivered rows.
 Done when: all repository ports have a SQLite implementation passing the shared tests.
+*Done (D40):* `HistoryRepository` and `AccountRegistry` are new ports; S15 wires `HistoryPersistence.flush` and
+the prunes.
 
 **S14. Configuration.** Pydantic models for the core (groups with named sites (D34), sources, people,
 `admin_notices`, `routing`, room for `peers`, the fingerprint de-duplication window per endpoint

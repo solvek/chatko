@@ -333,6 +333,7 @@ the composition root (S15) wires them.
 | `OutboxWorker` | `outbox` | delivers the pending rows, one lane per endpoint and recipient (§5.2); reports final results to the source's extension; loads the pending rows on `start` |
 | `ExtensionHub` | `hub` | the `HubContext` of one extension instance: `submit` into the pipeline, `heard` into the history, `retry_now` into the worker, `notify_admin` into `AdminNotices` (with the instance in the key), `now` from the clock. It ignores (and logs) calls about another instance's endpoints |
 | `HubHistory` | `history` | the routing script's `RoutingHistory`, in memory: the last time each account was heard (anywhere and per endpoint) and the fingerprints of the last 7 days |
+| `HistoryPersistence` | `history` | keeps a `HubHistory` in a `HistoryRepository`: `load(now)` at start, `flush()` saves what `HubHistory.take_unsaved()` hands over (kept for the next flush if the repository fails), `prune(now)` drops arrivals past the retention. S15 flushes after each message and on a timer, and prunes with the messages |
 | `Installation` | `installation` | one consistent snapshot of the topology, the running extension instances and the endpoints that de-duplicate by fingerprint; the services ask an `InstallationSource` for the current one per message and per attempt, so a reload (S14, S15) only swaps the snapshot |
 | `AdminNotifier` | (S14) | post admin notices into the configured endpoint, rate-limited and de-duplicated per key |
 | `ConfigService` | (S14) | load, validate (core + each extension's models) and hot-reload `chatko.yaml`; keep the last valid one |
@@ -347,10 +348,18 @@ them and `application.testing` fakes them in memory (`FakeClock`, `SequentialIds
 |---|---|---|
 | `Clock` | `now()`, `await sleep_until(when)` | `SystemClock`; `FakeClock` (moved by the test, wakes the sleepers that are due) |
 | `IdGenerator` | `new_message_id()` | `RandomIds` (UUID4 hex); `SequentialIds` (`m1`, `m2`, …) |
-| `MessageRepository` | `contains(endpoint, transport_id)`, `add(message, deliveries) -> bool` (both in one transaction; `False` and nothing stored for a copy), `get(id)` | SQLite (S13); `InMemoryStore` |
-| `OutboxRepository` | `pending()` (in the order stored), `save(delivery)` | SQLite (S13); `InMemoryStore` |
+| `MessageRepository` | `contains(endpoint, transport_id)`, `add(message, deliveries) -> bool` (both in one transaction; `False` and nothing stored for a copy), `get(id)`, `prune(before) -> int` (old messages without a pending delivery go, with their rows) | `SqliteStore`; `InMemoryStore` |
+| `OutboxRepository` | `pending()` (in the order stored), `save(delivery)` | `SqliteStore`; `InMemoryStore` |
+| `HistoryRepository` | `load(since) -> HistoryChanges`, `record(changes)` (one transaction; a last-heard time never moves back), `prune(before)` (arrivals only) | `SqliteHistory`; `InMemoryHistoryStore` |
+| `AccountRegistry` | `note(account, at) -> bool` (`True` the first time the key is seen; names and last-seen time are updated) | `SqliteAccounts`; `InMemoryAccounts` |
 | `AdminNotices` | `notify(text, key=…)` | `AdminNotifier` (S14); `RecordingNotices` |
 | `RoutingScriptSource` | `origin`, `await read() -> str \| None` (`None`: no script; `OSError` or `UnicodeDecodeError`: one that cannot be read) | `FileScriptSource(path)` (`config/routing.py`, read in a thread); `InMemoryScriptSource` |
+
+SQLite (`chatko.infrastructure.sqlite`, D40): `Database` is one `aiosqlite` connection whose every use is
+a transaction under a lock; its schema is the tuple `MIGRATIONS`, applied in order and numbered by
+`PRAGMA user_version` (a database from a newer chatko is refused with `SchemaError`).
+`SqliteStore`, `SqliteHistory` and `SqliteAccounts` implement the ports above. The same repository
+tests (`tests/integration/test_repositories.py`) run against these and against the in-memory fakes.
 
 The message is routed before it is stored and stored together with its outbox rows, so a crash
 leaves either both or neither: no message is stored without its deliveries. `submit` runs the

@@ -6,7 +6,17 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from chatko.domain import Delivery, DeliveryState, EndpointRef, Message, MessageId
+from chatko.application.ports import HistoryChanges
+from chatko.domain import (
+    Account,
+    AccountKey,
+    Delivery,
+    DeliveryState,
+    EndpointRef,
+    Fingerprint,
+    Message,
+    MessageId,
+)
 
 DEFAULT_TIME = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 
@@ -100,6 +110,18 @@ class InMemoryStore:
         except KeyError:
             raise KeyError(f"no message {message_id}") from None
 
+    async def prune(self, before: datetime) -> int:
+        pending = {
+            d.message_id for d in self._deliveries.values() if d.state is DeliveryState.PENDING
+        }
+        old = [m for m in self.messages.values() if m.received_at < before and m.id not in pending]
+        for message in old:
+            del self.messages[message.id]
+            self._transport_ids.discard((message.endpoint, message.transport_id))
+        gone = {message.id for message in old}
+        self._deliveries = {k: d for k, d in self._deliveries.items() if d.message_id not in gone}
+        return len(old)
+
     async def pending(self) -> list[Delivery]:
         return [d for d in self._deliveries.values() if d.state is DeliveryState.PENDING]
 
@@ -117,6 +139,42 @@ class InMemoryStore:
 
 def _key(delivery: Delivery) -> _DeliveryKey:
     return delivery.message_id, delivery.endpoint, delivery.recipient
+
+
+class InMemoryHistoryStore:
+    """Implements `HistoryRepository`."""
+
+    def __init__(self) -> None:
+        self.heard: dict[tuple[AccountKey, EndpointRef | None], datetime] = {}
+        self.arrivals: list[tuple[datetime, Fingerprint]] = []
+
+    async def load(self, since: datetime) -> HistoryChanges:
+        arrivals = [arrival for arrival in self.arrivals if arrival[0] >= since]
+        return HistoryChanges(dict(self.heard), arrivals)
+
+    async def record(self, changes: HistoryChanges) -> None:
+        for key, at in changes.heard.items():
+            known = self.heard.get(key)
+            if known is None or known < at:
+                self.heard[key] = at
+        self.arrivals.extend(changes.arrivals)
+
+    async def prune(self, before: datetime) -> None:
+        self.arrivals = [arrival for arrival in self.arrivals if arrival[0] >= before]
+
+
+class InMemoryAccounts:
+    """Implements `AccountRegistry`."""
+
+    def __init__(self) -> None:
+        self.accounts: dict[AccountKey, Account] = {}
+        self.last_seen: dict[AccountKey, datetime] = {}
+
+    async def note(self, account: Account, at: datetime) -> bool:
+        new = account.key not in self.accounts
+        self.accounts[account.key] = account
+        self.last_seen[account.key] = max(at, self.last_seen.get(account.key, at))
+        return new
 
 
 @dataclass(frozen=True, slots=True)

@@ -600,3 +600,35 @@ Session S12 wrote the routing engine (architecture.md §5.3) and the admin's tes
 the admin's tests, which needs `pytest` at run time (an optional extra, to be decided in S14).
 S15 creates the engine with a `FileScriptSource` for the configured `routing` file, calls
 `reload()` before the extensions start and passes the engine to the pipeline as its router.
+
+## D40. SQLite: one connection, explicit transactions, migrations in code, history as a journal
+**Status:** accepted (S13).
+- **One connection and a lock.** `Database` shares one `aiosqlite` connection (autocommit mode,
+  `BEGIN IMMEDIATE` per use) among the repositories, and every call is a transaction under an
+  `asyncio.Lock`. The awaits inside one transaction (a message and its deliveries) cannot
+  interleave with another coroutine's statements, which would otherwise commit half of it. The hub
+  is one process with one writer, so this costs nothing.
+- **Migrations are a tuple of scripts** (`PRAGMA user_version`), each applied with its version in one
+  transaction. A released script is never edited. A newer database is refused, not guessed at.
+- **Stored forms.** Times are UTC text of fixed width, so that they sort and compare as text; the
+  author (account, person, relayed label) is a JSON snapshot in the message row, so a message reads
+  back as it was even after the config changes; a delivery's missing recipient is `''` so that the
+  unique key (message, endpoint, recipient) works. The order of the outbox is an autoincrement `seq`.
+- **`HubHistory` stays synchronous and in memory; persistence is a journal.** The routing script
+  reads the history inside `route`, which is synchronous, so the history cannot await a database.
+  It remembers what is unsaved (`take_unsaved`), and `HistoryPersistence.flush` writes that through
+  `HistoryRepository.record`; a failed write is retried with the next changes. `load` restores the
+  last-heard times and the arrivals within the retention. A crash loses at most what came after the
+  last flush, and the cost is one more message that is not recognised as a copy.
+- **Pruning.** `MessageRepository.prune(before)` removes messages received before `before` that
+  have no pending delivery, and their deliveries (`ON DELETE CASCADE`); their transport ids stop
+  counting as copies, so the retention must be longer than any network's replay window (S15 uses
+  7 days like the history, configurable in S14). `HistoryRepository.prune` removes old arrivals but
+  keeps the last-heard times, which are one row per account and endpoint.
+- **`AccountRegistry`** is a port of its own: `note` says whether the hub sees the account's key for
+  the first time, which is what the admin notice for new accounts (design.md §8) needs. The notice
+  itself is S14/S15.
+
+**Consequences:** S15 creates the `Database` at the configured path under `data/`, passes the
+repositories to the pipeline and the worker, loads the history at start, and calls `flush` after each
+message and on a timer, and the prunes daily. `aiosqlite` is a runtime dependency.

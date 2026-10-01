@@ -4,7 +4,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from chatko.application.history import HubHistory
+from chatko.application.history import HistoryPersistence, HubHistory
+from chatko.application.ports import HistoryChanges
+from chatko.application.testing import InMemoryHistoryStore
 from chatko.domain import AccountKey, EndpointRef, fingerprint
 
 NODE = AccountKey("meshtastic", "!a1b2c3d4")
@@ -71,3 +73,87 @@ def test_a_fingerprint_seen_again_is_kept_by_its_latest_arrival() -> None:
 def test_the_retention_must_be_positive() -> None:
     with pytest.raises(ValueError, match="positive"):
         HubHistory(retention=timedelta(0))
+
+
+class FlakyRepository:
+    """A `HistoryRepository` that keeps what it is given and can be made to fail."""
+
+    def __init__(self) -> None:
+        self.saved = InMemoryHistoryStore()
+        self.failing = False
+
+    async def load(self, since: datetime) -> HistoryChanges:
+        return await self.saved.load(since)
+
+    async def record(self, changes: HistoryChanges) -> None:
+        if self.failing:
+            raise OSError("disk full")
+        await self.saved.record(changes)
+
+    async def prune(self, before: datetime) -> None:
+        await self.saved.prune(before)
+
+
+class TestPersistence:
+    async def test_only_what_is_new_is_saved(self) -> None:
+        history, repository = HubHistory(), FlakyRepository()
+        persistence = HistoryPersistence(history, repository)
+        history.hear(NODE, T0, CHANNEL)
+        history.see(FP, T0)
+        await persistence.flush()
+        history.hear(NODE, T0 + timedelta(minutes=1), CHANNEL)
+        await persistence.flush()
+
+        assert repository.saved.heard[(NODE, CHANNEL)] == T0 + timedelta(minutes=1)
+        assert repository.saved.arrivals == [(T0, FP)]
+
+    async def test_a_restart_restores_what_was_saved_and_saves_none_of_it_again(self) -> None:
+        repository = FlakyRepository()
+        before = HubHistory()
+        saved = HistoryPersistence(before, repository)
+        before.hear(NODE, T0, CHANNEL)
+        before.see(FP, T0)
+        await saved.flush()
+
+        after = HubHistory()
+        restarted = HistoryPersistence(after, repository)
+        await restarted.load(T0 + timedelta(days=1))
+        await restarted.flush()
+
+        assert after.last_heard(NODE, CHANNEL) == T0
+        assert after.seen_since(FP, T0)
+        assert repository.saved.arrivals == [(T0, FP)]
+
+    async def test_arrivals_older_than_the_retention_are_not_restored(self) -> None:
+        repository = FlakyRepository()
+        await repository.record(HistoryChanges(arrivals=[(T0, FP)]))
+        history = HubHistory(timedelta(days=1))
+
+        await HistoryPersistence(history, repository).load(T0 + timedelta(days=2))
+
+        assert not history.seen_since(FP, T0 - timedelta(days=1))
+
+    async def test_a_failed_save_is_tried_again_with_the_next_changes(self) -> None:
+        history, repository = HubHistory(), FlakyRepository()
+        persistence = HistoryPersistence(history, repository)
+        history.see(FP, T0)
+        repository.failing = True
+        with pytest.raises(OSError, match="disk full"):
+            await persistence.flush()
+        repository.failing = False
+        history.hear(NODE, T0, None)
+
+        await persistence.flush()
+
+        assert repository.saved.arrivals == [(T0, FP)]
+        assert repository.saved.heard == {(NODE, None): T0}
+
+    async def test_pruning_drops_what_the_retention_has_passed(self) -> None:
+        history, repository = HubHistory(timedelta(days=1)), FlakyRepository()
+        persistence = HistoryPersistence(history, repository)
+        history.see(FP, T0)
+        await persistence.flush()
+
+        await persistence.prune(T0 + timedelta(days=2))
+
+        assert repository.saved.arrivals == []

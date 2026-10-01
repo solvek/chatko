@@ -681,7 +681,8 @@ Secrets (tokens, passwords, PSKs, the hub node's private key) come from environm
 (`${VAR}` in YAML, values in `.env`), never from the files.
 
 The hub never writes these files. SQLite holds only runtime state: messages, the outbox, transport ids
-and fingerprints for de-duplication, when nodes were last heard, accounts already seen.
+and fingerprints for de-duplication, when nodes were last heard, accounts already seen. Old messages with nothing left to deliver and
+old fingerprints are pruned after the retention (7 days by default).
 
 ## 11. Development and deployment
 

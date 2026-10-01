@@ -2,6 +2,8 @@
 
 from chatko.application.testing.fakes import (
     FakeClock,
+    InMemoryAccounts,
+    InMemoryHistoryStore,
     InMemoryScriptSource,
     InMemoryStore,
     RecordedNotice,
@@ -11,6 +13,8 @@ from chatko.application.testing.fakes import (
 
 __all__ = [
     "FakeClock",
+    "InMemoryAccounts",
+    "InMemoryHistoryStore",
     "InMemoryScriptSource",
     "InMemoryStore",
     "RecordedNotice",
