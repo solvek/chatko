@@ -63,7 +63,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S14 | 1 | Configuration: models, `${ENV}`, people, admin notices, hot reload, `check-config` | Sonnet 5.5 | high | done |
 | S15 | 1 | Extension discovery, composition root, `chatko run`, fake extension end to end | Opus 5.5 | high | done |
 | S16 | 1 | Phase 1 review | Opus 5.5 | xhigh | done |
-| S17 | 2 | Telegram: port, group and private-chat endpoints, allowed chats | Opus 5.5 | high | todo |
+| S17 | 2 | Telegram: port, group and private-chat endpoints, allowed chats | Opus 5.5 | high | done |
 | S18 | 2 | Telegram live test with two groups (*with owner*) | Sonnet 5.5 | medium | todo |
 | S19 | 3 | Meshtastic: asyncio adapter over the `meshtastic` library (TCP to `meshtasticd`), provisioning from the config | Opus 5.5 | xhigh | todo |
 | S20 | 3 | Meshtastic: `channel` endpoints, splitting, rate limit, de-duplication, `LongFast` source | Opus 5.5 | high | todo |
@@ -281,6 +281,16 @@ one defensive line. 705 tests. Three low-impact points are recorded in D43 and l
 endpoints in and out; the author account and display name; drop the bot's own posts; serve only
 configured chats, leave others and post an admin notice with the chat id (design.md §5). Done when: the
 extension passes the contract suite and its coverage is ≥ 85 %.
+*Done (D44):* `chatko_telegram` (architecture.md §3.7) is registered as `telegram`: the
+`TelegramApi` port with its own event and error types, `AiogramTelegramApi` over aiogram 3 (long
+polling for messages and the bot's membership), `FakeTelegramApi`, and `TelegramExtension`. It
+confirms an update only after the hub stored its message, leaves a group it is added to that is not
+in the config and tells the admin the chat id, follows a group that became a supergroup until a
+restart, retries with an admin notice what the admin can fix, cuts texts over 4096 characters and
+marks a message cut elsewhere with ✍ (bots cannot react with ✂️). It passes the contract suite;
+its coverage is 99 %. `config.example.yaml` is now checked against the real Telegram models. 830
+tests. For S18: whether setting the group up (privacy mode, the bot as admin) turns it into a
+supergroup with a new id; how ✍ reads; the bot's notices in the owner's private chat.
 
 **S18. Live Telegram test.** *With owner*: a bot from BotFather, two test groups, the hub running
 locally. Done when: two groups work independently, foreign groups are left, labels look right.

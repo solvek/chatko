@@ -761,3 +761,50 @@ extension may see `attempt > 1` for a message it never got; a routing script in 
 does not exist when the hub starts is watched only after `chatko.yaml` changes; an extension that
 answers `Retry(after=0)` every time is retried at once every time. Phase 1 is closed; S17 starts
 phase 2.
+
+## D44. The Telegram extension: long polling behind a port of its own, groups followed to their new id, ✍ for a cut message
+**Status:** accepted (S17).
+Session S17 wrote the Telegram extension (`chatko_telegram`, architecture.md §3.7, design.md §5).
+Choices that design.md left open:
+- **A port in the extension's own terms.** `TelegramApi` has the five calls the extension needs and
+  its own event and error types; `AiogramTelegramApi` is the only module that imports aiogram. The
+  extension is tested against `FakeTelegramApi`, and the adapter against a scripted aiogram HTTP
+  session, so aiogram's own reading of Bot API answers is tested too. The extension owns its
+  polling loop (`getUpdates`, for `message` and `my_chat_member` only) instead of aiogram's
+  dispatcher, so that it confirms an update only once the hub has stored its message.
+- **The bot's id comes from its token** (`<bot id>:<secret>`), so the extension knows its own posts
+  without a call to Telegram, and `start` does no I/O that could fail. Telegram does not hand a
+  bot its own messages anyway; the check is there for the contract (D35).
+- **The transport id is the message id**, which Telegram keeps unique within a chat, and an update
+  is handed over again until it is confirmed, so messages survive a restart.
+- **Leave only when added.** The bot leaves a group or channel when it is added to one that is not
+  in the config (`my_chat_member`), as design.md §5 says. Messages from a group that it is in but
+  that is not in the config only make an admin notice: the group may be a configured one that
+  became a supergroup, and leaving it would cut the group off.
+- **Supergroups are followed.** When a group becomes a supergroup (seen as a service message in
+  either chat, or as the error of a delivery to the old id), the extension maps the endpoint to the
+  new id until the hub restarts and asks the admin to change the config. Writing the config is the
+  admin's (the hub never writes it, design.md §10). A supergroup that another endpoint already has is
+  not taken over.
+- **Errors the admin can fix are retried, with a notice.** A bot removed from a chat, blocked by a
+  person, or refused by Telegram (a revoked token, another program polling with it) answers
+  `Retry` and tells the admin, so messages wait in order for the fix instead of being lost; they
+  are given up after 3 days like any other (design.md §9.1). Only a request Telegram rejects as
+  such (a 400 that is not "chat not found") is `Failed`. Flood control's wait becomes `Retry.after`.
+- **A cut message gets ✍, not ✂️.** Bots can react only with Telegram's standard reactions, and ✂️
+  is not one of them. ✍ ("write it shorter") is the closest. If a chat does not allow it, the
+  failure is only logged.
+- **Long texts are cut, not split.** Telegram takes 4096 UTF-16 units per message; a longer text
+  (only a Briar post can be one) is cut with `…` and reported as truncated. Splitting would repeat
+  the parts already sent on every retry, since delivery is at least once.
+- **One update that aiogram cannot read does not stop the polling.** aiogram's models require every
+  field of the Bot API version it was generated for; an answer it cannot read as a whole is read
+  update by update, and an unreadable update is confirmed without an event and logged. Otherwise it
+  would be handed over again forever.
+- The `/start` that the app sends when a person presses Start is dropped in private chats; edits
+  and service messages are not relayed (design.md §8).
+**Consequences:** `aiogram` (with `aiohttp`) is a dependency of the hub, and `telegram` is
+registered in the `chatko.extensions` entry point group. `config.example.yaml` is tested against
+the real Telegram models. Telegram's limits on posting (about 20 messages a minute in a group) are
+met only through flood control's `Retry`. The live test (S18) should check how a group's setup
+for the hub (privacy mode, the bot as admin) changes its id, and whether ✍ reads well.

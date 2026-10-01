@@ -3,9 +3,13 @@
 
 # Extension instances. The key is the instance name; `type` selects the extension.
 extensions:
-  tg:
+  tg:                              # one instance = one bot
     type: telegram
-    bot_token: ${TELEGRAM_BOT_TOKEN}
+    bot_token: ${TELEGRAM_BOT_TOKEN} # from BotFather; there, /setprivacy → Disable, so the bot sees all messages
+    # A chat is an endpoint by its id: `chat: -100…` for a group (make the bot its admin, with no extra
+    # rights), the person's id for a private chat with the bot (they press Start once; the hub logs
+    # the id of a private chat that is not here). Added to a group that is not here, the bot leaves
+    # it, and an admin notice gives the group's id.
 
   kyiv:                            # one instance = one hub node
     type: meshtastic

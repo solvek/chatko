@@ -64,7 +64,9 @@ src/
                      # config (YAML + ${ENV}), the file watcher, extension discovery
     app/             # cli, run (the composition root of `chatko run`), check_config
   chatko_telegram/   # extension packages: separate top-level packages, so importing core internals
-  chatko_meshtastic/ # is visible and forbidden by import-linter
+                     # is visible and forbidden by import-linter. Telegram (§3.7): config, api
+                     # (the TelegramApi port), aiogram_api, extension, testing (FakeTelegramApi)
+  chatko_meshtastic/
   chatko_briar/
   briarctl/          # the admin's CLI for the hub's Briar account (design.md §7.5); a separate program:
                      # it imports neither chatko nor chatko_briar, and they never import it
@@ -175,7 +177,7 @@ then calls `stop` (§5.5).
   may be repeated, and `OutboundMessage.attempt` tells the repeat from the first.
 - **Reports.** When a delivery has ended, the core tells the extension that read the original:
   `delivery_report(DeliveryReport(source, transport_id, target, recipient, result))`. The Telegram
-  extension shows a truncated delivery with a ✂️ reaction (design.md §6.3). The default ignores it.
+  extension shows a truncated delivery with a ✍ reaction (design.md §5). The default ignores it.
 
 | Type | Fields |
 |---|---|
@@ -262,6 +264,23 @@ delivers the label and the text to every recipient; answers `Retry` while the ne
 - Give a `Retry` an `after` only when the network says when to try again: the core waits exactly
   that long, so a zero wait repeats the attempt at once.
 - Pass the contract suite (§3.5).
+
+### 3.7 The Telegram extension
+
+`chatko_telegram` (design.md §5, D44), registered as `telegram`. One instance is one bot.
+
+| Module | Contents |
+|---|---|
+| `config` | `TelegramConfig(bot_token)` (a `SecretStr` of the form `<bot id>:<secret>`; `bot_id` is read from it, so the bot knows its own posts without asking Telegram) and `TelegramChat(chat)`, the endpoint (a non-zero integer, strictly) |
+| `api` | the `TelegramApi` port: `get_updates(offset, wait)`, `send_message`, `leave_chat`, `set_reaction`, `close`. Its own types, so that the extension never sees aiogram: `Update(update_id, event)` with an `Event` (`ChatMessage`, `ChatMigrated`, `BotAdded`, `BotRemoved`, or `None` for an update of no use), `Chat`, `Sender`; and its errors: `UnreachableError` (retry, after `retry_after` if Telegram says), `BotRefusedError` (the token or another poller: the admin's), `ChatUnavailableError` (not a member, blocked, no such chat; `migrated_to` for a supergroup), `RejectedError` (a request that cannot work) |
+| `aiogram_api` | `AiogramTelegramApi`, the port over an aiogram `Bot`: long polling for `message` and `my_chat_member` only; turns aiogram's types into the port's (one attachment kind per message; service messages, edits and chats of unknown kinds become `None`; a change of the bot's membership becomes `BotAdded` or `BotRemoved` only when it joins or leaves) and its exceptions into the port's errors, with the token taken out of their text. An answer that aiogram cannot read as a whole is read update by update, so that one update it cannot read is skipped instead of stopping the polling |
+| `extension` | `TelegramExtension`: one polling task that hands each update's event over before it confirms the update (the next poll's offset), so an update the hub could not take comes again; the chats of the endpoints and the supergroups they moved to; `deliver`, which maps the port's errors to `Retry` (with an admin notice where the admin must act) or `Failed`; the ✍ reaction for a truncated delivery |
+| `testing` | `FakeTelegramApi`: the port in memory (`post`, `push`, `fail`, `online`; `sent`, `left`, `reactions`, `offsets`; `idle()` waits until the extension has taken every update) |
+
+`tests/contract/test_telegram_extension.py` runs the contract suite over `FakeTelegramApi`;
+`tests/unit/telegram` tests the extension over it and the adapter over a scripted aiogram
+session (`BaseSession`) that answers with Bot API JSON, so aiogram's own reading of answers and
+errors is part of the test.
 
 ## 4. Routing API
 
@@ -498,7 +517,7 @@ INFO]` logs to stderr and runs the installed extensions (`discover_extensions`).
 | Tests | `pytest`, `pytest-asyncio`, `pytest-cov`/`coverage` (branch), `hypothesis` (property tests); `respx`/local test servers for HTTP fakes |
 | Config | `pydantic` v2 models, YAML (`PyYAML`, safe loader), `${ENV}` substitution, `watchfiles` for reload |
 | Storage | SQLite via `aiosqlite`, schema migrations in code |
-| Telegram | `aiogram` 3, wrapped behind the extension's `TelegramApi` port |
+| Telegram | `aiogram` 3 (long polling), wrapped behind the extension's `TelegramApi` port (§3.7) |
 | Meshtastic | official `meshtastic` Python library over TCP to `meshtasticd` (serial, BLE and TCP to a physical node later); image `meshtastic/meshtasticd`, tag pinned in the compose files |
 | MQTT broker | Mosquitto 2 in the compose files: users and an ACL per hub node and gateway, TLS on 8883 for gateways (D30). The hub's code never talks MQTT itself; its `meshtasticd` nodes do |
 | Briar | `httpx` + `websockets` to `briar-headless` (our fork: a pinned upstream tag plus the private-group patch, D29; built with JDK 17, run in a Java 17 JRE image, D28) |

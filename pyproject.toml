@@ -7,6 +7,7 @@ license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
+    "aiogram>=3.15",
     "aiosqlite>=0.22.1",
     "pydantic>=2.9",
     "pyyaml>=6.0",
@@ -22,8 +23,8 @@ chatko = "chatko.app.cli:main"
 
 # Built-in extensions are registered like third-party ones, in the `chatko.extensions` entry point
 # group (docs/architecture.md §2). Each extension session adds its line here.
-# [project.entry-points."chatko.extensions"]
-# telegram = "chatko_telegram:TelegramExtension"
+[project.entry-points."chatko.extensions"]
+telegram = "chatko_telegram:TelegramExtension"
 
 [dependency-groups]
 dev = [

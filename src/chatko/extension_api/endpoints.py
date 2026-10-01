@@ -61,6 +61,6 @@ class EndpointProvider[E: BaseModel](ABC):
 
     async def delivery_report(self, report: DeliveryReport) -> None:
         """Learn how a message from one of this extension's endpoints fared at one target, once
-        that delivery ended. The default ignores it; a network may show it (a ✂️ reaction).
+        that delivery ended. The default ignores it; a network may show it (a reaction).
         """
         del report

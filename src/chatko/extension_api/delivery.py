@@ -45,7 +45,7 @@ type DeliveryResult = Delivered | Retry | Failed
 @dataclass(frozen=True, slots=True)
 class DeliveryReport:
     """How a message from one of the extension's endpoints fared at one target, once that delivery
-    ended. The extension may show it in its network, e.g. a ✂️ reaction for `truncated`.
+    ended. The extension may show it in its network, e.g. a reaction for `truncated`.
     """
 
     source: EndpointRef

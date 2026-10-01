@@ -16,6 +16,7 @@ from chatko.extension_api import (
     OutboundMessage,
 )
 from chatko.infrastructure.config import parse_config, read_env_file
+from chatko_telegram import TelegramExtension
 
 ROOT = Path(__file__).parents[2]
 
@@ -46,12 +47,16 @@ def stand_in(name: str) -> type[Extension[Any]]:
     return StandIn
 
 
-TYPES = {name: stand_in(name) for name in ("telegram", "meshtastic", "briar")}
+# The extensions written so far check their sections; stand-ins take the others.
+TYPES: dict[str, type[Extension[Any]]] = {
+    "telegram": TelegramExtension,
+    **{name: stand_in(name) for name in ("meshtastic", "briar")},
+}
 
 
 def example_env() -> dict[str, str]:
     names = read_env_file((ROOT / ".env.example").read_text(encoding="utf-8"))
-    return dict.fromkeys(names, "x")
+    return {**dict.fromkeys(names, "x"), "TELEGRAM_BOT_TOKEN": "123456:example-token"}
 
 
 def test_the_example_config_is_valid() -> None:

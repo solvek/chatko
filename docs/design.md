@@ -1,6 +1,6 @@
 # chatko design
 
-Status: **draft**; phase 1 (the core) is written and reviewed, phase 2 (Telegram) is next. This document describes **behaviour**. The
+Status: **draft**; phase 1 (the core) is written and reviewed; phase 2 (Telegram) is written and waits for its live test. This document describes **behaviour**. The
 code structure is described in [architecture.md](architecture.md). Items marked **(verify)** must be
 confirmed by a spike ([spikes.md](spikes.md)) or by reading the upstream source before we rely on
 them. Phase 0 answered every (verify) that v1 relies on (session S07); the questions still open
@@ -102,10 +102,33 @@ state are backed up daily, so the hub can be moved to another server within an h
 ## 5. Telegram extension
 
 - Endpoints are Telegram chats by id: groups, and private chats with the bot (e.g. for a feed or for
-  admin notices; the person must have pressed Start once).
-- The bot serves only the chats listed in the config. When it is added to any other group, it leaves at
-  once (`leaveChat`) and sends an admin notice with the chat id, so the admin can add the chat to the
-  config and add the bot again. Private messages from chats not in the config are ignored.
+  admin notices; the person must have pressed Start once). A group's id is negative; a private
+  chat's id is the person's user id. One instance is one bot, polling the Bot API (no webhook,
+  so the hub needs no inbound port).
+- The bot serves only the chats listed in the config. When it is added to any other group or
+  channel, it leaves at once (`leaveChat`) and sends an admin notice with the chat id, so the admin
+  can add the chat to the config and add the bot again. Messages from a group it is still in but
+  that is not in the config (e.g. one removed from the config) are ignored, and the admin is told
+  the chat id; the bot does not leave such a group, which may be a group that just changed its id
+  (below). Private messages from chats not in the config are ignored and only logged with the chat
+  id, which is how the admin learns their own id for a private-chat endpoint.
+- **A group that becomes a supergroup gets a new chat id.** Telegram does this when a group's
+  settings need a supergroup, which may happen while the admin sets it up for the hub. The bot follows the group to its new id until the hub
+  restarts, and an admin notice asks the admin to put the new id into the config (D44).
+- When a group removes the bot, or a person blocks it in a private chat, the admin is told; the
+  messages for that endpoint wait and are retried until the bot is back, or until they are given
+  up (§9.1). So do messages that the bot cannot post for another reason the admin can fix (it is
+  not a member, the chat does not exist, the token is refused).
+- In: the text of a message, or its attachments as placeholders with the caption as text (a
+  sticker's emoji, a venue's or a poll's title stands in for a caption). Service messages (joins,
+  pins, title changes), edits and the bot's own messages are not relayed. The author is the user,
+  or the chat for a message posted as a chat (an anonymous admin, a channel); its display name is
+  the first and last name (the chat's title), and the username is its short name (§8). The
+  `/start` that the Telegram app sends when a person presses Start in a private chat is dropped.
+- Out: `NatAda: text` as plain text, without markup. A text longer than Telegram's limit (4096
+  characters) is cut with `…`.
+- A message that another network got only in part (§6.3) gets the bot's ✍ reaction in Telegram.
+  Bots can react only with Telegram's standard reactions, which have no ✂️ (D44).
 - Who may write in a Telegram group is decided by its Telegram admins.
 - The bot must see all messages: disable privacy mode in BotFather (`/setprivacy` → Disable) **and**
   make the bot a group admin with no extra rights.
@@ -259,7 +282,7 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
   about 90 Cyrillic characters.
 - Longer text is split on spaces into `NatAda (1/3): …`, at most 3 parts. Anything beyond that is
   truncated with `…`, and the source endpoint is told about it (a delivery report, §9.1) where the
-  network allows (in Telegram, a ✂️ reaction).
+  network allows (in Telegram, the bot's ✍ reaction, §5).
 - Non-text content goes out as a placeholder: `NatAda: [photo] caption`.
 - The hub sends no faster than one packet every few seconds per node (configurable), to be a good
   neighbour on a busy mesh. The interval is per hub node (all its endpoints together) and at least 2 s:
