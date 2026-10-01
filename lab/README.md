@@ -1,4 +1,8 @@
-# Local Meshtastic lab
+# Local lab
+
+Two independent setups: the Meshtastic lab (below) and briar-headless ([Briar](#briar-headless)).
+
+## Meshtastic
 
 A Mosquitto broker and two virtual Meshtastic nodes (`meshtasticd` with a simulated radio), so the
 Meshtastic extension can be developed and tested without hardware (design.md §11, spike S2).
@@ -13,7 +17,7 @@ The nodes reach each other **only through MQTT**: the simulated radio does not t
 between nodes is off. All ports listen on `127.0.0.1` only; the `meshtasticd` API has no
 authentication.
 
-## Use
+### Use
 
 Needs Docker with Compose and [`uv`](https://docs.astral.sh/uv/). The scripts declare their own
 dependencies (`meshtastic`, `paho-mqtt`), so `uv run` needs no project setup.
@@ -49,7 +53,7 @@ fields, and exit non-zero if a direction fails.
 Stop the lab with `docker compose -f lab/docker-compose.yml down`; add `-v` to wipe the nodes' state
 (settings, node database; `provision.py` gives the nodes their lab keys back).
 
-## Files
+### Files
 
 - `docker-compose.yml`: the three services. `MESHTASTICD_TAG` overrides the pinned image tag.
 - `meshtasticd/{hub,radio}.yaml`: the `meshtasticd` config. `Lora: Module: sim` selects the simulated
@@ -66,7 +70,7 @@ Stop the lab with `docker compose -f lab/docker-compose.yml down`; add `-v` to w
 
 The findings are in [docs/spikes.md](../docs/spikes.md) (S2).
 
-## Pitfalls found in the spike
+### Pitfalls found in the spike
 
 - Setting a region with a duty-cycle limit (`EU_868`) for the first time makes the firmware turn
   `lora.ignore_mqtt` on. The node then drops (and does not relay) every packet that crossed MQTT.
@@ -85,3 +89,43 @@ The findings are in [docs/spikes.md](../docs/spikes.md) (S2).
   `meshtasticd` after 10 s without saving. The contacts that `provision.py` adds are saved at once.
 - A node sends at most one text per 2 s from its API client and drops the rest without telling the
   client. Scripts pause before each text.
+
+## briar-headless
+
+`briar/` builds upstream briar-headless (tag `release-1.5.21`, JDK 17) and runs it with one Briar
+account, its REST and WebSocket API on `127.0.0.1:7000` and its state in the volume `briar-data`
+(spike S3). It needs internet (Tor) and a phone with Briar for the other side.
+
+Put the secrets into `lab/briar/.env` (git-ignored):
+
+```bash
+printf 'BRIAR_PASSWORD=%s\nBRIAR_AUTH_TOKEN=%s\n' "$(openssl rand -base64 18)" "$(openssl rand -base64 32)" > lab/briar/.env
+```
+
+```bash
+docker compose -f lab/briar/docker-compose.yml up -d --build
+```
+
+The first start creates the account (nickname `chatko-lab`, or `BRIAR_NICKNAME`); later starts sign
+in with the same password. `spike_briar.py` is the spike client; it reads the token from the
+container:
+
+```bash
+uv run lab/spike_briar.py link
+```
+
+```bash
+uv run lab/spike_briar.py add 'briar://…' --alias phone
+```
+
+```bash
+uv run lab/spike_briar.py watch
+```
+
+```bash
+uv run lab/spike_briar.py send 1 "hello"
+```
+
+`pending`, `contacts` and `messages <contactId>` list the rest. Both sides must add the other's link;
+the contact appears within seconds after that. The first build takes about 2 min. `down -v` wipes the
+account, after which the phone has to add the new link again.

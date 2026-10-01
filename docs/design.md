@@ -88,7 +88,8 @@ state are backed up daily, so the hub can be moved to another server within an h
 - The hub is pure Python (3.12+) and runs on Linux, macOS and Windows, on x86-64 and ARM64.
 - `meshtasticd` runs in Docker (native on Linux; Docker Desktop on macOS and Windows).
 - `briar-headless` is a JVM application with Tor inside. Upstream builds it for Linux (x86-64,
-  aarch64, armhf), Windows and macOS.
+  aarch64, armhf), Windows and macOS; it builds with JDK 17 and runs on a Java 17 runtime. We build
+  the Linux jars in Docker and run them in a JRE image (spike S3).
 - The reference deployment is `docker compose` on a Linux server (x86-64 or ARM64). A development
   setup runs everything locally, including a local MQTT broker (§11).
 
@@ -280,8 +281,10 @@ between members who are contacts and reveal that (§7.3). A creator that is onli
 the group alive, so the recommended setup is: **the hub's account creates the groups** with `briarctl`.
 
 1. **Contacts.** For each person, `briarctl contact add briar://…` adds their link, and the person adds
-   the hub's link (`briarctl link`) in the Briar app. A contact at a distance needs **both** sides to
-   add each other's link **(verify: spike S3)**.
+   the hub's link (`briarctl link`) in the Briar app ("Add contact at a distance"). A contact at a
+   distance needs **both** sides to add each other's link: with only one side, nothing happens; once
+   both have, the contact appears in seconds (spike S3). Such contacts stay "unverified" in Briar
+   (only contacts added in person are verified), which does not affect syncing.
 2. **Group.** `briarctl group create "Family"` prints the new group's id;
    `briarctl group invite <group> <contact>…` invites people. They accept in the app.
 3. **Endpoint.** The admin puts the group id into `chatko.yaml` (a leg of a group, or a source). From
@@ -528,6 +531,10 @@ and fingerprints for de-duplication, when nodes were last heard, accounts alread
 - Volumes: `config/` (chatko.yaml, routing.py, meshtasticd configs) and `data/` (SQLite, Briar and
   meshtasticd state: settings, the node database with members' keys, and the node's own key unless
   `private_key` is set). Secrets live in `.env`. `config/` and `data/` are backed up daily.
+- `briar-headless` asks for its account password on every start, because the password encrypts the
+  database key. Its container entrypoint gives it `BRIAR_PASSWORD` (and the nickname on the first
+  start) and writes `BRIAR_AUTH_TOKEN` as the API token, so it starts unattended (D28). Its API
+  (port 7000) stays inside the Docker network.
 - `docker stop` kills `meshtasticd` after 10 s (it does not exit on `SIGTERM`) without saving, so
   whatever the node learned but has not saved yet is lost (learned keys are saved at most once a
   minute); the hub keeps what it needs as favorites or in its own state (§6.2).

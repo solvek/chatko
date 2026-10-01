@@ -30,7 +30,8 @@
 ## Current state
 - Design phase; no code yet. Phase 0 (spikes S1–S3) is in progress (spike S1, Briar relay, and the lab
   parts of spike S2, the local Meshtastic lab in `lab/` with channel and direct messages, keys, ACKs
-  and provisioning, are done), then phase 1 (core). The next session is the first one marked `todo` in
+  and provisioning, and part 1 of spike S3, briar-headless built and run in Docker in `lab/briar/`
+  with contacts and private messages to a phone, are done), then phase 1 (core). The next session is the first one marked `todo` in
   `docs/roadmap.md`.
 - Development runs locally on the owner's Linux machine. There is no hardware Meshtastic node yet, so
   a second virtual node (`meshtasticd`) plays the member's radio. The production host will be some Linux

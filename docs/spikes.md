@@ -377,9 +377,9 @@ checked on the Kyiv mesh in S04 and S23):
 **Question:** can we build and run `briar-headless` locally, and how big is the private-group patch?
 
 Steps and answers needed:
-- [ ] Build `x86LinuxJar` (and `aarch64LinuxJar`) from the current upstream; the JDK version needed.
-- [ ] Run it in Docker with a persistent data volume and a non-interactive account creation.
-- [ ] Contacts API end to end with a phone: exchange links, `ContactAddedEvent`, private messages both
+- [x] Build `x86LinuxJar` (and `aarch64LinuxJar`) from the current upstream; the JDK version needed.
+- [x] Run it in Docker with a persistent data volume and a non-interactive account creation.
+- [x] Contacts API end to end with a phone: exchange links, `ContactAddedEvent`, private messages both
   ways over the WebSocket. Confirm that a contact at a distance needs **both** sides to add the other's
   link, and write down the exact `curl` calls the admin will use (D23).
 - [ ] Read `PrivateGroupManager`, `GroupInvitationManager` and how the Android app uses them. List the
@@ -389,7 +389,67 @@ Steps and answers needed:
   with phones on the same network? Not needed for v1; it decides the future home hub (D17).
 - [ ] Upstream contribution rules for briar-headless (code style, tests, merge request process).
 
-**Result:** _not run yet._
+**Result, part 1 (2026-10-01, session S05; build, Docker, contacts and private messages):**
+- *Build.* Upstream tag `release-1.5.21` (2026-09-27) builds with **JDK 17** (Temurin 17.0.20; the
+  Gradle files set `jvmToolchain(17)` and `release = 17`) and the Gradle 8.14.3 wrapper.
+  `./gradlew --configure-on-demand briar-headless:x86LinuxJar briar-headless:aarch64LinuxJar` needs no
+  Android SDK and takes about 2 min in Docker with an empty Gradle cache. Each jar is 44 MB and
+  carries Tor and lyrebird for its architecture. The aarch64 jar was built but not run (no ARM64 host
+  or emulation here); the JVM part is the same, only the Tor binaries differ.
+- *Docker.* `lab/briar/`: a two-stage Dockerfile (the JDK stage clones the tag and builds both jars on
+  the build machine; the runtime stage on `eclipse-temurin:17-jre` takes the jar for `TARGETARCH`), an
+  entrypoint and a compose file with the volume `briar-data` at `/data` and the API on
+  `127.0.0.1:7000`. Image 339 MB; the running peer uses about 250 MB of RAM and 65 MB of data.
+- *No terminal.* briar-headless reads the account from stdin: nickname, password and confirmation
+  the first time, and **the password on every start** (the database key is encrypted with it). There
+  is no option for a password file. The entrypoint feeds stdin from `BRIAR_PASSWORD` (and
+  `BRIAR_NICKNAME` the first time) and decides by whether `/data/key/db.key` exists. A wrong
+  password makes the process exit 1. The API token is the file `/data/auth_token`, read verbatim
+  and made on first start if missing; the entrypoint writes `BRIAR_AUTH_TOKEN` into it, so the token
+  can come from `.env`. Account creation, restart, `docker compose up --build` (a new container on
+  the same volume) and the token from `.env` all work. The `briar://` link stays the same across
+  restarts. A stop takes about 1 s (the shutdown hook stops Briar's services), and the API answers
+  about 2 s after a start.
+- *The API.* Javalin listens on all interfaces in the container, so the published port works. Every
+  REST call needs `Authorization: Bearer <token>` (401 without). The WebSocket `/v1/ws` needs the
+  token as its first message. JSON bodies need no `Content-Type` header.
+- *Adding a contact at a distance needs both sides* (D23, design.md §7.1). The phone (Briar 1.5.20,
+  "Sergi", Samsung A33) added the hub's link at about 10:05. For 4 minutes the hub saw nothing: no
+  pending contact, no event. The phone showed "Connecting…": the app shows that for 15 s after each
+  rendezvous poll (once a minute) even while it is only waiting, so it does not mean the other side
+  was found. At 10:09:18 the hub added the phone's link. The WebSocket then showed
+  `PendingContactAddedEvent` and `PendingContactStateChangedEvent` `waiting_for_connection`, then
+  `adding_contact` (10:09:33), then `PendingContactRemovedEvent`, `ContactAddedEvent`
+  (`verified: false`) and `ContactConnectedEvent` (10:09:35): **17 s** after the second side added
+  its link. (In S1 the owner could not add contacts at a distance either, but did not look into it;
+  here it worked once both sides had added the other's link.)
+- *Verification.* A contact added at a distance is "unverified" on both sides, and Briar cannot make
+  it verified later: only "Add contact nearby" (QR codes in person) creates verified contacts, and
+  nothing in the app or briar-headless calls the database's `setContactVerified`. The hub's contacts
+  are therefore always unverified. That does not affect syncing or messages.
+- *Private messages both ways.* Phone → hub: `ConversationMessageReceivedEvent` on the WebSocket
+  within a second, and the message in `GET /v1/messages/1`. Hub → phone: `POST /v1/messages/1`, then
+  `MessagesSentEvent` at once and `MessagesAckedEvent` (the phone's two ticks) 1 s later. Right after the
+  contact was added, the WebSocket also showed `MessagesSentEvent` and `MessagesAckedEvent` for
+  messages that are not in the conversation (Briar's own sync between the two peers); a client
+  should match message ids. After a restart the hub was connected to the phone again within
+  about 25 s.
+- *The admin's calls* (until `briarctl` exists, and what `briarctl` wraps). With `TOKEN` from `.env`:
+
+  ```bash
+  curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7000/v1/contacts/add/link
+  curl -H "Authorization: Bearer $TOKEN" -d '{"link":"briar://…","alias":"Ada"}' http://127.0.0.1:7000/v1/contacts/add/pending
+  curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7000/v1/contacts/add/pending
+  curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7000/v1/contacts
+  curl -H "Authorization: Bearer $TOKEN" -X PUT -d '{"alias":"Ada"}' http://127.0.0.1:7000/v1/contacts/1/alias
+  ```
+
+  The first prints the hub's link for the person, who adds it in the app ("＋", "Add contact at a
+  distance"); the second adds the person's link (from the same screen of their app). A bad link gives
+  400 `INVALID_LINK`; a link of an existing contact gives 403 `CONTACT_EXISTS` with the contact's
+  name. The pending list shows the state until the contact appears in `/v1/contacts`.
+- *Tooling.* `lab/spike_briar.py` (`link`, `add`, `pending`, `contacts`, `watch`, `send`, `messages`)
+  is the spike client; `lab/README.md` has the steps.
 
 **Result, part 3 (2026-09-30, session S04; Kyiv broker, read-only):**
 - *What the site <https://meshtastic.kyiv.ua/join> tells.* The QR code is a channel URL

@@ -176,7 +176,7 @@ tests (whatever the script returns, no echo and no duplicate delivery).
 | Storage | SQLite via `aiosqlite`, schema migrations in code |
 | Telegram | `aiogram` 3, wrapped behind the extension's `TelegramApi` port |
 | Meshtastic | official `meshtastic` Python library over TCP to `meshtasticd` (serial, BLE and TCP to a physical node later); image `meshtastic/meshtasticd`, tag pinned in the compose files |
-| Briar | `httpx` + `websockets` to `briar-headless` |
+| Briar | `httpx` + `websockets` to `briar-headless` (upstream, built from a pinned tag with JDK 17, run in a Java 17 JRE image; D28) |
 | License | GPL-3.0-or-later |
 
 ## 7. Quality gates

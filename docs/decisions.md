@@ -283,3 +283,18 @@ Mosquitto (as in `lab/`); a physical node with an internet connection acts as th
 broker and the Kyiv mesh (D17). Claiming a node for the Kyiv broker is a later step with the owner.
 **Consequences:** the `LongFast` source (§6.5) reads the mesh's primary channel, not the public default
 one. The root topic, PKI and downlink policy stay open questions for the Kyiv community.
+
+## D28. briar-headless starts unattended from secrets in `.env`
+Spike S3, part 1: briar-headless reads its account from stdin, the nickname and password the first
+time and the password on every start, because the password encrypts the database key. It has no
+option for a password file. Its API token is the file `auth_token` in the data directory, made on the
+first start if missing.
+**Decision:** we run upstream briar-headless (built from a pinned tag with JDK 17, in a JRE image)
+behind a small entrypoint that feeds stdin from `BRIAR_PASSWORD` (and `BRIAR_NICKNAME` when no
+account exists) and writes `BRIAR_AUTH_TOKEN` into `auth_token`. Both secrets live in `.env` (D7);
+chatko and `briarctl` use the same token. The lab version is `lab/briar/`; session S25 turns it into
+the production image. A `--password-file` option could be offered upstream with the patch of D24,
+which would make the entrypoint simpler.
+**Consequences:** anyone with `.env` can open the hub's Briar account, as with the other secrets. A
+backup of `data/` is useless without `BRIAR_PASSWORD`, so the password must be kept with the backups'
+secrets. A wrong password makes the container exit and restart in a loop, which the logs show.

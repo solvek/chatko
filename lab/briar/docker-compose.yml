@@ -1,0 +1,23 @@
+# briar-headless for spike S3: one Briar account (the hub's) with its REST and WebSocket API on
+# 127.0.0.1:7000. Its state (account, database, Tor) is in the briar-data volume.
+# Secrets come from lab/briar/.env (git-ignored): BRIAR_PASSWORD, optionally BRIAR_AUTH_TOKEN.
+#   docker compose -f lab/briar/docker-compose.yml up -d --build
+name: chatko-briar
+
+services:
+  briar:
+    build: .
+    image: chatko/briar-headless:lab
+    environment:
+      BRIAR_NICKNAME: ${BRIAR_NICKNAME:-chatko-lab}
+      BRIAR_PASSWORD: ${BRIAR_PASSWORD:?set BRIAR_PASSWORD}
+      BRIAR_AUTH_TOKEN: ${BRIAR_AUTH_TOKEN:-}
+    command: ["-v"]
+    volumes:
+      - briar-data:/data
+    ports:
+      - "127.0.0.1:7000:7000"
+    restart: unless-stopped
+
+volumes:
+  briar-data:

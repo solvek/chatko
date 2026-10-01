@@ -49,7 +49,7 @@ Escalate instead of looping: if a session fails at the same problem twice, resta
 | S02 | 0 | Spike S2a: local Meshtastic lab, channel messages | Opus 5.5 | high | done |
 | S03 | 0 | Spike S2b: PKI direct messages, keys, ACKs, persistence, provisioning | Opus 5.5 | xhigh | done |
 | S04 | 0 | Spike S2c: Kyiv broker, read-only; questions for the Kyiv community | Sonnet 5.5 | medium | partly done: waits for a claimed physical node (D27), not blocking |
-| S05 | 0 | Spike S3a: build and run briar-headless, contacts API with a phone | Opus 5.5 | high | todo |
+| S05 | 0 | Spike S3a: build and run briar-headless, contacts API with a phone | Opus 5.5 | high | done |
 | S06 | 0 | Spike S3b: private-group internals of Briar, read/post/join patch plan | Opus 5.5 | xhigh | todo |
 | S07 | 0 | Phase 0 wrap-up: all (verify) answered, design and roadmap revised | Opus 5.5 | high | todo |
 | S08 | 1 | Project skeleton, tooling and CI | Sonnet 5.5 | high | todo |
@@ -117,6 +117,8 @@ waits for that. Not blocking: continue with S05. When a physical 433 MHz node is
 **S05. briar-headless, part 1.** Build `x86LinuxJar` (and `aarch64LinuxJar`) from upstream, note the JDK;
 run it in Docker with a data volume and non-interactive account creation; exchange links with a phone;
 private messages both ways over the WebSocket. Done when: the S3 checkboxes 1–3 are answered.
+Result: spikes.md S3 part 1, D28; the lab is `lab/briar/`. The upstream clone is in `~/Projects/briar`
+(tag `release-1.5.21`) for S06. The ARM64 jar is built but untested.
 
 **S06. briar-headless, part 2.** Read `PrivateGroupManager`, `GroupInvitationManager` and how the Android
 app uses them. Write the patch plan of design.md §7.4 (D24): create, list, members, invite, dissolve,
