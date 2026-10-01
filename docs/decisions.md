@@ -632,3 +632,50 @@ S15 creates the engine with a `FileScriptSource` for the configured `routing` fi
 **Consequences:** S15 creates the `Database` at the configured path under `data/`, passes the
 repositories to the pipeline and the worker, loads the history at start, and calls `flush` after each
 message and on a timer, and the prunes daily. `aiosqlite` is a runtime dependency.
+
+## D41. The config: a core model that leaves endpoints to their extensions, staged errors, notices through the outbox
+**Status:** accepted (S14).
+- **Shape.** `chatko.application.config.validate_config(raw, types)` turns the parsed YAML into an
+  immutable `Config` or raises one `ConfigError` with a line per problem, each starting with its place
+  in the file (`groups.family.sites.tg.chat`). The core's pydantic models reject unknown keys; an
+  extension instance's section (without `type`) goes to its `config_model` and an endpoint's settings
+  (without `ext`) to its `endpoint_config_model` (D34). Errors never contain values, because a value
+  may be a secret (pydantic is asked for no input in its errors, and a YAML error gives only its
+  line and column). Errors come in stages: sections and endpoints first, then the checks that need the
+  topology (`admin_notices.to`, the de-duplication names), and last the constructor and `set_endpoints`
+  of every instance on a fresh object with an inert hub, so an extension's own refusal (a channel the
+  node does not have) is reported as `extensions.<instance>`.
+- **New core keys.** `fingerprint_dedup_s: {endpoint name: seconds}` is the per-endpoint window of D37
+  (a top-level mapping, not a key inside the endpoint, because the endpoint's keys belong to its
+  extension); `retention_days` (default 7, D40); `peers` is parsed into account sets and not used
+  yet. `admin_notices` is optional: without it a notice is only logged.
+- **`${ENV}`.** Substituted after the YAML is parsed, in values only (never keys), at any depth, so
+  a value cannot change the YAML's structure. A variable that is unset **or empty** is an error that
+  names its place; `$${` is a literal `${`. Outside block context YAML needs the value quoted
+  (`['${A}']`). `chatko check-config` also reads `--env-file` (default `.env`, the environment wins) so that it
+  works from a shell; the running hub gets its environment from Docker.
+- **`ConfigService`** reloads on demand and keeps the last valid `Config`. Identical content is
+  `UNCHANGED` (a refused file too, so a bad file is reported once), a refusal tells the admin with the
+  key `config:load` and leaves `current` alone, and a different problem is reported again.
+  `refresh()` reloads the config and then the routing script, which is all a watcher callback needs.
+  The file watching is `infrastructure.watcher.watch_files` over `watchfiles`: it watches the
+  directories, so replacing a file by rename or creating the routing script later is noticed.
+- **`AdminNotifier`** posts a notice as a message of its own from a pseudo endpoint
+  (`chatko:hub/notices`, in no extension, so no delivery report goes anywhere) with one delivery
+  per recipient of the admin endpoint, so it has the outbox's retries and survives a crash. It
+  rate-limits per key (10 minutes by default) and tells how many notices it held back. Without an
+  endpoint, or when storing fails, it logs and never raises, because it is called from error paths.
+- **`check-config`** validates the config, loads the routing script named in it with `load_script`
+  (a named script that is missing is an error here, while the running hub takes it for no script),
+  and runs the admin's `test_*.py` next to the config in a `pytest` subprocess, so that their
+  imports and failures stay out of the checker. `pytest` is the optional extra `chatko[test]`; without
+  it the tests are skipped with a message, not failed. Exit code 1 for anything wrong.
+- **Discovery** (`infrastructure.discovery`) moved forward from S15 because `check-config` needs the
+  installed types. It refuses, with a reason and without stopping the rest, an extension that cannot
+  be imported, is no `Extension`, is registered under another name than its `type_name`, or needs an
+  unsupported API version.
+
+**Consequences:** S15 wires `ConfigService`, the notifier and `watch_files`, builds `Installation`
+snapshots from `Config`, and decides what to do with a `LOADED` outcome while the hub runs. A
+reload that changes an endpoint's name drops its pending state (D34); `ExtensionSetup` equality is
+how S15 knows an instance must be restarted. `PyYAML` and `watchfiles` are runtime dependencies.

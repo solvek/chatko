@@ -60,7 +60,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S11 | 1 | Inbound pipeline, routing invariants and outbox worker | Opus 5.5 | high | done |
 | S12 | 1 | Routing engine: script loading, defaults, `label` hook, test kit, example script | Opus 5.5 | high | done |
 | S13 | 1 | SQLite repositories and migrations | Sonnet 5.5 | high | done |
-| S14 | 1 | Configuration: models, `${ENV}`, people, admin notices, hot reload, `check-config` | Sonnet 5.5 | high | todo |
+| S14 | 1 | Configuration: models, `${ENV}`, people, admin notices, hot reload, `check-config` | Sonnet 5.5 | high | done |
 | S15 | 1 | Extension discovery, composition root, `chatko run`, fake extension end to end | Opus 5.5 | high | todo |
 | S16 | 1 | Phase 1 review | Opus 5.5 | xhigh | todo |
 | S17 | 2 | Telegram: port, group and private-chat endpoints, allowed chats | Opus 5.5 | high | todo |
@@ -236,11 +236,19 @@ notices, and calling `RoutingEngine.reload()` when `routing.py` changes (D39); `
 `chatko check-config` (also loads the routing script with `load_script` and runs its tests: decide
 how `pytest` is available at run time, e.g. an optional extra). Done when:
 `config.example.yaml` validates with fake extensions, and invalid configs give clear errors.
+*Done (D41):* `chatko.application.config` (`validate_config`, `Config`), `ConfigService`, `AdminNotifier`,
+`infrastructure.config` / `watcher` / `discovery`, `chatko check-config`. S15 wires them: it builds the
+`Installation` and the extension instances from `ConfigService.current`, feeds `Config.admin_endpoint` to
+the notifier's `target`, passes `Config.retention` to the prunes, calls `ConfigService.refresh` from
+`watch_files` for `chatko.yaml` and the routing file, applies a `LOADED` outcome (restart the instances
+whose `ExtensionSetup` changed, `set_endpoints` where the endpoints changed), and uses
+`discover_extensions`, which S14 needed for `check-config` and already refuses an unsupported
+`api_version`.
 
 **S15. Wiring.** Entry-point discovery (`chatko.extensions`, refusing extensions whose `api_version`
-is not supported, D35), the routing engine over a `FileScriptSource`, reloaded before the
+is not supported, D35: written in S14, S15 only calls it), the routing engine over a `FileScriptSource`, reloaded before the
 extensions start (D39), the composition root (the lifecycle of architecture.md §3.1, including
-checking a new endpoint set on a fresh instance), the `Installation` snapshot that the pipeline
+checking a new endpoint set on a fresh instance: `validate_config` does it for a whole config, S14), the `Installation` snapshot that the pipeline
 and the worker read (D37), the outbox worker started before the extensions and stopped after them,
 `chatko run`; `FakeExtension` (in
 `extension_api.testing` since S10) registered for the test. Done when: an end-to-end test runs the hub with two fake extensions and a message crosses

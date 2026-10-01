@@ -60,7 +60,7 @@ src/
       testing/       # installation (FakeInstallation, RouteResult, assert_routed_to), history
                      # (FakeHistory)
     infrastructure/  # the real clock and ids, the routing script's file, SQLite repositories,
-                     # config loading (YAML + ${ENV}), extension discovery, logging
+                     # config (YAML + ${ENV}), the file watcher, extension discovery, logging
     app/             # composition root, CLI: `chatko run`, `chatko check-config`
   chatko_telegram/   # extension packages: separate top-level packages, so importing core internals
   chatko_meshtastic/ # is visible and forbidden by import-linter
@@ -335,8 +335,9 @@ the composition root (S15) wires them.
 | `HubHistory` | `history` | the routing script's `RoutingHistory`, in memory: the last time each account was heard (anywhere and per endpoint) and the fingerprints of the last 7 days |
 | `HistoryPersistence` | `history` | keeps a `HubHistory` in a `HistoryRepository`: `load(now)` at start, `flush()` saves what `HubHistory.take_unsaved()` hands over (kept for the next flush if the repository fails), `prune(now)` drops arrivals past the retention. S15 flushes after each message and on a timer, and prunes with the messages |
 | `Installation` | `installation` | one consistent snapshot of the topology, the running extension instances and the endpoints that de-duplicate by fingerprint; the services ask an `InstallationSource` for the current one per message and per attempt, so a reload (S14, S15) only swaps the snapshot |
-| `AdminNotifier` | (S14) | post admin notices into the configured endpoint, rate-limited and de-duplicated per key |
-| `ConfigService` | (S14) | load, validate (core + each extension's models) and hot-reload `chatko.yaml`; keep the last valid one |
+| `AdminNotifier` | `notifier` | implements `AdminNotices`: stores a notice as a message from `NOTICE_SOURCE` with one delivery per recipient of the admin endpoint (`target()`, from the config), rate-limited per key; it only logs without an endpoint and never raises (D41) |
+| `validate_config`, `Config` | `config` | the models of `chatko.yaml` and the validation: core sections, each extension's and endpoint's models, topology, the check of every instance on a fresh object (§5.4) |
+| `ConfigService` | `config_service` | `reload()` loads and validates through a `ConfigLoader` and keeps the last valid `Config` (`current`), reporting a refusal once with the key `config:load`; `refresh()` also reloads the routing script (D41) |
 
 ### 5.1 Ports
 
@@ -352,7 +353,8 @@ them and `application.testing` fakes them in memory (`FakeClock`, `SequentialIds
 | `OutboxRepository` | `pending()` (in the order stored), `save(delivery)` | `SqliteStore`; `InMemoryStore` |
 | `HistoryRepository` | `load(since) -> HistoryChanges`, `record(changes)` (one transaction; a last-heard time never moves back), `prune(before)` (arrivals only) | `SqliteHistory`; `InMemoryHistoryStore` |
 | `AccountRegistry` | `note(account, at) -> bool` (`True` the first time the key is seen; names and last-seen time are updated) | `SqliteAccounts`; `InMemoryAccounts` |
-| `AdminNotices` | `notify(text, key=…)` | `AdminNotifier` (S14); `RecordingNotices` |
+| `AdminNotices` | `notify(text, key=…)` | `AdminNotifier`; `RecordingNotices` |
+| `ConfigLoader` | `await load() -> Mapping` (`OSError`; `ConfigError` for bad YAML or an unset variable) | `FileConfigLoader(path, env)` (`infrastructure.config`); `InMemoryConfigLoader` |
 | `RoutingScriptSource` | `origin`, `await read() -> str \| None` (`None`: no script; `OSError` or `UnicodeDecodeError`: one that cannot be read) | `FileScriptSource(path)` (`config/routing.py`, read in a thread); `InMemoryScriptSource` |
 
 SQLite (`chatko.infrastructure.sqlite`, D40): `Database` is one `aiosqlite` connection whose every use is
@@ -407,6 +409,25 @@ pipeline in a task of its own, so cancelling the caller does not cut it short.
   posts their notices in tasks of its own instead of awaiting them: an admin notifier that goes
   through the pipeline (S14) cannot deadlock it. Lost notices are logged.
 - A script that never returns blocks the hub: it is trusted code, like the config (design.md §9.5).
+
+### 5.4 The config
+
+- **Loading.** `infrastructure.config.parse_config(text, env)` is `yaml.safe_load` plus `${NAME}`
+  substitution in values (D41). `FileConfigLoader` reads the file in a thread.
+- **Validating.** `validate_config(raw, types)` takes the installed extension classes by `type_name`
+  (`infrastructure.discovery.discover_extensions` finds them, refusing the unsupported ones) and
+  returns a `Config`: `extensions` (`ExtensionSetup`: type and validated config) and `endpoints` per
+  instance in config order, the `Topology` (sites are named `<group>.<site>`, D34), `fingerprint_dedup`
+  per endpoint, `admin_endpoint`, `new_accounts`, `routing`, `retention` and `peers`. Otherwise it
+  raises a `ConfigError` listing the problems with their places and without values. Its last step
+  builds each instance and calls `set_endpoints` on a fresh one with an inert hub, so the same call
+  serves `check-config` and every reload.
+- **Reloading.** `watch_files(paths, on_change, stop)` (over `watchfiles`) calls
+  `ConfigService.refresh()` for `chatko.yaml` and the routing script; the composition root (S15)
+  applies a `LOADED` outcome.
+- **`chatko check-config`** (`app.check_config`): validate, load the routing script with
+  `load_script`, run `test_*.py` next to the config with `pytest` in a subprocess (optional extra
+  `chatko[test]`; skipped with a message if missing). Exit 0 if all pass, 1 otherwise.
 
 ## 6. Technology
 

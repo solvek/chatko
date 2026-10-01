@@ -2,9 +2,10 @@
 
 import asyncio
 import itertools
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from chatko.application.ports import HistoryChanges
 from chatko.domain import (
@@ -210,3 +211,17 @@ class InMemoryScriptSource:
         if self.error is not None:
             raise self.error
         return self.code
+
+
+class InMemoryConfigLoader:
+    """Implements `ConfigLoader` with data a test sets; `error` is raised by the next loads
+    instead."""
+
+    def __init__(self, config: Mapping[str, Any] | None = None) -> None:
+        self.config: Mapping[str, Any] = {} if config is None else config
+        self.error: Exception | None = None
+
+    async def load(self) -> Mapping[str, Any]:
+        if self.error is not None:
+            raise self.error
+        return self.config

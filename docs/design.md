@@ -677,6 +677,10 @@ Two files in `config/`, both edited only by the admin and reloaded on change:
   [`routing.example.py`](../routing.example.py).
 
 If a new version is invalid, the hub keeps the previous one and reports the error as an admin notice.
+`chatko check-config` checks both files (and runs the routing script's tests) without starting the hub.
+Beside the sections of the example, the config has `fingerprint_dedup_s` (§9.3: the window per endpoint,
+in seconds) and `retention_days`. Admin notices go through the outbox like any message; notices
+with the same cause are rate-limited together, and the next one says how many were held back.
 Secrets (tokens, passwords, PSKs, the hub node's private key) come from environment variables
 (`${VAR}` in YAML, values in `.env`), never from the files.
 

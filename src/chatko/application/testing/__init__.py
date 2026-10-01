@@ -3,6 +3,7 @@
 from chatko.application.testing.fakes import (
     FakeClock,
     InMemoryAccounts,
+    InMemoryConfigLoader,
     InMemoryHistoryStore,
     InMemoryScriptSource,
     InMemoryStore,
@@ -14,6 +15,7 @@ from chatko.application.testing.fakes import (
 __all__ = [
     "FakeClock",
     "InMemoryAccounts",
+    "InMemoryConfigLoader",
     "InMemoryHistoryStore",
     "InMemoryScriptSource",
     "InMemoryStore",

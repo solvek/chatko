@@ -60,6 +60,13 @@ uv run lint-imports
 uv run coverage run -m pytest && uv run coverage report
 ```
 
+Check a config and its routing script (and run the script's tests, which needs the `test` extra,
+`uv sync --extra test`; the dev group has `pytest` already):
+
+```bash
+uv run chatko check-config --config config/chatko.yaml    # reads .env too
+```
+
 The gates and their limits are in [docs/architecture.md §7](docs/architecture.md#7-quality-gates).
 
 ## Documentation

@@ -7,7 +7,7 @@ for tests.
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Protocol
+from typing import Any, Protocol
 
 from chatko.domain import (
     Account,
@@ -114,9 +114,18 @@ class AccountRegistry(Protocol):
 
 
 class AdminNotices(Protocol):
-    """Posts admin notices (design.md §2). The real one rate-limits them by key (roadmap S14)."""
+    """Posts admin notices (design.md §2). The real one, `AdminNotifier`, rate-limits them."""
 
     async def notify(self, text: str, *, key: str) -> None: ...
+
+
+class ConfigLoader(Protocol):
+    """Where `chatko.yaml` comes from, parsed and with `${ENV}` substituted (design.md §10)."""
+
+    async def load(self) -> Mapping[str, Any]:
+        """The config as plain data. Raises `OSError` when it cannot be read and `ConfigError`
+        when it is not YAML, is not a mapping, or uses an environment variable that is not set."""
+        ...
 
 
 class RoutingScriptSource(Protocol):
