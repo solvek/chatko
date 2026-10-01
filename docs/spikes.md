@@ -373,12 +373,12 @@ checked on the Kyiv mesh in S04 and S23):
 - A virtual node has no clock: `lastHeard` and `rxTime` are absent. The hub uses its own clock.
 
 **Result, part 3 (2026-09-30, session S04; Kyiv broker, read-only):**
-- *What the site <https://meshtastic.kyiv.ua/join> tells.* The QR code is a channel URL
+- *What the website <https://meshtastic.kyiv.ua/join> tells.* The QR code is a channel URL
   (<https://meshtastic.org/e/#CjQSIFziz2R01sx4MpCcWd6Z49dJjCXa_IJYG5bDRi1CL3dcGghMb25nRmFzdCgBMAE6AgggCjISIHJheFM1Vm52VkNMcWZRcmVwUm9sYWh0TUpCNWxYWm81GgZLeWl2VUEoATABOgIIIBIOCAE4DkAFSAFQClgBaAE>);
   decoded, it holds: region **EU_433** (433.125 MHz, not `EU_868`), preset `LONG_FAST`, hop limit 5,
   TX power 10 dBm, and two channels: channel 0 **`LongFast`** with a **non-default 32-byte PSK**
   (public, in the URL), and a secondary channel **`KyivUA`** with its own 32-byte PSK. Members are told
-  to use the secondary channel for chat. The site states the broker host in its page config:
+  to use the secondary channel for chat. The website states the broker host in its page config:
   `mqtt.meshtastic.kyiv.ua` (157.180.74.120; ports 1883 and 8883 accept TCP), and its statistics
   show mostly text messages and no private ones. Nothing is published about the root topic, the
   credentials, PKI topics, downlink or gateway firmware.
@@ -387,8 +387,8 @@ checked on the Kyiv mesh in S04 and S23):
   listener: it subscribes to a filter, never publishes, and prints topic prefixes, channels, ports and
   the `pki_encrypted` and `via_mqtt` flags of the envelopes. Credentials come from `KYIV_MQTT_USER` and
   `KYIV_MQTT_PASSWORD` (or `--user`, `--password`), and `--tls` uses port 8883.
-- *Getting credentials (from the community chat).* Register on the site with Telegram, verify a node,
-  mark in its settings that it uses MQTT, and the site generates a login, password and host. The site
+- *Getting credentials (from the community chat).* Register on the website with Telegram, verify a node,
+  mark in its settings that it uses MQTT, and the website generates a login, password and host. The website
   has no node-verification page, so the community has to be asked; the node probably has to be seen on
   the mesh first, which a virtual node cannot do.
 - *How a node gets access (screenshots of a member's cabinet and node settings, 2026-10-01).* The
@@ -397,7 +397,7 @@ checked on the Kyiv mesh in S04 and S23):
   that is the **node id** (hex, no `!`), a password, and the topic **`node/<node id>`**. In the node's
   settings: MQTT address and credentials as shown, root topic `node/<node id>` (**not** `msh/EU_433`),
   TLS **off** (port 1883), encryption on ("send encrypted packets"), JSON off, map reporting on. A
-  checkbox "enable routing" lets "remote nodes join the local network" (the site warns that MQTT
+  checkbox "enable routing" lets "remote nodes join the local network" (the website warns that MQTT
   traffic may be large). So access is per node, tied to a node the registry has seen, and each node
   publishes under its own root. A virtual node that never transmits is not in the registry, so it
   cannot be claimed: the community's answer was to wait for a physical node to be confirmed (and even

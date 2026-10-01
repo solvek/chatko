@@ -11,33 +11,34 @@ from chatko.domain.errors import DomainError
 
 @dataclass(frozen=True, slots=True)
 class Topology:
-    """The groups with their legs, the named sources, and the people of an installation.
+    """The groups with their sites, the named sources, and the people of an installation.
 
-    Every endpoint is either a leg of exactly one group or exactly one source; a person's label and
-    each of their accounts belong to that person only.
+    Every endpoint is either a site of exactly one group or exactly one source, and no two endpoints
+    share a name; a person's label and each of their accounts belong to that person only.
     """
 
     groups: tuple[Group, ...] = ()
     sources: Mapping[str, EndpointRef] = field(default_factory=dict)
     people: tuple[Person, ...] = ()
     _group_by_name: Mapping[str, Group] = field(init=False, repr=False, compare=False)
-    _group_by_leg: Mapping[EndpointRef, Group] = field(init=False, repr=False, compare=False)
+    _group_by_site: Mapping[EndpointRef, Group] = field(init=False, repr=False, compare=False)
     _person_by_account: Mapping[AccountKey, Person] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "sources", MappingProxyType(dict(self.sources)))
         object.__setattr__(self, "_group_by_name", _index_groups(self.groups))
-        object.__setattr__(self, "_group_by_leg", _index_legs(self.groups))
-        _check_sources(self.sources, self._group_by_leg)
+        object.__setattr__(self, "_group_by_site", _index_sites(self.groups))
+        _check_sources(self.sources, self._group_by_site)
+        _check_names(self._group_by_site.keys() | self.sources.values())
         object.__setattr__(self, "_person_by_account", _index_people(self.people))
 
     @property
     def endpoints(self) -> frozenset[EndpointRef]:
-        """Every leg and every source."""
-        return frozenset(self._group_by_leg) | frozenset(self.sources.values())
+        """Every site and every source."""
+        return frozenset(self._group_by_site) | frozenset(self.sources.values())
 
     def has_endpoint(self, endpoint: EndpointRef) -> bool:
-        return endpoint in self._group_by_leg or endpoint in self.sources.values()
+        return endpoint in self._group_by_site or endpoint in self.sources.values()
 
     def group(self, name: str) -> Group:
         try:
@@ -46,8 +47,8 @@ class Topology:
             raise KeyError(f"no group {name!r}") from None
 
     def group_of(self, endpoint: EndpointRef) -> Group | None:
-        """The group the endpoint is a leg of; `None` for a source or an unknown endpoint."""
-        return self._group_by_leg.get(endpoint)
+        """The group the endpoint is a site of; `None` for a source or an unknown endpoint."""
+        return self._group_by_site.get(endpoint)
 
     def source(self, name: str) -> EndpointRef:
         try:
@@ -72,30 +73,38 @@ def _index_groups(groups: Iterable[Group]) -> Mapping[str, Group]:
     return MappingProxyType(by_name)
 
 
-def _index_legs(groups: Iterable[Group]) -> Mapping[EndpointRef, Group]:
-    by_leg: dict[EndpointRef, Group] = {}
+def _index_sites(groups: Iterable[Group]) -> Mapping[EndpointRef, Group]:
+    by_site: dict[EndpointRef, Group] = {}
     for group in groups:
-        for leg in group.legs:
-            if leg in by_leg:
+        for site in group.sites:
+            if site in by_site:
                 raise DomainError(
-                    f"endpoint {leg} is a leg of both {by_leg[leg].name!r} and {group.name!r}"
+                    f"endpoint {site} is a site of both {by_site[site].name!r} and {group.name!r}"
                 )
-            by_leg[leg] = group
-    return MappingProxyType(by_leg)
+            by_site[site] = group
+    return MappingProxyType(by_site)
 
 
-def _check_sources(sources: Mapping[str, EndpointRef], legs: Mapping[EndpointRef, Group]) -> None:
+def _check_sources(sources: Mapping[str, EndpointRef], sites: Mapping[EndpointRef, Group]) -> None:
     seen: dict[EndpointRef, str] = {}
     for name, endpoint in sources.items():
         if not name.strip():
             raise DomainError(f"source {endpoint} needs a name")
-        if endpoint in legs:
+        if endpoint in sites:
             raise DomainError(
-                f"source {name!r} is also a leg of group {legs[endpoint].name!r}: {endpoint}"
+                f"source {name!r} is also a site of group {sites[endpoint].name!r}: {endpoint}"
             )
         if endpoint in seen:
             raise DomainError(f"sources {seen[endpoint]!r} and {name!r} are the same {endpoint}")
         seen[endpoint] = name
+
+
+def _check_names(endpoints: Iterable[EndpointRef]) -> None:
+    by_name: dict[str, EndpointRef] = {}
+    for endpoint in sorted(endpoints):
+        if endpoint.name in by_name:
+            raise DomainError(f"endpoints {by_name[endpoint.name]} and {endpoint} share a name")
+        by_name[endpoint.name] = endpoint
 
 
 def _index_people(people: Iterable[Person]) -> Mapping[AccountKey, Person]:

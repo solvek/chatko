@@ -32,7 +32,7 @@ def test_unknown_group_is_a_key_error() -> None:
         topology().group("x")
 
 
-def test_group_of_a_leg() -> None:
+def test_group_of_a_site() -> None:
     assert topology().group_of(MESH_DM) == FAMILY
 
 
@@ -60,7 +60,7 @@ def test_sources_cannot_be_changed_through_the_topology() -> None:
         topo.sources["other"] = LONGFAST  # type: ignore[index]
 
 
-def test_endpoints_are_all_legs_and_sources() -> None:
+def test_endpoints_are_all_sites_and_sources() -> None:
     topo = topology()
 
     assert topo.endpoints == {TG_FAMILY, BRIAR_FAMILY, MESH_DM, TG_STREET, LONGFAST, OWNER}
@@ -100,13 +100,13 @@ def test_group_names_are_unique() -> None:
         Topology(groups=(FAMILY, Group("family", (TG_STREET,))))
 
 
-def test_endpoint_is_a_leg_of_one_group_only() -> None:
-    with pytest.raises(DomainError, match="leg of both 'family' and 'street'"):
+def test_endpoint_is_a_site_of_one_group_only() -> None:
+    with pytest.raises(DomainError, match="site of both 'family' and 'street'"):
         Topology(groups=(FAMILY, Group("street", (TG_STREET, BRIAR_FAMILY))))
 
 
-def test_source_is_not_a_leg() -> None:
-    with pytest.raises(DomainError, match="also a leg of group 'family'"):
+def test_source_is_not_a_site() -> None:
+    with pytest.raises(DomainError, match="also a site of group 'family'"):
         Topology(groups=(FAMILY,), sources={"fam": TG_FAMILY})
 
 
@@ -128,3 +128,8 @@ def test_person_labels_are_unique() -> None:
 def test_account_belongs_to_one_person_only() -> None:
     with pytest.raises(DomainError, match="belongs to both 'NatAda' and 'Nata2'"):
         Topology(people=(NATA, Person("Nata2", frozenset({NAT_MESH}))))
+
+
+def test_endpoint_names_are_unique_across_instances() -> None:
+    with pytest.raises(DomainError, match="share a name"):
+        Topology(sources={"a": EndpointRef("tg", "x"), "b": EndpointRef("kyiv", "x")})

@@ -109,7 +109,7 @@ relays and gateways run with "Ignore MQTT" on, whether gateways downlink `LongFa
 the hub's node only that way, and downlinks a direct message only if it knows both nodes), and how
 many radios have "OK to MQTT" on (design.md §6.2, spike S2 part 2). Done when:
 receiving works, the questions are sent, and design.md §6.2 notes what is still waiting for an answer.
-State (2026-09-30): the site data, the QR channel URL and the broker host are recorded, the listener
+State (2026-09-30): the website data, the QR channel URL and the broker host are recorded, the listener
 `lab/spike_kyiv.py` is written, design.md §6.2 is updated and the questions are drafted; the broker
 refuses anonymous clients and issues credentials only for a claimed physical node (D27), so receiving
 waits for that. Not blocking: continue with S05. When a physical 433 MHz node is claimed, run
@@ -155,12 +155,12 @@ by `ruff` only until `routing_api` exists (S12).
 **S09. Domain.** `EndpointRef`, `Group`, `Account`, `Person`, `Message`, `Target`, `Delivery`, the
 fingerprint, and the label generator (KMU-2010 transliteration, fallbacks). No I/O.
 Done when: domain coverage ≥ 95 % and the label examples of design.md §8 are tests.
-Result: `chatko.domain` (architecture.md §2.1), D32; 178 tests, domain coverage 100 %. Also
+Result: `chatko.domain` (architecture.md §2.1), D32; 179 tests, domain coverage 100 %. Also
 `Topology` (groups, sources, people and their uniqueness rules) and `Author.relayed_label` for peer
 relays (D17). design.md §8 gained the generator's exact rules and an example table, which
 `tests/unit/domain/test_labels.py` checks; §9.5 the fingerprint's normalization. All names are
 transliterated as Ukrainian, with letters of other Cyrillic alphabets added. Left to later
-sessions: how the config names legs (S14), backoff (S11).
+sessions: backoff (S11). Sites are named by the admin (D34).
 
 **S10. Extension and routing APIs.** The most expensive decision to change later, hence `xhigh` and a careful review of the result. Settle
 `Extension`, `EndpointProvider`, `HubContext`, the message and delivery types, and API versioning (room
@@ -185,15 +185,15 @@ are tests, and the example script passes its own tests.
 de-duplication, last heard, accounts seen). The same repository tests run against the fakes and SQLite.
 Done when: all repository ports have a SQLite implementation passing the shared tests.
 
-**S14. Configuration.** Pydantic models for the core (groups, legs, sources, people, `admin_notices`,
-`routing`, room for `peers`) and hooks for each extension's models; YAML safe load; `${ENV}`
+**S14. Configuration.** Pydantic models for the core (groups with named sites (D34), sources, people,
+`admin_notices`, `routing`, room for `peers`) and hooks for each extension's models; YAML safe load; `${ENV}`
 substitution; reload with `watchfiles`, keeping the last valid config and reporting errors as admin
 notices; `AdminNotifier`; `chatko check-config` (also loads and tests the routing script). Done when:
 `config.example.yaml` validates with fake extensions, and invalid configs give clear errors.
 
 **S15. Wiring.** Entry-point discovery (`chatko.extensions`), the composition root, `chatko run`,
 `FakeExtension`. Done when: an end-to-end test runs the hub with two fake extensions and a message crosses
-from one leg to the other through SQLite.
+from one site to the other through SQLite.
 
 **S16. Phase 1 review.** `/code-review` at high effort, coverage and architecture check, docs in sync
 with the code. Done when: findings are fixed or recorded as sessions.

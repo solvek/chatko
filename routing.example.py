@@ -24,9 +24,11 @@ def route(msg: RoutedMessage, ctx: RoutingContext) -> list[Target]:
     # A tagged message from the family group is also posted to the street group.
     if msg.group == ctx.group("family") and msg.text.startswith("#street "):
         text = msg.text.removeprefix("#street ")
-        return mirror(msg, ctx) + [to_endpoint(leg, text=text) for leg in ctx.group("street").legs]
+        return mirror(msg, ctx) + [
+            to_endpoint(site, text=text) for site in ctx.group("street").sites
+        ]
 
-    # Everything else: all other legs of the message's group.
+    # Everything else: all other sites of the message's group.
     return mirror(msg, ctx)
 
 

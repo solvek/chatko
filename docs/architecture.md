@@ -77,11 +77,11 @@ its rules, and re-exports its public names from the package.
 
 | Module | Contents |
 |---|---|
-| `endpoints` | `EndpointRef(instance, name)`; `Group(name, legs)` with `other_legs(endpoint)` |
+| `endpoints` | `EndpointRef(instance, name)`, the name being the admin's (`family.tg`, D34); `Group(name, sites)` with `other_sites(endpoint)` |
 | `accounts` | `AccountKey(kind, external_id)` (`telegram:123`, parsed from the config form); `Account(key, display_name, short_name)` as the network shows it now; `Person(label, accounts)`; `Author(account, person, relayed_label)`, where `relayed_label` marks a peer hub's relay (D17) |
 | `messages` | `MessageId`; `Attachment(kind)` with its `[photo]` placeholder; `Message` (endpoint, transport id, author, text, attachments, time) with `plain_text` and `fingerprint`; `Target(endpoint, text, label)` |
 | `delivery` | `Delivery`: one outbox row (message, endpoint, author label, text, due time, attempts, last error). `delivered`, `retry(at)` and `failed` return a new value; delivered and failed are final |
-| `topology` | `Topology(groups, sources, people)`: lookups (`group`, `group_of`, `source`, `person_of`, `author_of`) and the rules that every endpoint is the leg of one group or one source, and every account belongs to one person |
+| `topology` | `Topology(groups, sources, people)`: lookups (`group`, `group_of`, `source`, `person_of`, `author_of`) and the rules that every endpoint is the site of one group or one source, endpoint names are unique, and every account belongs to one person |
 | `fingerprint` | `Fingerprint`, `fingerprint(label, text)` and the normalization (design.md §9.5) |
 | `labels`, `transliteration` | `default_label(author)`, `generate_label(account)`, `transliterate` (design.md §8) |
 
@@ -120,7 +120,9 @@ The protocol set can grow later (e.g. commands for a web UI) without changing ex
 Key types:
 - `AccountKey(kind, external_id)`, e.g. `("telegram", "123")`, `("meshtastic", "!a1b2c3d4")`, plus the
   display name and, if the network has one, the short name it gives (the domain's `Account`).
-- `EndpointRef(instance, name)`: a leg or a source. The extension does not know which; groups are a
+- `EndpointRef(instance, name)`: a site or a source, named by the admin in the config (`family.tg`,
+  `longfast`; D34). The rest of an endpoint's config is the extension's and is validated by its
+  `endpoint_config_model`; the core never reads it. The extension does not know which; groups are a
   core concept.
 - `InboundMessage(endpoint, external_id, author: Account, text, attachments)`, where `external_id` is
   used for de-duplication.
@@ -162,12 +164,12 @@ from chatko.routing_api import RoutedMessage, RoutingContext, Target, mirror, to
 def route(msg: RoutedMessage, ctx: RoutingContext) -> list[Target]:
     if msg.endpoint == ctx.source("longfast"):                 # a feed
         return [to_endpoint(ctx.endpoint("owner"))]
-    return mirror(msg, ctx)                                    # all other legs of the group
+    return mirror(msg, ctx)                                    # all other sites of the group
 ```
 
 - `RoutedMessage` (read-only): `endpoint`, `group | None`, `author` (account, display name, person or
   `None`, relayed-by-peer), `text`, `attachments`, `fingerprint`, `received_at`.
-- `RoutingContext` (read-only): groups and their legs, sources and other named endpoints, people,
+- `RoutingContext` (read-only): groups and their sites, sources and other named endpoints, people,
   peers, `last_heard(account, endpoint)`, `seen(fingerprint, within)`, the clock.
 - `Target`: `to_endpoint(ref, *, text=None, label=None)`.
 - Optional hook `label(author, target, ctx) -> str`; without it the core uses `default_label`.

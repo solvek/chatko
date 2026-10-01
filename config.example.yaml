@@ -40,21 +40,24 @@ extensions:
     api: http://briar:7000
     auth_token: ${BRIAR_AUTH_TOKEN}
 
+# A group's sites: the places where it lives, named by you. A site is `<group>.<name>` to the
+# routing script (`family.radio`). `ext` names the extension instance; everything else in a site
+# belongs to that extension, which checks it.
 groups:
   family:
-    legs:
-      - { ext: tg, chat: -1001234567890 }
-      - { ext: briar, group: "<Briar group id>" }          # printed by `briarctl group create`
-      - { ext: kyiv, channel: family }                      # broadcast on the private channel
-      - { ext: kyiv, dm: ["!a1b2c3d4", "!0badc0de"] }       # PKI direct messages to these nodes
+    sites:
+      tg: { ext: tg, chat: -1001234567890 }
+      briar: { ext: briar, group: "<Briar group id>" }          # printed by `briarctl group create`
+      channel: { ext: kyiv, channel: family }                    # broadcast on the private channel
+      radio: { ext: kyiv, dm: ["!a1b2c3d4", "!0badc0de"] }       # PKI direct messages to these nodes
 
   street:
-    legs:
-      - { ext: tg, chat: -1009876543210 }
-      - { ext: briar, group: "<another Briar group id>" }  # any number of Briar groups
-      - { ext: kyiv, dm: ["!a1b2c3d4"] }
+    sites:
+      tg: { ext: tg, chat: -1009876543210 }
+      briar: { ext: briar, group: "<another Briar group id>" }  # any number of Briar groups
+      radio: { ext: kyiv, dm: ["!a1b2c3d4"] }
 
-# Endpoints outside any group. Their messages go only where routing.py sends them.
+# Endpoints outside any group, named like sites. Their messages go only where routing.py sends them.
 sources:
   longfast: { ext: kyiv, channel: LongFast }
   owner: { ext: tg, chat: 123456789 }                        # the owner's private chat with the bot
@@ -69,7 +72,7 @@ people:
   NatAda: ["telegram:111111111", "meshtastic:!a1b2c3d4", "briar:<author id>"]
 
 # Where each message goes and how authors are labelled: config/routing.py (see routing.example.py).
-# Without it, every message goes to all other legs of its group.
+# Without it, every message goes to all other sites of its group.
 routing: routing.py
 
 # Later (several hubs): other chatko installations and their accounts, so their relays are recognized.

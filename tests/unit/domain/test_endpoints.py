@@ -22,21 +22,21 @@ def test_endpoint_needs_an_instance_and_a_name(instance: str, name: str) -> None
         EndpointRef(instance, name)
 
 
-def test_group_knows_its_legs() -> None:
+def test_group_knows_its_sites() -> None:
     group = Group("family", (TG, BRIAR))
 
-    assert group.has_leg(TG)
-    assert not group.has_leg(MESH)
+    assert group.has_site(TG)
+    assert not group.has_site(MESH)
 
 
-def test_other_legs_are_all_legs_but_the_given_one_in_config_order() -> None:
+def test_other_sites_are_all_sites_but_the_given_one_in_config_order() -> None:
     group = Group("family", (TG, BRIAR, MESH))
 
-    assert group.other_legs(BRIAR) == (TG, MESH)
+    assert group.other_sites(BRIAR) == (TG, MESH)
 
 
-def test_other_legs_of_an_endpoint_outside_the_group_are_all_legs() -> None:
-    assert Group("family", (TG, BRIAR)).other_legs(MESH) == (TG, BRIAR)
+def test_other_sites_of_an_endpoint_outside_the_group_are_all_sites() -> None:
+    assert Group("family", (TG, BRIAR)).other_sites(MESH) == (TG, BRIAR)
 
 
 def test_group_needs_a_name() -> None:
@@ -44,11 +44,11 @@ def test_group_needs_a_name() -> None:
         Group(" ", (TG,))
 
 
-def test_group_needs_a_leg() -> None:
-    with pytest.raises(DomainError, match="no legs"):
+def test_group_needs_a_site() -> None:
+    with pytest.raises(DomainError, match="no sites"):
         Group("family", ())
 
 
-def test_group_cannot_list_a_leg_twice() -> None:
+def test_group_cannot_list_a_site_twice() -> None:
     with pytest.raises(DomainError, match="twice"):
         Group("family", (TG, BRIAR, TG))

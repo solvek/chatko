@@ -27,7 +27,7 @@ is limited to 8 channels and one broker.
 **Decision:** a group names its membership source. In v1 it is a Telegram group, so whoever is in the
 Telegram group is a member. The bot serves only chats listed in the config and leaves any other group.
 **Consequences:** admins manage people with ordinary Telegram tools. Removing someone from the Briar
-or Meshtastic legs needs a new Briar group or a new channel PSK. Another source can replace Telegram
+or Meshtastic sites needs a new Briar group or a new channel PSK. Another source can replace Telegram
 later without core changes (see D9).
 
 ## D5. Admin config is read-only for the hub; user state lives in SQLite
@@ -50,7 +50,7 @@ git-ignored.
 localization, with Ukrainian as the first translation.
 
 ## D9. Every network is an extension; Telegram is not special
-**Decision:** the core knows no network. Extensions implement capabilities (legs, membership source,
+**Decision:** the core knows no network. Extensions implement capabilities (sites, membership source,
 control surface, commands, feeds) through the public `chatko.extension_api`. They are discovered through
 entry points, including the built-in ones. Members have an internal id, and all network accounts are
 identities attached to it.
@@ -103,19 +103,19 @@ group does stop it for everyone. Relay through other members works, and a "Revea
 two members is enough.
 **Decision:** `/briar remove` deletes the contact and the identity and does not try to remove the member
 from groups. Posts from such an account are relayed as unlinked or ignored, as configured. A real
-cut-off is done by re-creating the group's Briar leg (dissolve, create, invite the linked members). The
+cut-off is done by re-creating the group's Briar site (dissolve, create, invite the linked members). The
 `/briar` help tells members to add each other nearby and to reveal their contacts in the group.
 **Consequences:** the briar-headless patch needs no remove-member endpoint; `DELETE /v1/groups/{groupId}`
-(dissolve) is required. Re-creating a Briar leg loses its history on members' phones and needs every
+(dissolve) is required. Re-creating a Briar site loses its history on members' phones and needs every
 member to reach the hub directly once to accept the new invitation.
 
 ## D16. Routing is a Python script; the YAML declares what exists
-Fixed rules ("mirror all legs of a group", feeds as a separate feature) are not flexible enough: the
+Fixed rules ("mirror all sites of a group", feeds as a separate feature) are not flexible enough: the
 owner wants to route between any endpoints (several Briar groups, a broadcast to one member), and later
 between several hubs.
-**Decision:** `chatko.yaml` stays declarative (extensions, groups, legs, sources, admins, peers).
+**Decision:** `chatko.yaml` stays declarative (extensions, groups, sites, sources, admins, peers).
 Routing is `config/routing.py`: a pure function `route(message, ctx) → targets` that imports only the
-public `chatko.routing_api`. The core ships a default router (`mirror`: all other legs of the group)
+public `chatko.routing_api`. The core ships a default router (`mirror`: all other sites of the group)
 used when there is no script, and as the fallback when the script raises. The core always enforces the
 invariants against echoes and duplicates (own posts, source endpoint, at most once per target,
 transport-id and optional fingerprint de-duplication). Feeds become routes from a source to members.
@@ -378,8 +378,8 @@ Session S09 wrote `chatko.domain` (architecture.md §2.1). Choices that the desi
   standard library.
 - An `AccountKey`'s kind is the extension type (`telegram`), not the instance (`tg`), so the
   `people` section names an account once for all instances. An `EndpointRef`'s name only has to be
-  unique within its instance; how the config names legs is settled with the config (S14).
-- `Topology` (groups, sources, people) enforces what routing relies on: an endpoint is the leg of
+  unique within its instance; how the config names sites is settled with the config (S14).
+- `Topology` (groups, sources, people) enforces what routing relies on: an endpoint is the site of
   one group or one source, never both, and an account belongs to one person.
 - Transliteration: every name is read as Ukrainian, by KMU-2010, with no separate Russian table
   and no language guessing (the owner's choice; the design had "Russian by a similar one"). Letters
@@ -401,3 +401,27 @@ Session S09 wrote `chatko.domain` (architecture.md §2.1). Choices that the desi
 them but should not redefine them. Changing the fingerprint means a new personalization string and
 a note for peers. Two hubs match fingerprints only if they label a person the same way (the same
 `people` labels, or names that generate the same label).
+
+## D33. A group's endpoints are its "sites", not its "legs"
+The owner found "leg" an awkward term, in English and in Ukrainian ("нога").
+**Decision:** an endpoint that belongs to a group is a **site** (Ukrainian "майданчик"): the
+config key is `sites:`, the domain has `Group.sites`, `Group.has_site` and `Group.other_sites`. The
+word is replaced in every document, the earlier decisions included, since only the term changes,
+not what they decided. "Site" in the sense of a web page is now written "website".
+**Consequences:** none beyond the rename; nothing was released with the old key.
+
+## D34. The admin names every site and source; the core never reads an endpoint's settings
+An endpoint's settings (`chat`, `group`, `channel`, `dm`) belong to its extension, so the core
+cannot make a stable name for an endpoint from them. It needs one for the hub's state in SQLite
+(outbox, de-duplication) and for the routing script. Two ways were weighed: each extension derives
+a key from its endpoint config (`chat:-100…`), or the admin names the endpoints.
+**Decision:** the admin names them. A group's `sites` is a mapping from a name to the endpoint
+(`family: {sites: {tg: {ext: tg, chat: …}}}`), and the endpoint's name is `<group>.<site>`
+(`family.tg`); a source's name is its key under `sources` (`longfast`). `EndpointRef(instance,
+name)` carries that name, and no two endpoints of an installation share one. The core reads only
+`ext` and passes everything else to the extension, which validates it with its
+`endpoint_config_model` (architecture.md §3). This refines D32, which left the naming to S14.
+**Consequences:** extensions need no way to serialize their endpoint config, and the routing script
+refers to readable names. Renaming a site or moving it to another group changes its name, so the
+hub's state for it (pending deliveries, de-duplication) no longer applies; changing a site's
+settings under the same name (a new Telegram chat id) keeps its name.

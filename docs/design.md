@@ -31,8 +31,8 @@ DMs to several nodes) in sync (D20).
 | **Extension** | A plug-in that connects chatko to one network or service: `telegram`, `meshtastic`, `briar`, later others. The core knows no network by name. An extension can be added or removed without touching the core. |
 | **Extension instance** | A configured copy of an extension, with its own name, e.g. `tg` (telegram), `kyiv` and `lab` (two meshtastic instances on different MQTT brokers), `briar`. |
 | **Endpoint** | One place where an extension instance reads and posts messages: a Telegram chat, a Briar private group, a Meshtastic channel, a set of Meshtastic nodes reached by DM. |
-| **Group** | An independent chat room: a named set of **legs**. |
-| **Leg** | An endpoint that belongs to a group: one place where the group lives. |
+| **Group** | An independent chat room: a named set of **sites**. |
+| **Site** | An endpoint that belongs to a group: one place where the group lives. |
 | **Source** | An endpoint that belongs to no group but is still read, e.g. the public `LongFast` channel. Its messages go only where the routing script sends them. |
 | **Account** | An author in some network: `telegram:123456789`, `meshtastic:!a1b2c3d4`, `briar:<author id>`, with the display name the network gives. |
 | **Person** | Optional, in the config: a label (e.g. `NatAda`) and the accounts of one human, so that they are signed the same way in every network (§8). |
@@ -158,7 +158,7 @@ for `channel` delivery, but `dm` delivery would need our own PKI, NodeInfo, ACK 
   only client of its node; the admin does not connect the Meshtastic app or CLI to it while the hub runs.
 - A node has up to 8 channels. Channel 0 is usually the primary channel of the mesh (e.g. `LongFast`;
   on the Kyiv mesh it has a non-default PSK), used as a source. The other channels are private group channels with their own PSK.
-- A group may have several Meshtastic legs, even on different instances (brokers).
+- A group may have several Meshtastic sites, even on different instances (brokers).
 - A private channel must use the same modem preset as the primary channel, because secondary channels
   share its LoRa settings.
 
@@ -320,7 +320,7 @@ the group alive, so the recommended setup is: **the hub's account creates the gr
    (only contacts added in person are verified), which does not affect syncing.
 2. **Group.** `briarctl group create "Family"` prints the new group's id;
    `briarctl group invite <group> <contact>…` invites people. They accept in the app.
-3. **Endpoint.** The admin puts the group id, as `briarctl` prints it, into `chatko.yaml` (a leg of
+3. **Endpoint.** The admin puts the group id, as `briarctl` prints it, into `chatko.yaml` (a site of
    a group, or a source). From then on the extension reads and posts there.
 
 Briar ids (groups, authors) are 32 bytes. `briarctl`, `chatko.yaml` and chatko's logs write them in
@@ -510,7 +510,10 @@ Replies, edits and deletions are not mirrored in v1. A reply is sent as plain te
 
 Configuration is split in two (D16):
 - **What exists** is declarative, in `chatko.yaml`: extension instances (with channels and PSKs),
-  groups and their legs, sources, people, where admin notices go, later peer hubs.
+  groups and their sites, sources, people, where admin notices go, later peer hubs. The admin names
+  every site and source (`family.tg`, `longfast`); the script and the hub's state refer to them by
+  that name (D34). What a site is in its network (a chat id, a channel, a list of nodes) is up to
+  its extension, and the core never reads it.
 - **Where each message goes** is code, in `config/routing.py`: a Python function the admin writes. It
   sees the incoming message and the installation and returns the targets.
 
@@ -531,7 +534,7 @@ For every incoming message:
 
 ### 9.2 Targets
 
-A target is an endpoint (a leg or a source) with optional overrides of the text or the author label,
+A target is an endpoint (a site or a source) with optional overrides of the text or the author label,
 e.g. to add a `#street` tag. The script has no I/O: it cannot send anything itself, only return targets.
 So the core controls every delivery, and the script is easy to test.
 
@@ -550,8 +553,8 @@ does:
 
 ### 9.4 Default routing and errors
 
-- Without `routing.py`, the core uses its **default router**: a message from a leg goes to all other
-  legs of the same group, and a source goes nowhere. The same function is available to scripts as
+- Without `routing.py`, the core uses its **default router**: a message from a site goes to all other
+  sites of the same group, and a source goes nowhere. The same function is available to scripts as
   `mirror(message, ctx)`, so a script usually handles a few special cases and ends with
   `return mirror(message, ctx)`.
 - `routing.py` is reloaded on change, like the YAML. A script that fails to load keeps the previous one
@@ -567,9 +570,9 @@ gives:
 - an optional hook: if the script defines `label(author, target, ctx) -> str`, the core uses it for
   every author label instead of `default_label` (§8). The core still limits a label to what the target
   network can show (it counts towards the 200-byte Meshtastic packet);
-- the message: source endpoint, group (if the endpoint is a leg), author (account, display name, person
+- the message: source endpoint, group (if the endpoint is a site), author (account, display name, person
   if any, or an author relayed by a peer hub), text, attachments, fingerprint, time;
-- the installation: groups and their legs, sources, people, peers;
+- the installation: groups and their sites, sources, people, peers;
 - state the core already tracks, e.g. when a node was last heard on a channel (`last_heard`);
 - **fingerprint**: a hash of the original author label and the normalized text. Two copies of one
   message that came by different paths (a peer's relay, a late Briar sync, another gateway) have the
