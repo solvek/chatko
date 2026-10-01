@@ -403,11 +403,11 @@ async def test_keeps_serving_after_a_failure_of_its_own(caplog: pytest.LogCaptur
     rig = Rig(provisioned(Broken()))
     await rig.node.start()
     try:
-        await rig.ready()
+        # The broken connection is ready for a moment too, until its reader fails.
+        await eventually(lambda: rig.api.connections == 2 and rig.node.ready)
     finally:
         await rig.node.stop()
 
-    assert rig.api.connections == 2
     assert any("lost the node" in message for message in caplog.messages)
 
 
@@ -528,7 +528,7 @@ async def test_gives_up_waiting_for_old_texts(rig: Rig) -> None:
 
 
 async def test_keeps_the_interval_between_texts() -> None:
-    rig = Rig(provisioned(FakeMeshApi()), timings=replace(FAST, min_send_interval=0.1))
+    rig = Rig(provisioned(FakeMeshApi()), timings=replace(FAST, min_send_interval=0.2))
     await rig.node.start()
     loop = asyncio.get_running_loop()
     try:
@@ -540,7 +540,7 @@ async def test_keeps_the_interval_between_texts() -> None:
     finally:
         await rig.node.stop()
 
-    assert took >= 0.09
+    assert took >= 0.17  # asyncio may wake a timer one clock tick early (16 ms on Windows)
 
 
 async def test_the_ports_errors_reach_the_sender(rig: Rig) -> None:
