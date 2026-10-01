@@ -150,8 +150,8 @@ for `channel` delivery, but `dm` delivery would need our own PKI, NodeInfo, ACK 
   have the same name and PSK on the hub's node and on every radio.
 - `meshtasticd` serves one API client at a time: a new connection drops the previous one. The hub is the
   only client of its node; the admin does not connect the Meshtastic app or CLI to it while the hub runs.
-- A node has up to 8 channels. Channel 0 is usually the public primary channel of the mesh (e.g.
-  `LongFast`), used as a source. The other channels are private group channels with their own PSK.
+- A node has up to 8 channels. Channel 0 is usually the primary channel of the mesh (e.g. `LongFast`;
+  on the Kyiv mesh it has a non-default PSK), used as a source. The other channels are private group channels with their own PSK.
 - A group may have several Meshtastic legs, even on different instances (brokers).
 - A private channel must use the same modem preset as the primary channel, because secondary channels
   share its LoRa settings.
@@ -204,7 +204,13 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
   to a broker on a public address only if that radio has **"OK to MQTT"** on. It is off by default, so
   members turn it on, like "Ignore MQTT" off below. A gateway downlinks a direct message only if it
   knows both the hub's node and the person's node, and it learns the hub's node only through MQTT
-  downlink on the primary channel **(verify on the Kyiv mesh, S04)**.
+  downlink on the primary channel. **Kyiv (spike S2, part 3):** the primary channel there is `LongFast`
+  on `EU_433` with its own PSK (from the QR code at <https://meshtastic.kyiv.ua/join>, the same for all
+  members), so the hub's primary channel must use that PSK. The broker `mqtt.meshtastic.kyiv.ua`
+  gives a login and the root topic `node/<node id>` per **claimed physical node** that the registry has
+  seen; a virtual node cannot get them (D27). Until a physical node is confirmed, the hub uses our own
+  broker. Still unknown **(verify: what the broker's "routing" does with packets under `node/<id>`,
+  PKI and downlink policy, gateway firmware)**.
 - Both kinds can be used in one group. Then a person with a node on both gets the message twice, unless
   the routing script skips `dm` for nodes recently heard on the channel (`last_heard`, §9.5).
 - With a physical hub node (later), both kinds work within its radio range without any gateway.
@@ -212,9 +218,10 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
   A packet from the hub's virtual node is marked "via MQTT", and the mark travels in the LoRa header after
   a gateway downlinks it. A node with `ignore_mqtt` on drops such a packet before it would show or relay
   it (spike S2, firmware 2.7.26). The firmware turns `ignore_mqtt` on when a region with a duty-cycle
-  limit, such as `EU_868` in Ukraine, is set for the first time, so many radios have it on. Setup
+  limit, such as `EU_868`, or `EU_433` on the Kyiv mesh (probably, unchecked), is set for the first
+  time, so many radios have it on. Setup
   instructions for members say to turn it off. How common it is on the Kyiv relays is **(verify: ask the
-  Kyiv community, S04)**.
+  Kyiv community, questions sent in S04)**.
 - Relays forward packets of channels they do not know without decrypting them, so a private-channel
   packet still travels over foreign relays. This holds for the default rebroadcast mode `ALL` and for
   `CORE_PORTNUMS_ONLY` (the default of the `ROUTER` role). Nodes set to `LOCAL_ONLY` or `KNOWN_ONLY`

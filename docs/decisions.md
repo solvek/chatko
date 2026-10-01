@@ -267,3 +267,19 @@ oldest of more than 4 admin messages waiting in its queue.
 **Consequences:** two more config keys and one more secret. A key change is a config edit, since the
 hub has no commands (D22). The hub logs its node's public key at start, so the admin can hand it to
 members. Members need "OK to MQTT" on and "Ignore MQTT" off (design.md §6.2).
+
+## D27. The Kyiv mesh is EU_433 with a non-default primary PSK
+Spike S2, part 3 decoded the channel URL on <https://meshtastic.kyiv.ua/join>: region `EU_433`, preset
+`LONG_FAST`, channel 0 `LongFast` with its own 32-byte PSK, and a secondary channel `KyivUA`. The broker
+`mqtt.meshtastic.kyiv.ua` refuses anonymous clients.
+**Decision:** the example config uses `EU_433` and a `KYIV_PRIMARY_PSK` secret for the hub's primary
+channel, which must match the mesh for NodeInfo, ACKs and `dm` to work (D26). We never hard-code the
+community's PSK or credentials in the repository.
+Part 3 also found that the broker issues credentials per node: the community answered the request for
+a login for a virtual node by asking for a physical node to be confirmed in the registry first. A
+claimed node gets a login equal to its node id and the root topic `node/<node id>`.
+**Decision:** until a physical node is claimed, development and the first deployment use our own
+Mosquitto (as in `lab/`); a physical node with an internet connection acts as the gateway between that
+broker and the Kyiv mesh (D17). Claiming a node for the Kyiv broker is a later step with the owner.
+**Consequences:** the `LongFast` source (§6.5) reads the mesh's primary channel, not the public default
+one. The root topic, PKI and downlink policy stay open questions for the Kyiv community.

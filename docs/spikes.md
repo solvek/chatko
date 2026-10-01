@@ -112,7 +112,7 @@ Steps and answers needed:
 - [x] The node identity (node id, keys) persists across container restarts (volume).
 - [x] Setting channels, PSKs, names and MQTT settings from code or config files, so the hub can
   provision its node.
-- [ ] Read-only connection to the Kyiv broker: `LongFast` text messages are received. Broker policy
+- [ ] (part 3: blocked on credentials, see the result) Read-only connection to the Kyiv broker: `LongFast` text messages are received. Broker policy
   for PKI direct messages (topic `…/2/e/PKI/…`) and for downlink (ask the Kyiv community). Do the Kyiv
   gateways downlink PKI direct messages to nodes they hear? This decides whether `dm` mode works
   without our own gateway.
@@ -390,3 +390,45 @@ Steps and answers needed:
 - [ ] Upstream contribution rules for briar-headless (code style, tests, merge request process).
 
 **Result:** _not run yet._
+
+**Result, part 3 (2026-09-30, session S04; Kyiv broker, read-only):**
+- *What the site <https://meshtastic.kyiv.ua/join> tells.* The QR code is a channel URL
+  (<https://meshtastic.org/e/#CjQSIFziz2R01sx4MpCcWd6Z49dJjCXa_IJYG5bDRi1CL3dcGghMb25nRmFzdCgBMAE6AgggCjISIHJheFM1Vm52VkNMcWZRcmVwUm9sYWh0TUpCNWxYWm81GgZLeWl2VUEoATABOgIIIBIOCAE4DkAFSAFQClgBaAE>);
+  decoded, it holds: region **EU_433** (433.125 MHz, not `EU_868`), preset `LONG_FAST`, hop limit 5,
+  TX power 10 dBm, and two channels: channel 0 **`LongFast`** with a **non-default 32-byte PSK**
+  (public, in the URL), and a secondary channel **`KyivUA`** with its own 32-byte PSK. Members are told
+  to use the secondary channel for chat. The site states the broker host in its page config:
+  `mqtt.meshtastic.kyiv.ua` (157.180.74.120; ports 1883 and 8883 accept TCP), and its statistics
+  show mostly text messages and no private ones. Nothing is published about the root topic, the
+  credentials, PKI topics, downlink or gateway firmware.
+- *Connection.* An anonymous connection to port 1883 is refused (`CONNACK` 4, bad user name or
+  password), so a read-only client needs credentials from the community. `lab/spike_kyiv.py` is the
+  listener: it subscribes to a filter, never publishes, and prints topic prefixes, channels, ports and
+  the `pki_encrypted` and `via_mqtt` flags of the envelopes. Credentials come from `KYIV_MQTT_USER` and
+  `KYIV_MQTT_PASSWORD` (or `--user`, `--password`), and `--tls` uses port 8883.
+- *Getting credentials (from the community chat).* Register on the site with Telegram, verify a node,
+  mark in its settings that it uses MQTT, and the site generates a login, password and host. The site
+  has no node-verification page, so the community has to be asked; the node probably has to be seen on
+  the mesh first, which a virtual node cannot do.
+- *How a node gets access (screenshots of a member's cabinet and node settings, 2026-10-01).* The
+  cabinet lists nodes of the registry; a user **claims** a node ("Ваша нода") and states its type,
+  antenna, place, and "MQTT: yes". Then the cabinet shows server `mqtt.meshtastic.kyiv.ua`, a login
+  that is the **node id** (hex, no `!`), a password, and the topic **`node/<node id>`**. In the node's
+  settings: MQTT address and credentials as shown, root topic `node/<node id>` (**not** `msh/EU_433`),
+  TLS **off** (port 1883), encryption on ("send encrypted packets"), JSON off, map reporting on. A
+  checkbox "enable routing" lets "remote nodes join the local network" (the site warns that MQTT
+  traffic may be large). So access is per node, tied to a node the registry has seen, and each node
+  publishes under its own root. A virtual node that never transmits is not in the registry, so it
+  cannot be claimed: the community's answer was to wait for a physical node to be confirmed (and even
+  that is not guaranteed). It is not clear what "routing" does with packets published under
+  `node/<id>` (whether the broker bridges them to other nodes' topics), nor whether a client may read
+  other nodes' topics.
+- *Consequences.* (1) The "public default-key `LongFast`" of the design does not exist on this mesh:
+  reading `LongFast` needs its PSK, and the hub's primary channel must be that one, or its NodeInfo,
+  ACKs and `dm` cannot work (design.md §6.2). (2) `EU_433` is a region with a duty-cycle limit too,
+  so the firmware probably turns `ignore_mqtt` on there as well (unchecked). (3) The example config
+  uses `EU_433`, the `KYIV_PRIMARY_PSK` secret and the root topic `node/<hub node id>`, TLS off.
+  (4) Without a claimed physical node the hub gets no access to the Kyiv broker, so development goes
+  on with our own Mosquitto (lab, D27).
+- *Open, questions for the Kyiv community (drafted in Ukrainian in the S04 chat for the owner to send):* credentials and root topic; PKI topic and downlink policy; gateway firmware; "Ignore MQTT"
+  on relays; downlink of `LongFast`; how many radios have "OK to MQTT"; may a bot node join the mesh.

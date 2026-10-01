@@ -14,18 +14,18 @@ extensions:
     # Later (not in v1): a physical node: { serial: /dev/ttyUSB0 } | { ble: "AA:BB:CC:DD:EE:FF" } | { tcp: "192.168.1.50:4403" }
     long_name: chatko
     short_name: CHKO               # up to 4 characters
-    region: EU_868                 # the hub sets it and keeps ignore_mqtt off (design.md §6.1)
+    region: EU_433                 # Kyiv mesh: 433.125 MHz, LongFast; the hub sets it and keeps ignore_mqtt off (design.md §6.1)
     private_key: ${MESH_KYIV_PRIVATE_KEY}  # optional, base64, 32 bytes: keeps the node's identity if its volume is lost
     mqtt:                          # required for a virtual node
       host: mqtt.example.org       # the Kyiv community broker, our own Mosquitto, or any other
-      port: 8883
-      tls: true
-      username: ${KYIV_MQTT_USER}
+      port: 1883                   # the Kyiv broker: 1883 without TLS
+      tls: false
+      username: ${KYIV_MQTT_USER}  # the Kyiv broker: the node id in hex, issued per claimed node
       password: ${KYIV_MQTT_PASSWORD}
-      root_topic: msh/EU_868
+      root_topic: node/2a55b544    # Kyiv broker: node/<node id of the claimed node>; own broker: msh/EU_433
     channels:                      # the hub provisions its node with these
-      - name: LongFast             # index 0: the public primary channel of the mesh
-        psk: AQ==
+      - name: LongFast             # index 0: the primary channel of the Kyiv mesh; its PSK is not the
+        psk: ${KYIV_PRIMARY_PSK}   # default one: take it from the QR code at https://meshtastic.kyiv.ua/join
       - name: family
         psk: ${MESH_FAMILY_PSK}    # base64, 16 or 32 bytes; give it to people as a channel URL/QR code
     contacts:                      # optional: public keys of members' nodes (base64, from the Meshtastic app)

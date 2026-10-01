@@ -48,7 +48,7 @@ Escalate instead of looping: if a session fails at the same problem twice, resta
 | S01 | 0 | Spike S1: Briar relay on 3 phones (*with owner*) | Opus 5.5 | medium | done |
 | S02 | 0 | Spike S2a: local Meshtastic lab, channel messages | Opus 5.5 | high | done |
 | S03 | 0 | Spike S2b: PKI direct messages, keys, ACKs, persistence, provisioning | Opus 5.5 | xhigh | done |
-| S04 | 0 | Spike S2c: Kyiv broker, read-only; questions for the Kyiv community | Sonnet 5.5 | medium | todo |
+| S04 | 0 | Spike S2c: Kyiv broker, read-only; questions for the Kyiv community | Sonnet 5.5 | medium | partly done: waits for a claimed physical node (D27), not blocking |
 | S05 | 0 | Spike S3a: build and run briar-headless, contacts API with a phone | Opus 5.5 | high | todo |
 | S06 | 0 | Spike S3b: private-group internals of Briar, read/post/join patch plan | Opus 5.5 | xhigh | todo |
 | S07 | 0 | Phase 0 wrap-up: all (verify) answered, design and roadmap revised | Opus 5.5 | high | todo |
@@ -108,6 +108,11 @@ relays and gateways run with "Ignore MQTT" on, whether gateways downlink `LongFa
 the hub's node only that way, and downlinks a direct message only if it knows both nodes), and how
 many radios have "OK to MQTT" on (design.md §6.2, spike S2 part 2). Done when:
 receiving works, the questions are sent, and design.md §6.2 notes what is still waiting for an answer.
+State (2026-09-30): the site data, the QR channel URL and the broker host are recorded, the listener
+`lab/spike_kyiv.py` is written, design.md §6.2 is updated and the questions are drafted; the broker
+refuses anonymous clients and issues credentials only for a claimed physical node (D27), so receiving
+waits for that. Not blocking: continue with S05. When a physical 433 MHz node is claimed, run
+`lab/spike_kyiv.py` once and record the answers in spikes.md and design.md §6.2.
 
 **S05. briar-headless, part 1.** Build `x86LinuxJar` (and `aarch64LinuxJar`) from upstream, note the JDK;
 run it in Docker with a data volume and non-interactive account creation; exchange links with a phone;
