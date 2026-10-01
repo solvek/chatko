@@ -20,17 +20,20 @@ async def test_a_change_of_a_watched_file_calls_back_and_other_files_do_not(
     stop = asyncio.Event()
     watcher = asyncio.create_task(watch_files([config, script], on_change, stop, debounce_ms=50))
     await asyncio.sleep(0.5)  # let the watcher start
+    # macOS (FSEvents) may replay the creation of config just before the watching began
+    settled = calls
 
     other.write_text("ignored", encoding="utf-8")
     await asyncio.sleep(0.5)
-    assert calls == 0
+    assert calls == settled
 
     script.write_text("def route(msg, ctx): ...\n", encoding="utf-8")  # created later
+    changed.clear()
     await asyncio.wait_for(changed.wait(), 10)
     stop.set()
     await asyncio.wait_for(watcher, 10)
 
-    assert calls >= 1
+    assert calls > settled
 
 
 async def test_an_error_in_the_callback_does_not_end_the_watching(tmp_path: Path) -> None:
