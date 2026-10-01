@@ -66,3 +66,17 @@ class AdminNotices(Protocol):
     """Posts admin notices (design.md §2). The real one rate-limits them by key (roadmap S14)."""
 
     async def notify(self, text: str, *, key: str) -> None: ...
+
+
+class RoutingScriptSource(Protocol):
+    """Where the routing script's code comes from: `config/routing.py` (design.md §9)."""
+
+    @property
+    def origin(self) -> str:
+        """The script's name in tracebacks and admin notices: its path."""
+        ...
+
+    async def read(self) -> str | None:
+        """The script's code, or `None` when there is no script. Raises `OSError` or
+        `UnicodeDecodeError` when there is one but it cannot be read."""
+        ...

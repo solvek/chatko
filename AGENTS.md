@@ -31,7 +31,8 @@
 - The project skeleton (S08: `pyproject.toml`, packages under `src/`, CI, `pre-commit`; run the
   gates as in the README), the domain model (S09: `chatko.domain`), the two public APIs with
   their test kits (S10: `chatko.extension_api`, `chatko.routing_api`, D35, D36) and the application
-  layer's pipeline, invariants, outbox worker and `HubContext` over in-memory fakes (S11, D37) exist;
+  layer's pipeline, invariants, outbox worker and `HubContext` over in-memory fakes (S11, D37) and
+  the routing engine with the admin's test kit for routing scripts (S12, D39) exist;
   the hub does not run yet. Every extension passes the contract suite in `chatko.extension_api.testing`. Phase 0 (spikes S1–S3) is closed (D30): the Briar relay on phones, the local
   Meshtastic lab in `lab/` (channel and direct messages, keys, ACKs, provisioning), briar-headless in
   Docker in `lab/briar/` and the plan for its private-group patch (D29). Only the Kyiv broker questions

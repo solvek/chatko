@@ -58,7 +58,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S09 | 1 | Domain model and label generator | Opus 5.5 | high | done |
 | S10 | 1 | Extension API, routing API and contract test suite design | Opus 5.5 | xhigh | done |
 | S11 | 1 | Inbound pipeline, routing invariants and outbox worker | Opus 5.5 | high | done |
-| S12 | 1 | Routing engine: script loading, defaults, `label` hook, test kit, example script | Opus 5.5 | high | todo |
+| S12 | 1 | Routing engine: script loading, defaults, `label` hook, test kit, example script | Opus 5.5 | high | done |
 | S13 | 1 | SQLite repositories and migrations | Sonnet 5.5 | high | todo |
 | S14 | 1 | Configuration: models, `${ENV}`, people, admin notices, hot reload, `check-config` | Sonnet 5.5 | high | todo |
 | S15 | 1 | Extension discovery, composition root, `chatko run`, fake extension end to end | Opus 5.5 | high | todo |
@@ -207,6 +207,16 @@ notice; the optional `label` hook and `default_label` (design.md §8); `routing_
 installation builder and assertions next to `FakeHistory`); `routing.example.py` tested and
 type-checked in CI. Done when: design.md §9.2, §9.4 and §9.5
 are tests, and the example script passes its own tests.
+Result: `RoutingEngine` and `load_script` in `chatko.application.routing` (architecture.md §5.3),
+`RoutingScript` and `ScriptError` in `chatko.routing_api`, the `RoutingScriptSource` port with
+`FileScriptSource` (infrastructure) and `InMemoryScriptSource`, and the test kit
+(`FakeInstallation`, `RouteResult`, `assert_routed_to`); D39. 494 tests, coverage 100 %.
+`routing.example.py` is type-checked by `mypy` and tested by
+`tests/examples/test_routing_example.py`, which is also the template for an admin's tests. Each
+function falls back on its own default (`route` → `mirror`, `label` → `default_label`), and each
+error kind (function, exception type, script line) is reported once per script version. Watching
+the file is left to S14, which calls `reload()`; running the admin's tests from `check-config`
+needs `pytest` at run time (S14 decides how).
 
 **S13. Storage.** `aiosqlite` repositories and schema migrations for runtime state (messages, outbox,
 de-duplication, last heard, accounts seen). The same repository tests run against the fakes and SQLite.
@@ -220,11 +230,14 @@ Done when: all repository ports have a SQLite implementation passing the shared 
 `admin_notices`, `routing`, room for `peers`, the fingerprint de-duplication window per endpoint
 (D37)) and hooks for each extension's models; YAML safe load; `${ENV}`
 substitution; reload with `watchfiles`, keeping the last valid config and reporting errors as admin
-notices; `AdminNotifier`; `chatko check-config` (also loads and tests the routing script). Done when:
+notices, and calling `RoutingEngine.reload()` when `routing.py` changes (D39); `AdminNotifier`;
+`chatko check-config` (also loads the routing script with `load_script` and runs its tests: decide
+how `pytest` is available at run time, e.g. an optional extra). Done when:
 `config.example.yaml` validates with fake extensions, and invalid configs give clear errors.
 
 **S15. Wiring.** Entry-point discovery (`chatko.extensions`, refusing extensions whose `api_version`
-is not supported, D35), the composition root (the lifecycle of architecture.md §3.1, including
+is not supported, D35), the routing engine over a `FileScriptSource`, reloaded before the
+extensions start (D39), the composition root (the lifecycle of architecture.md §3.1, including
 checking a new endpoint set on a fresh instance), the `Installation` snapshot that the pipeline
 and the worker read (D37), the outbox worker started before the extensions and stopped after them,
 `chatko run`; `FakeExtension` (in

@@ -585,10 +585,17 @@ does:
   recipients; a source goes nowhere. The same function is available to scripts as
   `mirror(message, ctx)`, so a script usually handles a few special cases and ends with
   `return mirror(message, ctx)`.
-- `routing.py` is reloaded on change, like the YAML. A script that fails to load keeps the previous one
-  running and is reported as an admin notice; so does a script written for a routing API version
-  this hub does not support (§9.5). If `route()` or `label()` raises for a message, that
-  message is handled by the defaults, and the admin is told once per error kind.
+- `routing.py` is reloaded on change, like the YAML; the same code read again changes nothing. A
+  script that cannot be read or fails to load (a syntax error, an exception while it runs, no
+  `route(msg, ctx)`, a `route` or `label` that does not take the hook's arguments) keeps the
+  previous one running, or the defaults at start, and is reported as an admin notice with the
+  line it failed at; so does a script written for a routing API version this hub does not
+  support (§9.5). A removed script leaves the defaults running.
+- Each function falls back on its own default. If `route()` raises for a message or returns
+  something that is not a list of targets, that message goes by `mirror`; if `label()` raises or
+  returns no label (not a string, or blank), that target gets `default_label`. The error is
+  logged, and the admin is told once per error kind (the function, the exception type and the
+  script line it came from) until the script changes (D39).
 - `chatko check-config` loads the script and runs its tests (§9.5) as well.
 
 ### 9.5 Helpers for scripts
@@ -617,8 +624,17 @@ gives:
   one space. A message cut short on the way (§6.3) does not match its original;
 - `ctx.seen(fingerprint, within=…)` for scripts that want their own duplicate rules: whether another
   message with that fingerprint arrived within that time before this one;
-- a test kit: the admin writes plain `pytest`-style checks next to `routing.py` with a fake installation
-  and asserts on the returned targets and labels;
+- a test kit, `chatko.routing_api.testing`: the admin writes plain `pytest` checks next to
+  `routing.py` (`config/test_routing.py`, which does `import routing`). A `FakeInstallation` is
+  described as in `chatko.yaml` (extension instances, groups and their sites, sources, recipients,
+  people), makes messages, fills the history (`hear`, `see`) and routes a message with the script
+  as the hub would: it checks the script like the hub, then labels each target with its own
+  label, the `label` hook or `default_label`. The result lists the targets by endpoint name with
+  their label, text, recipients and the text as a network shows it (`NatAda: [photo] caption`);
+  `assert_routed_to(result, "family.tg", …)` checks where it went. It shows what the script asked
+  for, before the invariants of §9.3, and raises the script's errors so that a test shows them.
+  [`tests/examples/test_routing_example.py`](../tests/examples/test_routing_example.py) tests
+  `routing.example.py` this way and is the template for the admin's tests;
 - a version: the script may declare the version of `chatko.routing_api` it was written for
   (`api_version = (1, 0)`), so that after an upgrade that breaks it the hub runs the defaults and
   says why, instead of failing on every message.

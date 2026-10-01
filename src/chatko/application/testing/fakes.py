@@ -133,3 +133,22 @@ class RecordingNotices:
 
     async def notify(self, text: str, *, key: str) -> None:
         self.notices.append(RecordedNotice(text, key))
+
+
+class InMemoryScriptSource:
+    """Implements `RoutingScriptSource` with code a test sets: `code = None` is no script, and
+    `error` is raised by the next reads instead."""
+
+    def __init__(self, code: str | None = None, origin: str = "routing.py") -> None:
+        self.code = code
+        self.error: OSError | UnicodeDecodeError | None = None
+        self._origin = origin
+
+    @property
+    def origin(self) -> str:
+        return self._origin
+
+    async def read(self) -> str | None:
+        if self.error is not None:
+            raise self.error
+        return self.code

@@ -561,3 +561,42 @@ let the radios hear each other.
   version (a field with a default at the end).
 **Consequences:** the Meshtastic extension (S21) sets `from_recipient` to the sending node for `dm`
 endpoints. The SQLite schema (S13) stores it with the message.
+
+## D39. The routing engine: a script source port, per-function fallbacks, a test kit shaped like the config
+Session S12 wrote the routing engine (architecture.md §5.3) and the admin's test kit
+(architecture.md §4). Choices that the design left open:
+**Decision:**
+- **The script's file is behind a port.** The application reads the code from a
+  `RoutingScriptSource` (`FileScriptSource` in the infrastructure, reading in a thread; a fake
+  in `application.testing`) and runs it itself with `compile` and `exec` as a module of its own.
+  The engine compares the code with what it read last, so a reload of the same code changes
+  nothing and a refused script is reported once; watching the file for changes is the config
+  watcher's job (S14), which calls `reload()`.
+- **What a script must define is part of the routing API.** `RoutingScript.of` (in
+  `routing_api`) checks `route`, the optional `label` and `api_version`, including that the
+  functions take the hook's arguments, so a `label(author, ctx)` copied from `default_label` is
+  refused at load time instead of failing on every message. The version is checked first. The
+  engine and the test kit use the same check, so a script that passes its tests loads in the hub.
+  `API_VERSION` and `is_supported` moved to `routing_api.version` (the package re-exports them).
+- **Each function falls back on its own default.** A failing `route` sends that message by
+  `mirror`; a failing `label` gives that target `default_label`, while the rest of the script
+  keeps working. Wrong return values (no list of targets, a blank or non-string label) count as
+  errors, so they never reach the pipeline (`Delivery` refuses a blank label).
+- **Once per error kind** means per function, exception type and script line, until the script
+  changes: the admin learns of each bug once, with its line, and a fixed script starts fresh.
+- **Notices in tasks.** `route` and `label` are synchronous and run under the pipeline's lock, so
+  the engine does not await its notices there but posts them in tasks of its own. The `Router`
+  port stays synchronous.
+- **The test kit takes the installation in the shape of `chatko.yaml`** (`FakeInstallation`:
+  extension instances, groups with `{site: instance}`, sources, recipients, people) and routes a
+  message as the hub would, labels included. It shows what the script asked for and does not
+  apply the invariants, which belong to the application layer that the API may not import; it
+  raises the script's errors so that a test shows their tracebacks. `routing.example.py` is now
+  type-checked by `mypy --strict` and tested this way in CI; its test is the template for an
+  admin's `config/test_routing.py`. Tests may ignore `ARG001`, like the example, because fake
+  scripts keep the hooks' signatures.
+**Consequences:** S14 watches `routing.py` with the YAML and calls `RoutingEngine.reload()`;
+`check-config` uses `load_script` (it must report a `ScriptError` as an invalid config) and runs
+the admin's tests, which needs `pytest` at run time (an optional extra, to be decided in S14).
+S15 creates the engine with a `FileScriptSource` for the configured `routing` file, calls
+`reload()` before the extensions start and passes the engine to the pipeline as its router.

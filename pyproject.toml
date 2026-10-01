@@ -59,7 +59,8 @@ ignore = ["PLR2004"]
 
 [tool.ruff.lint.per-file-ignores]
 # Cyrillic letters are data here, not look-alikes of Latin ones.
-"tests/**" = ["S101", "ANN", "ARG002", "PLR0913", "RUF001", "RUF002", "RUF003"]
+# Fake routing scripts in tests keep the hook signatures of the routing API, like the example.
+"tests/**" = ["S101", "ANN", "ARG001", "ARG002", "PLR0913", "RUF001", "RUF002", "RUF003"]
 # The public test kits are test code that ships with the package.
 "src/chatko/*/testing/**" = ["S101", "RUF001"]
 "src/chatko/domain/transliteration.py" = ["RUF001", "RUF002", "RUF003"]
@@ -75,8 +76,7 @@ ban-relative-imports = "all"
 
 [tool.mypy]
 strict = true
-files = ["src", "tests"]
-# routing.example.py joins the checks when routing_api exists (roadmap S12).
+files = ["src", "tests", "routing.example.py"]
 mypy_path = ["src"]
 explicit_package_bases = true
 warn_unreachable = true

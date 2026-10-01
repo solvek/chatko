@@ -3,8 +3,6 @@
 It re-exports the domain types a script needs, so a script imports nothing else of chatko.
 """
 
-from typing import Final
-
 from chatko.domain import (
     Account,
     AccountKey,
@@ -27,18 +25,8 @@ from chatko.routing_api.helpers import (
     to_endpoint,
 )
 from chatko.routing_api.messages import RoutedMessage
-
-API_VERSION: Final = (1, 0)
-"""The version of this API: (major, minor). A minor version only adds; a major one breaks."""
-
-
-def is_supported(version: tuple[int, int]) -> bool:
-    """Whether a script written for API `version` runs on this one: the same major version, and
-    a minor version no newer than this one's.
-    """
-    major, minor = version
-    return major == API_VERSION[0] and minor <= API_VERSION[1]
-
+from chatko.routing_api.script import RoutingScript, ScriptError
+from chatko.routing_api.version import API_VERSION, is_supported
 
 __all__ = [
     "API_VERSION",
@@ -57,6 +45,8 @@ __all__ = [
     "RoutedMessage",
     "RoutingContext",
     "RoutingHistory",
+    "RoutingScript",
+    "ScriptError",
     "Target",
     "default_label",
     "is_supported",

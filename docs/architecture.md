@@ -55,10 +55,12 @@ src/
                      # (EndpointProvider), hub (HubContext), messages, delivery (results, reports)
       testing/       # contract (the suite), hub (FakeHub), fake (FakeNetwork, FakeExtension)
     routing_api/     # the ONLY package a routing script may import (§4): messages (RoutedMessage),
-                     # context (RoutingContext, RoutingHistory), helpers (to_endpoint, mirror, …)
-      testing/       # FakeHistory; the fake installation and assertions come in S12
-    infrastructure/  # the real clock and ids, SQLite repositories, config loading (YAML + ${ENV}),
-                     # extension discovery, logging
+                     # context (RoutingContext, RoutingHistory), helpers (to_endpoint, mirror, …),
+                     # script (RoutingScript, ScriptError), version (API_VERSION, is_supported)
+      testing/       # installation (FakeInstallation, RouteResult, assert_routed_to), history
+                     # (FakeHistory)
+    infrastructure/  # the real clock and ids, the routing script's file, SQLite repositories,
+                     # config loading (YAML + ${ENV}), extension discovery, logging
     app/             # composition root, CLI: `chatko run`, `chatko check-config`
   chatko_telegram/   # extension packages: separate top-level packages, so importing core internals
   chatko_meshtastic/ # is visible and forbidden by import-linter
@@ -284,6 +286,7 @@ def label(msg: RoutedMessage, target: Target, ctx: RoutingContext) -> str:   # o
 | `default_label(author, ctx)` | the label the core uses without a hook (design.md §8) |
 | `RouteFunction`, `LabelFunction` | the types of `route` and `label` |
 | `RoutingHistory` | what `last_heard` and `seen` read; implemented by the core and by the test kit |
+| `RoutingScript.of(script)`, `ScriptError` | the checked functions of a loaded script (a module): `route`, `label` or `None`, `api_version`. Raises `ScriptError`, with a reason for the admin, unless the script defines `route(msg, ctx)`, a `label` that takes `(msg, target, ctx)` if any, and a supported `api_version` if any (checked first: a script for another major version may define other functions). The engine and the test kit both check scripts with it |
 | `API_VERSION`, `is_supported` | as in §3.4 |
 
 - The script is synchronous and must not do I/O. The routing engine calls it from the event loop,
@@ -293,18 +296,26 @@ def label(msg: RoutedMessage, target: Target, ctx: RoutingContext) -> str:   # o
 - The `label` hook gets the message, not only its author, so that a label may depend on where the
   message came from (a feed from `longfast` signed `[BC1] Base Camp`). The core calls it for every
   target that does not carry its own label, after the invariants.
-- A script may declare `api_version`; the engine refuses a script whose version is not supported
-  (the defaults run, and the admin gets a notice). Without it, the script is taken to be current.
+- A script may declare `api_version` as a pair of numbers; the engine refuses a script whose
+  version is not supported (the previous version or the defaults run, and the admin gets a
+  notice). Without it, the script is taken to be current.
 - Room for peers (D17): `Author.relayed_label` is there now; `ctx.peers` comes with the second hub,
   as a minor version.
-- `routing_api.testing` has `FakeHistory` now; S12 adds a fake installation builder and assertions,
-  so admins test their script with plain `pytest`. `routing.example.py` is tested in our CI the same
-  way.
+- `routing_api.testing` is the admin's test kit (design.md §9.5): `FakeInstallation(extensions=…,
+  groups=…, sources=…, recipients=…, people=…, now=…)` takes the installation in the shape of
+  `chatko.yaml` (a site is `{site name: extension instance}`); `message(endpoint, text, author=…,
+  name=…, short_name=…, attachments=…, from_recipient=…, relayed_label=…)`, `hear`, `see`,
+  `context()`; `route(script, msg)` checks the script with `RoutingScript.of`, runs `route` and
+  labels each target as the core does, and returns a `RouteResult` (`endpoints`, `to(name)` →
+  `Outgoing`: `label`, `text`, `recipients`, `formatted`, `target`), raising the script's errors.
+  It does not apply the invariants, which are the application's; `assert_routed_to(result, *names)`
+  compares the endpoints in any order. `routing.example.py` is type-checked with `mypy --strict`
+  and tested this way in CI (`tests/examples/test_routing_example.py`, the template for an admin's
+  `config/test_routing.py`).
 
-The routing engine (application layer) loads the script from the config directory, validates that it
-defines `route`, and keeps the last good version on reload errors. After `route` returns, it applies
-the invariants of design.md §9.3 in one place, `RoutingInvariants`, which is covered by property-style
-tests (whatever the script returns, no echo and no duplicate delivery). The invariants hold per
+The routing engine (application layer, §5) runs the script; the pipeline applies the invariants of
+design.md §9.3 to whatever it returns in one place, `RoutingInvariants`, which is covered by
+property-style tests (whatever the script returns, no echo and no duplicate delivery). The invariants hold per
 endpoint and recipient: a message goes to each at most once, and never back to where it came from
 (its endpoint, or only the recipient that posted it when the extension names it, D38).
 
@@ -317,7 +328,8 @@ the composition root (S15) wires them.
 |---|---|---|
 | `InboundPipeline` | `pipeline` | for each submitted message, one at a time: drop it if its endpoint is unknown or it is a copy (same endpoint and transport id) → find the person for the account → (later: the peer-relayed author) → fingerprint → skip routing if the endpoint de-duplicates by fingerprint and the same message came lately → `Router.route` → `RoutingInvariants` → `Router.label` once per target without its own label → store the message with one outbox row per target and recipient, in one transaction → record it in the history → hand the rows to the `OutboxWorker`. Returns an `Outcome` |
 | `RoutingInvariants` | `invariants` | turns the targets into `Destination`s (target, recipient) that keep design.md §9.3: none back at the source (only at the recipient that posted it, if the extension named it, D38), none at an unknown endpoint, each endpoint and recipient once (the first target that includes it wins), only the endpoint's own recipients |
-| `Router` | `routing` | the port the pipeline routes with: `route` and `label`, never raising. `DefaultRouter` (`mirror`, `default_label`) stands in until the `RoutingEngine` (S12): load and hot-reload the routing script, check its `api_version`, call `route` and `label`, fall back to the defaults on errors and post an admin notice |
+| `Router` | `routing` | the port the pipeline routes with: `route` and `label`, synchronous and never raising. `DefaultRouter`: `mirror` and `default_label` |
+| `RoutingEngine` | `routing` | the `Router` of a running hub (§5.3): the routing script, or `DefaultRouter` without one. `reload()` reads the script from a `RoutingScriptSource`, loads it with `load_script` and keeps the last good version; `route` and `label` fall back to the defaults on a script's errors and post an admin notice once per error kind |
 | `OutboxWorker` | `outbox` | delivers the pending rows, one lane per endpoint and recipient (§5.2); reports final results to the source's extension; loads the pending rows on `start` |
 | `ExtensionHub` | `hub` | the `HubContext` of one extension instance: `submit` into the pipeline, `heard` into the history, `retry_now` into the worker, `notify_admin` into `AdminNotices` (with the instance in the key), `now` from the clock. It ignores (and logs) calls about another instance's endpoints |
 | `HubHistory` | `history` | the routing script's `RoutingHistory`, in memory: the last time each account was heard (anywhere and per endpoint) and the fingerprints of the last 7 days |
@@ -329,7 +341,7 @@ the composition root (S15) wires them.
 
 `application.ports` defines what the application needs from outside; `infrastructure` implements
 them and `application.testing` fakes them in memory (`FakeClock`, `SequentialIds`,
-`InMemoryStore`, `RecordingNotices`).
+`InMemoryStore`, `RecordingNotices`, `InMemoryScriptSource`).
 
 | Port | Methods | Implementations |
 |---|---|---|
@@ -338,6 +350,7 @@ them and `application.testing` fakes them in memory (`FakeClock`, `SequentialIds
 | `MessageRepository` | `contains(endpoint, transport_id)`, `add(message, deliveries) -> bool` (both in one transaction; `False` and nothing stored for a copy), `get(id)` | SQLite (S13); `InMemoryStore` |
 | `OutboxRepository` | `pending()` (in the order stored), `save(delivery)` | SQLite (S13); `InMemoryStore` |
 | `AdminNotices` | `notify(text, key=…)` | `AdminNotifier` (S14); `RecordingNotices` |
+| `RoutingScriptSource` | `origin`, `await read() -> str \| None` (`None`: no script; `OSError` or `UnicodeDecodeError`: one that cannot be read) | `FileScriptSource(path)` (`config/routing.py`, read in a thread); `InMemoryScriptSource` |
 
 The message is routed before it is stored and stored together with its outbox rows, so a crash
 leaves either both or neither: no message is stored without its deliveries. `submit` runs the
@@ -360,6 +373,31 @@ pipeline in a task of its own, so cancelling the caller does not cut it short.
   without duplicates); `enqueue` adds the ones the pipeline stored (while stopped it leaves them to
   the next `start`); `stop` cancels the waiting lanes and gives the deliveries in progress 10 s.
   Start the worker before the extensions and stop it after them.
+
+### 5.3 The routing engine
+
+- **Loading.** `load_script(code, origin)` compiles the code with `origin` (the file's path) as
+  its file name, runs it as a fresh module (`chatko_routing_script`, in `sys.modules` only while
+  it runs, so that it can define dataclasses), and checks it with `RoutingScript.of` (§4). Any
+  error becomes a `ScriptError` with the script's line: `line 3: NameError: …`.
+- **Reloading.** `reload()` is called at start and whenever the file may have changed (the
+  config watcher, S14). It returns a `ReloadOutcome`: `LOADED`; `DEFAULTS` (no script, or it was
+  removed); `REFUSED` (unreadable or not loadable: the previous version, or the defaults, keep
+  running, and an admin notice says why, with the key `routing:load`); `UNCHANGED` (the same
+  code as last read, also for a refused one, so a refusal is reported once). It reads the file in
+  a thread, so it does not block the event loop.
+- **Running.** `route` and `label` call the script synchronously, from the pipeline (§4). A
+  `route` that raises, or returns `None`, a single `Target`, a string or anything else that is not
+  an iterable of `Target`s, is an error: the message goes by `mirror`. A `label` that raises or
+  returns anything but a non-blank string is an error: the target gets `default_label`. The kind
+  of an error is the function, the exception type and the script line of the innermost frame in
+  the script; the first error of a kind is logged with its traceback and posted as an admin notice
+  (key `routing:<function>:<type>:<line>`), later ones are logged on one line. A new version of
+  the script forgets the reported kinds.
+- **Notices without waiting.** `route` and `label` run inside the pipeline's lock, so the engine
+  posts their notices in tasks of its own instead of awaiting them: an admin notifier that goes
+  through the pipeline (S14) cannot deadlock it. Lost notices are logged.
+- A script that never returns blocks the hub: it is trusted code, like the config (design.md §9.5).
 
 ## 6. Technology
 
