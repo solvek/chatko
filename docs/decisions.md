@@ -349,3 +349,23 @@ firmware source confirmed that `EU_433` (and `UA_433`, `UA_868`) turns `ignore_m
 and ACL; the deployment session (S29) covers them. The field test (S23) needs a physical `EU_433`
 gateway node of our own. This refines D27, which already chose our own Mosquitto until a node is
 claimed, and changes design.md §11 (inbound ports were SSH only).
+
+## D31. Project tooling: uv and hatchling, strict static checks, the dependency rule as import contracts
+Session S08 set up the code base. Choices that are not obvious from the files:
+**Decision:**
+- One distribution (`chatko`) with five packages under `src/`: `chatko`, the three extensions and
+  `briarctl` (architecture.md §2). `uv` manages the environment and `uv.lock` is committed; CI runs
+  `uv sync --locked`. `hatchling` builds. There are no runtime dependencies yet; each session adds
+  those it uses.
+- `ruff` runs a wide rule set (including `ANN`, `S`, `PL`, `TID` with all relative imports banned);
+  `mypy --strict` covers `src` and `tests`. `lab/` (spike scripts with their own inline dependencies)
+  and `docs/` are outside both.
+- The dependency rule is ten `import-linter` contracts (architecture.md §7). Extensions may reach
+  `chatko.extension_api` only, and indirect imports through it are allowed. Whether `application`
+  may import `extension_api` and `routing_api` is deliberately not forbidden yet: S10 settles the
+  shape of both APIs and then adds the contract that fits.
+- The per-package coverage gates are `coverage report --include=… --fail-under=…` steps in CI, not
+  custom code. The pre-commit hooks call the tools through `uv run`, so the versions are the lock
+  file's.
+**Consequences:** the first push is the first CI run on macOS and Windows. `routing.example.py` is
+checked by `ruff` only until S12 tests it against the real `routing_api`.

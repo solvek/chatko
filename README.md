@@ -16,7 +16,7 @@ Meshtastic LoRa channels. A hub copies every message to all the other places.
   Without it, every message goes to all the other places of its group.
 - It can forward the mesh's primary Meshtastic chat (e.g. the Kyiv `LongFast`) to selected chats.
 
-> **Status: design.** No code yet. Start with the [design](docs/design.md).
+> **Status: design.** The project skeleton and tooling are in place; the hub itself is not written yet. Start with the [design](docs/design.md).
 
 ## Known limitations
 
@@ -46,6 +46,21 @@ Meshtastic LoRa channels. A hub copies every message to all the other places.
   them, and one of the two has used "Reveal contacts" in the group. Direct Briar messages are never
   relayed like this, which is one reason chatko has group messages only.
 - **The hub is a single point of failure.** Keep backups of `config/` and `data/`.
+
+## Development
+
+Python 3.12+ and [uv](https://docs.astral.sh/uv/). Every gate that CI runs:
+
+```bash
+uv sync
+uv run pre-commit install        # once: runs ruff, mypy and lint-imports before each commit
+uv run ruff check . && uv run ruff format --check .
+uv run mypy
+uv run lint-imports
+uv run coverage run -m pytest && uv run coverage report
+```
+
+The gates and their limits are in [docs/architecture.md §7](docs/architecture.md#7-quality-gates).
 
 ## Documentation
 

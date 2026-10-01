@@ -52,7 +52,7 @@ Escalate instead of looping: if a session fails at the same problem twice, resta
 | S05 | 0 | Spike S3a: build and run briar-headless, contacts API with a phone | Opus 5.5 | high | done |
 | S06 | 0 | Spike S3b: private-group internals of Briar, read/post/join patch plan | Opus 5.5 | xhigh | done |
 | S07 | 0 | Phase 0 wrap-up: all (verify) answered, design and roadmap revised | Opus 5.5 | high | done |
-| S08 | 1 | Project skeleton, tooling and CI | Sonnet 5.5 | high | todo |
+| S08 | 1 | Project skeleton, tooling and CI | Sonnet 5.5 | high | done |
 | S09 | 1 | Domain model and label generator | Opus 5.5 | high | todo |
 | S10 | 1 | Extension API, routing API and contract test suite design | Fable 5.1 | xhigh | todo |
 | S11 | 1 | Inbound pipeline, routing invariants and outbox worker | Opus 5.5 | high | todo |
@@ -145,6 +145,11 @@ S23 needs our own gateway, S25 and S29 run the ARM64 images, S29 sets up Mosquit
 --strict`, `import-linter` contracts (the dependency rule, including `routing_api`), `pytest` with branch
 coverage and the gates from architecture.md §7; `pre-commit`; GitHub Actions on Linux, macOS and Windows.
 Done when: CI passes on an empty project and a deliberate forbidden import fails `lint-imports`.
+Result: `pyproject.toml`, `.pre-commit-config.yaml`, `.github/workflows/ci.yml`, empty packages under
+`src/` and one test (`chatko --version`); D31. All gates pass locally and each kind of forbidden
+import (inner → outer, core → extension, extension → core internals) breaks `lint-imports`. The
+workflow itself has not run yet: it first runs when the owner pushes. `routing.example.py` is checked
+by `ruff` only until `routing_api` exists (S12).
 
 **S09. Domain.** `EndpointRef`, `Group`, `Account`, `Person`, `Message`, `Target`, `Delivery`, the
 fingerprint, and the label generator (Ukrainian KMU-2010 and Russian transliteration, fallbacks). No I/O.

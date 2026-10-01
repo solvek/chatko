@@ -177,7 +177,7 @@ tests (whatever the script returns, no echo and no duplicate delivery).
 |---|---|
 | Language | Python 3.12+, asyncio, full type hints |
 | Tooling | `uv` (environments, lock file), `ruff` (lint + format), `mypy --strict`, `import-linter`, `pre-commit` |
-| Tests | `pytest`, `pytest-asyncio`, `coverage` (branch); `respx`/local test servers for HTTP fakes |
+| Tests | `pytest`, `pytest-asyncio`, `pytest-cov`/`coverage` (branch); `respx`/local test servers for HTTP fakes |
 | Config | `pydantic` v2 models, YAML (`PyYAML`, safe loader), `${ENV}` substitution, `watchfiles` for reload |
 | Storage | SQLite via `aiosqlite`, schema migrations in code |
 | Telegram | `aiogram` 3, wrapped behind the extension's `TelegramApi` port |
@@ -196,6 +196,21 @@ Every pull request must pass in CI (GitHub Actions; Linux, macOS and Windows for
 - `pytest` with branch coverage: **≥ 95 %** for `domain`, `application` and `routing_api`, **≥ 85 %** for each
   extension, **≥ 90 %** overall;
 - the contract test suite for every built-in extension.
+
+The checks are configured in `pyproject.toml`, run by `.github/workflows/ci.yml` and, except for the
+coverage gates, by `pre-commit` (`.pre-commit-config.yaml`). The coverage gates are separate
+`coverage report --include=… --fail-under=…` steps in the workflow; a package without code reports
+100 %. `lab/` (spike scripts) and `docs/` are outside `ruff` and `mypy`.
+
+The `import-linter` contracts (`[tool.importlinter]`) are:
+- layers `app > infrastructure > application > domain`, and `domain` imports nothing outward;
+- `extension_api` and `routing_api` do not import the infrastructure or `app`, and not each other;
+- the core never imports an extension; extensions import `chatko.extension_api` only (through it
+  they may reach the domain indirectly) and not each other;
+- `briarctl` imports nothing of chatko and chatko never imports it.
+
+Whether `application` may import the two public APIs (the diagram of §1 puts them outside it) is left
+open until their real shape is settled in S10.
 
 Integration tests with the docker lab run on demand and nightly; they are not required for every PR.
 

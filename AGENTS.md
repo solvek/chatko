@@ -28,10 +28,11 @@
   spike scripts; see `lab/README.md`.
 
 ## Current state
-- No code yet. Phase 0 (spikes S1–S3) is closed (D30): the Briar relay on phones, the local
+- Only the project skeleton exists (S08: `pyproject.toml`, empty packages under `src/`, CI,
+  `pre-commit`; run the gates as in the README). Phase 0 (spikes S1–S3) is closed (D30): the Briar relay on phones, the local
   Meshtastic lab in `lab/` (channel and direct messages, keys, ACKs, provisioning), briar-headless in
   Docker in `lab/briar/` and the plan for its private-group patch (D29). Only the Kyiv broker questions
-  are open (design.md §6.6); they do not block v1. Phase 1 (core) is next: the first session marked
+  are open (design.md §6.6); they do not block v1. Phase 1 (core) is under way: the next session is the first one marked
   `todo` in `docs/roadmap.md`.
 - The upstream Briar clone for reading and patching is `~/Projects/briar` (tag `release-1.5.21`).
 - Development runs locally on the owner's Linux machine. There is no hardware Meshtastic node yet, so

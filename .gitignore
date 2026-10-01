@@ -21,3 +21,9 @@ build/
 .idea/
 .vscode/
 .obsidian/
+
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
