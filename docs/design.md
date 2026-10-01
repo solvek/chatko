@@ -1,10 +1,10 @@
 # chatko design
 
-Status: **draft**, no code yet. This document describes **behaviour**. The code structure is described
-in [architecture.md](architecture.md). Items marked **(verify)** must be confirmed by a spike
-([spikes.md](spikes.md)) or by reading the upstream source before we rely on them. Phase 0 answered
-every (verify) that v1 relies on (session S07); the questions still open concern only the Kyiv
-community's broker and gateways, which v1 does not use, and are listed in §6.6.
+Status: **draft**; phase 1 (the core) is being written. This document describes **behaviour**. The
+code structure is described in [architecture.md](architecture.md). Items marked **(verify)** must be
+confirmed by a spike ([spikes.md](spikes.md)) or by reading the upstream source before we rely on
+them. Phase 0 answered every (verify) that v1 relies on (session S07); the questions still open
+concern only the Kyiv community's broker and gateways, which v1 does not use, and are listed in §6.6.
 
 ## 1. Goal
 
@@ -460,13 +460,34 @@ every Meshtastic byte counts. By default:
 | Author | Default label |
 |---|---|
 | an account listed under a **person** in the config | the person's label: `NatAda` |
-| any other account | a 2–6 character Latin form of the name the network gives (Telegram name, Briar nickname, Meshtastic long name), made by the label generator below. If the name gives no letters: the Meshtastic short name, or the first characters of the account id. Not unique |
+| any other account | a 2–6 character Latin form of the name the network gives (Telegram name, Briar nickname, Meshtastic long name), made by the label generator below. If the name gives fewer than 2 Latin letters: the network's short name (a Meshtastic node has one), or else the first characters of the account id. Not unique |
 | an author relayed by a peer hub (§9.6) | the label the peer already put in front of the text |
 
-The label generator: transliterate the name (Ukrainian by the official KMU-2010 table, Russian by a
-similar one), then take the first 3 letters of the first word and the first 3 letters of the second,
-each capitalized: *Наталія Адамчук* → *Nataliia Adamchuk* → `NatAda`. With a single word, its first 6
-letters.
+The label generator:
+1. **Transliterate** the name. Every name is read as Ukrainian, by the official KMU-2010 table.
+   Letters of other Cyrillic alphabets are added to it (ы → y, э → e, ъ dropped, ђ → dj, қ → k),
+   and a letter with a diacritic is written as its base letter (ё → e, ў → u). Apostrophes inside a
+   Cyrillic word are dropped; other Latin letters lose their marks (é → e, ł → l).
+2. **Words** are separated by anything but letters, digits, apostrophes and hyphens
+   (`Jean-Luc` and `O'Brien` are one word each). Only Latin letters count, so words without any (an
+   emoji, a number, Chinese characters) are skipped.
+3. **Label**: the first 3 letters of the first word and the first 3 of the second, each capitalized:
+   *Наталія Адамчук* → *Nataliia Adamchuk* → `NatAda`. With a single word, its first 6 letters.
+4. **Fallback**, when step 3 gives fewer than 2 letters: the network's short name, transliterated,
+   with its letters and digits up to 6; else the first 6 letters and digits of the account id.
+
+| Name the network gives (short name, account) | Label |
+|---|---|
+| Наталія Адамчук | `NatAda` |
+| Сергей Петров | `SerPet` |
+| Юлія | `Yuliia` |
+| Ada Lovelace | `AdaLov` |
+| Jean-Luc Picard | `JeaPic` |
+| 🦊 Fox | `Fox` |
+| Наталія Адамчук-Коваль | `NatAda` |
+| Li Wei | `LiWei` |
+| 📡 42 (short name `BC1`) | `BC1` |
+| none (short name 🦊, node `!a1b2c3d4`) | `a1b2c3` |
 
 People in the config are optional. They give a person one name in every network (their Telegram,
 Briar and Meshtastic accounts all signed `NatAda`). To find account ids, the admin can turn on an admin
@@ -552,7 +573,11 @@ gives:
 - state the core already tracks, e.g. when a node was last heard on a channel (`last_heard`);
 - **fingerprint**: a hash of the original author label and the normalized text. Two copies of one
   message that came by different paths (a peer's relay, a late Briar sync, another gateway) have the
-  same fingerprint but different transport ids;
+  same fingerprint but different transport ids. The label is the default one (§8: a peer's label,
+  the person's, or the generated one), never the `label` hook's, and keeps only its letters and
+  digits, case-folded, so `~NatAda` matches `NatAda`. The text is the message as a text-only network
+  shows it (`[photo] caption`), Unicode-normalized (NFKC), case-folded, with runs of whitespace made
+  one space. A message cut short on the way (§6.3) does not match its original;
 - `ctx.seen(fingerprint, within=…)` for scripts that want their own duplicate rules;
 - a test kit: the admin writes plain `pytest`-style checks next to `routing.py` with a fake installation
   and asserts on the returned targets and labels.

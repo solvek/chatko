@@ -369,3 +369,35 @@ Session S08 set up the code base. Choices that are not obvious from the files:
   file's.
 **Consequences:** the first push is the first CI run on macOS and Windows. `routing.example.py` is
 checked by `ruff` only until S12 tests it against the real `routing_api`.
+
+## D32. The domain model: immutable values, two transliteration tables, a versioned fingerprint
+Session S09 wrote `chatko.domain` (architecture.md §2.1). Choices that the design left open:
+**Decision:**
+- Entities are frozen dataclasses with validation in the constructor; a state change (a delivery
+  attempt) returns a new value. One exception type, `DomainError`. No dependencies outside the
+  standard library.
+- An `AccountKey`'s kind is the extension type (`telegram`), not the instance (`tg`), so the
+  `people` section names an account once for all instances. An `EndpointRef`'s name only has to be
+  unique within its instance; how the config names legs is settled with the config (S14).
+- `Topology` (groups, sources, people) enforces what routing relies on: an endpoint is the leg of
+  one group or one source, never both, and an account belongs to one person.
+- Transliteration: every name is read as Ukrainian, by KMU-2010, with no separate Russian table
+  and no language guessing (the owner's choice; the design had "Russian by a similar one"). Letters
+  of other Cyrillic alphabets are added to the table (Russian ы э ъ, Serbian, Macedonian, Kazakh),
+  and a letter with a diacritic falls back to its base letter (ё → e, ў → u). A label only has to be
+  short and readable, not a correct spelling in the author's language.
+- The label generator treats words as runs of letters, digits, apostrophes and hyphens, counts only
+  Latin letters, and falls back to the short name and then the account id when the name gives fewer
+  than 2 letters (design.md §8).
+- The fingerprint is BLAKE2b with a 16-byte digest over the normalized default label and the
+  normalized plain text (attachment placeholders included), with `chatko-fp-v1` as the hash's
+  personalization, so a future change of the algorithm cannot match old fingerprints by accident.
+  It uses the default label, not the `label` hook, so it does not depend on the target; the label
+  keeps only letters and digits, so a `~` mark added by a script does not matter. A unit test pins
+  one value, because hubs compare fingerprints with each other (D17).
+- `ruff`'s confusable-character rules are off for the tests and the transliteration tables, where
+  Cyrillic letters are data.
+**Consequences:** S10–S12 build the public APIs and the pipeline on these types; the APIs may wrap
+them but should not redefine them. Changing the fingerprint means a new personalization string and
+a note for peers. Two hubs match fingerprints only if they label a person the same way (the same
+`people` labels, or names that generate the same label).

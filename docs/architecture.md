@@ -39,8 +39,8 @@ How the code is organized. What the system does is in [design.md](design.md).
 ```
 src/
   chatko/
-    domain/          # entities and pure rules: EndpointRef, Group, Account, Person, Message, Target,
-                     # Delivery, fingerprint, label generator (+ transliteration); no I/O
+    domain/          # entities and pure rules (§2.1): EndpointRef, Group, Account, Person, Message,
+                     # Target, Delivery, Topology, fingerprint, label generator; no I/O
     application/     # use cases: inbound pipeline, routing engine, routing invariants, outbox worker,
                      # admin notices; ports: repositories, clock, id generator
     extension_api/   # the ONLY package extensions may import: Extension base, EndpointProvider,
@@ -68,6 +68,25 @@ lab/                 # docker compose lab: Mosquitto + two meshtasticd nodes, pl
 Built-in extensions are shipped in the same repository and distribution for now, but they are registered
 exactly like third-party ones: through the `chatko.extensions` entry point group in `pyproject.toml`.
 Any of them can move to its own package later without code changes.
+
+### 2.1 The domain
+
+`chatko.domain` is plain, immutable dataclasses and pure functions (D32). It imports only the
+standard library, raises one exception type (`DomainError`, a `ValueError`) for values that break
+its rules, and re-exports its public names from the package.
+
+| Module | Contents |
+|---|---|
+| `endpoints` | `EndpointRef(instance, name)`; `Group(name, legs)` with `other_legs(endpoint)` |
+| `accounts` | `AccountKey(kind, external_id)` (`telegram:123`, parsed from the config form); `Account(key, display_name, short_name)` as the network shows it now; `Person(label, accounts)`; `Author(account, person, relayed_label)`, where `relayed_label` marks a peer hub's relay (D17) |
+| `messages` | `MessageId`; `Attachment(kind)` with its `[photo]` placeholder; `Message` (endpoint, transport id, author, text, attachments, time) with `plain_text` and `fingerprint`; `Target(endpoint, text, label)` |
+| `delivery` | `Delivery`: one outbox row (message, endpoint, author label, text, due time, attempts, last error). `delivered`, `retry(at)` and `failed` return a new value; delivered and failed are final |
+| `topology` | `Topology(groups, sources, people)`: lookups (`group`, `group_of`, `source`, `person_of`, `author_of`) and the rules that every endpoint is the leg of one group or one source, and every account belongs to one person |
+| `fingerprint` | `Fingerprint`, `fingerprint(label, text)` and the normalization (design.md §9.5) |
+| `labels`, `transliteration` | `default_label(author)`, `generate_label(account)`, `transliterate` (design.md §8) |
+
+The domain does not decide what goes where (routing, invariants, backoff): that is the application
+layer's (§5), built on these types.
 
 ## 3. Extension API
 
@@ -100,7 +119,7 @@ The protocol set can grow later (e.g. commands for a web UI) without changing ex
 
 Key types:
 - `AccountKey(kind, external_id)`, e.g. `("telegram", "123")`, `("meshtastic", "!a1b2c3d4")`, plus the
-  display name the network gives.
+  display name and, if the network has one, the short name it gives (the domain's `Account`).
 - `EndpointRef(instance, name)`: a leg or a source. The extension does not know which; groups are a
   core concept.
 - `InboundMessage(endpoint, external_id, author: Account, text, attachments)`, where `external_id` is

@@ -55,7 +55,9 @@ select = [
 ignore = ["PLR2004"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "ANN", "PLR0913"]
+# Cyrillic letters are data here, not look-alikes of Latin ones.
+"tests/**" = ["S101", "ANN", "PLR0913", "RUF001", "RUF002", "RUF003"]
+"src/chatko/domain/transliteration.py" = ["RUF001", "RUF002", "RUF003"]
 # The hook signature is fixed by the routing API even where an argument is unused.
 "routing.example.py" = ["ARG001"]
 

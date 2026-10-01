@@ -27,8 +27,7 @@ Rules:
 
 | Model | Price, input / output per 1M tokens | Use for |
 |---|---|---|
-| **Fable 5.1** | $10 / $50 | Decisions that are expensive to change later: the extension API, the final review before release. Rarely. |
-| **Opus 5.5** | $4 / $20 | The default for design and non-trivial code: concurrency, protocols, unfamiliar code bases, debugging. |
+| **Opus 5.5** | $4 / $20 | The default for design and non-trivial code: concurrency, protocols, unfamiliar code bases, debugging. Also the decisions that are expensive to change later (the extension API) and the final review before release, at `xhigh`. |
 | **Sonnet 5.5** | $2 / $10 | Well-specified implementation, tooling, docs, guided manual tests. |
 | **Haiku 4.5** | $1 / $5 | Trivial chores only: typo fixes, reformatting, renaming. It has no effort levels. |
 
@@ -40,6 +39,9 @@ Effort (`low` → `medium` → `high` → `xhigh` → `max`) sets how much the m
 
 Escalate instead of looping: if a session fails at the same problem twice, restart it one step up
 (Sonnet → Opus, or effort +1).
+
+Fable 5.1 ($10 / $50) is not available to the owner, so no session depends on it: the sessions that
+would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if they get stuck.
 
 ## Sessions
 
@@ -53,8 +55,8 @@ Escalate instead of looping: if a session fails at the same problem twice, resta
 | S06 | 0 | Spike S3b: private-group internals of Briar, read/post/join patch plan | Opus 5.5 | xhigh | done |
 | S07 | 0 | Phase 0 wrap-up: all (verify) answered, design and roadmap revised | Opus 5.5 | high | done |
 | S08 | 1 | Project skeleton, tooling and CI | Sonnet 5.5 | high | done |
-| S09 | 1 | Domain model and label generator | Opus 5.5 | high | todo |
-| S10 | 1 | Extension API, routing API and contract test suite design | Fable 5.1 | xhigh | todo |
+| S09 | 1 | Domain model and label generator | Opus 5.5 | high | done |
+| S10 | 1 | Extension API, routing API and contract test suite design | Opus 5.5 | xhigh | todo |
 | S11 | 1 | Inbound pipeline, routing invariants and outbox worker | Opus 5.5 | high | todo |
 | S12 | 1 | Routing engine: script loading, defaults, `label` hook, test kit, example script | Opus 5.5 | high | todo |
 | S13 | 1 | SQLite repositories and migrations | Sonnet 5.5 | high | todo |
@@ -74,10 +76,9 @@ Escalate instead of looping: if a session fails at the same problem twice, resta
 | S27 | 4 | `briarctl`: contacts, groups, invitations (command-line tool) | Sonnet 5.5 | high | todo |
 | S28 | 4 | Three-network test in the cloud setup: Briar ⇄ Telegram ⇄ Meshtastic (`channel` and `dm`) (*with owner*) | Sonnet 5.5 | medium | todo |
 | S29 | 5 | Production deployment, backups, operations docs | Sonnet 5.5 | high | todo |
-| S30 | 5 | Release review: security, code, docs | Fable 5.1 | high | todo |
+| S30 | 5 | Release review: security, code, docs | Opus 5.5 | xhigh | todo |
 
-Rough cost profile: about two thirds of the sessions on Opus 5.5, a third on Sonnet 5.5, two on
-Fable 5.1.
+Rough cost profile: about two thirds of the sessions on Opus 5.5 and a third on Sonnet 5.5.
 
 ## Session details
 
@@ -152,10 +153,16 @@ workflow itself has not run yet: it first runs when the owner pushes. `routing.e
 by `ruff` only until `routing_api` exists (S12).
 
 **S09. Domain.** `EndpointRef`, `Group`, `Account`, `Person`, `Message`, `Target`, `Delivery`, the
-fingerprint, and the label generator (Ukrainian KMU-2010 and Russian transliteration, fallbacks). No I/O.
+fingerprint, and the label generator (KMU-2010 transliteration, fallbacks). No I/O.
 Done when: domain coverage ≥ 95 % and the label examples of design.md §8 are tests.
+Result: `chatko.domain` (architecture.md §2.1), D32; 178 tests, domain coverage 100 %. Also
+`Topology` (groups, sources, people and their uniqueness rules) and `Author.relayed_label` for peer
+relays (D17). design.md §8 gained the generator's exact rules and an example table, which
+`tests/unit/domain/test_labels.py` checks; §9.5 the fingerprint's normalization. All names are
+transliterated as Ukrainian, with letters of other Cyrillic alphabets added. Left to later
+sessions: how the config names legs (S14), backoff (S11).
 
-**S10. Extension and routing APIs.** The most expensive decision to change later, hence Fable. Settle
+**S10. Extension and routing APIs.** The most expensive decision to change later, hence `xhigh` and a careful review of the result. Settle
 `Extension`, `EndpointProvider`, `HubContext`, the message and delivery types, and API versioning (room
 for more protocols later, D22). Settle the routing API (architecture.md §4): `RoutedMessage`,
 `RoutingContext`, targets, `mirror`, `label`/`default_label`, the fingerprint, and room for peer hubs

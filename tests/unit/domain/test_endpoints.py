@@ -1,0 +1,54 @@
+import pytest
+
+from chatko.domain import DomainError, EndpointRef, Group
+
+TG = EndpointRef("tg", "chat:-100")
+BRIAR = EndpointRef("briar", "group:abc")
+MESH = EndpointRef("kyiv", "channel:family")
+
+
+def test_endpoint_is_written_as_instance_and_name() -> None:
+    assert str(TG) == "tg/chat:-100"
+
+
+def test_endpoints_with_the_same_instance_and_name_are_equal() -> None:
+    assert EndpointRef("tg", "chat:-100") == TG
+    assert len({EndpointRef("tg", "chat:-100"), TG}) == 1
+
+
+@pytest.mark.parametrize(("instance", "name"), [("", "x"), (" ", "x"), ("tg", ""), ("tg", "  ")])
+def test_endpoint_needs_an_instance_and_a_name(instance: str, name: str) -> None:
+    with pytest.raises(DomainError):
+        EndpointRef(instance, name)
+
+
+def test_group_knows_its_legs() -> None:
+    group = Group("family", (TG, BRIAR))
+
+    assert group.has_leg(TG)
+    assert not group.has_leg(MESH)
+
+
+def test_other_legs_are_all_legs_but_the_given_one_in_config_order() -> None:
+    group = Group("family", (TG, BRIAR, MESH))
+
+    assert group.other_legs(BRIAR) == (TG, MESH)
+
+
+def test_other_legs_of_an_endpoint_outside_the_group_are_all_legs() -> None:
+    assert Group("family", (TG, BRIAR)).other_legs(MESH) == (TG, BRIAR)
+
+
+def test_group_needs_a_name() -> None:
+    with pytest.raises(DomainError, match="name"):
+        Group(" ", (TG,))
+
+
+def test_group_needs_a_leg() -> None:
+    with pytest.raises(DomainError, match="no legs"):
+        Group("family", ())
+
+
+def test_group_cannot_list_a_leg_twice() -> None:
+    with pytest.raises(DomainError, match="twice"):
+        Group("family", (TG, BRIAR, TG))
