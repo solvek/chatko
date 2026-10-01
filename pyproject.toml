@@ -20,6 +20,7 @@ chatko = "chatko.app.cli:main"
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6.100",
     "import-linter>=2.1",
     "mypy>=1.13",
     "pre-commit>=4.0",
@@ -58,12 +59,16 @@ ignore = ["PLR2004"]
 
 [tool.ruff.lint.per-file-ignores]
 # Cyrillic letters are data here, not look-alikes of Latin ones.
-"tests/**" = ["S101", "ANN", "PLR0913", "RUF001", "RUF002", "RUF003"]
+"tests/**" = ["S101", "ANN", "ARG002", "PLR0913", "RUF001", "RUF002", "RUF003"]
 # The public test kits are test code that ships with the package.
 "src/chatko/*/testing/**" = ["S101", "RUF001"]
 "src/chatko/domain/transliteration.py" = ["RUF001", "RUF002", "RUF003"]
 # The hook signature is fixed by the routing API even where an argument is unused.
 "routing.example.py" = ["ARG001"]
+
+[tool.ruff.lint.pylint]
+# The application's services take their ports as keyword arguments.
+max-args = 8
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
@@ -113,18 +118,20 @@ layers = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "Only tests use the test kits of the public APIs"
-type = "forbidden"
-source_modules = [
-    "chatko.domain",
-    "chatko.application",
-    "chatko.infrastructure",
-    "chatko.app",
-    "chatko_telegram",
-    "chatko_meshtastic",
-    "chatko_briar",
+name = "Only tests use the test kits and fakes"
+type = "protected"
+# Tests are outside the root packages, so no module of the code base may import a test kit, except
+# the test kits themselves.
+protected_modules = [
+    "chatko.extension_api.testing",
+    "chatko.routing_api.testing",
+    "chatko.application.testing",
 ]
-forbidden_modules = ["chatko.extension_api.testing", "chatko.routing_api.testing"]
+allowed_importers = [
+    "chatko.extension_api.testing",
+    "chatko.routing_api.testing",
+    "chatko.application.testing",
+]
 
 [[tool.importlinter.contracts]]
 name = "The core never imports an extension"

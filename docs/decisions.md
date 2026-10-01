@@ -498,3 +498,45 @@ Session S10 also settled `chatko.routing_api` (architecture.md §4).
 assertions to `routing_api.testing` (it has `FakeHistory` now) and tests `routing.example.py`, which
 already type-checks against the API. S11 keeps the last-heard times and recent fingerprints in
 memory for the history.
+
+## D37. The pipeline routes before it stores; the outbox runs one lane per endpoint and recipient
+Session S11 wrote the application layer's pipeline, invariants, outbox worker and `HubContext`
+(architecture.md §5). Choices that the design left open:
+**Decision:**
+- **Route, then store.** design.md §9.1 stored the message before routing it. The pipeline now
+  routes first (the script is synchronous and has no I/O) and stores the message with all its
+  outbox rows in one transaction (`MessageRepository.add`), which refuses a copy with the same
+  endpoint and transport id. A crash therefore never leaves a stored message without its rows,
+  which a resubmission could not repair, since it would be dropped as a copy.
+- **One message at a time.** The pipeline handles submissions in order under a lock, so the outbox
+  keeps the order of arrival across endpoints and `seen` counts exactly the earlier messages. The
+  hub's traffic is small; routing is in memory. `submit` runs the pipeline in its own task, so a
+  cancelled caller does not leave half a message.
+- **Attempts are counted before the call.** `Delivery.begin_attempt` is saved before `deliver`, and
+  the outcomes no longer count attempts. After a crash in the middle of an attempt, the next one
+  has `attempt == 2`, which is what D35 promised extensions. This changes the domain of D32.
+- **Lanes.** The worker keeps the pending deliveries per endpoint and recipient in memory, with a
+  task per non-empty lane, and loads them from the outbox on `start`. Backoff 10 s doubling to 1 h,
+  no jitter (few deliveries, no thundering herd); a `deliver` or `delivery_report` call times out
+  after 2 min (longer than a Meshtastic DM's ~23 s of retries); a delivery to an instance that is
+  not running is a `Retry`, so an instance being restarted loses nothing.
+- **Giving up** is by age, not by attempts: once the message is 3 days old the next `Retry` fails
+  it. `retry_now` can cause many attempts for a radio that comes and goes, so a count would be
+  arbitrary; age is what makes a message stale.
+- **Fingerprint de-duplication** is per endpoint with its own window (`Installation`), checked
+  against the in-memory history (7 days). A copy is stored (its transport id is then known) but not
+  routed.
+- **Own posts** stay the extension's job (§9.1 step 1): the core has no way to tell the hub's own
+  accounts in v1. The contract suite checks it, and an end-to-end test with `FakeExtension` checks
+  that what the hub posts never comes back in.
+- `notify_admin` keys are prefixed with the instance, so two instances' notices are rate-limited
+  apart. Calls about another instance's endpoint are logged and ignored.
+- The application's fakes are in `chatko.application.testing`. The import contract for test kits
+  became a `protected` one: the `forbidden` contract it replaced let a package import its own kit.
+  `hypothesis` (dev only) runs the property tests of the invariants.
+**Consequences:** S12 replaces `DefaultRouter` with the routing engine behind the same `Router`
+port. S13 implements `MessageRepository` and `OutboxRepository` in SQLite (the store must keep the
+order of the rows) and should persist and reload the `HubHistory`; S14 configures the
+de-duplication windows and possibly `OutboxSettings`; S15 builds the `Installation` snapshots and
+starts the worker before the extensions. Open for the owner: a direct message from one node of a
+`dm` endpoint does not reach the endpoint's other nodes (design.md §9.3).

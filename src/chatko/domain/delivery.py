@@ -23,8 +23,10 @@ class Delivery:
     `recipient` is set when the endpoint has recipients that are reached separately (the nodes of
     a Meshtastic `dm` endpoint): such a message gets one delivery per recipient (design.md §9.1).
 
-    A pending delivery is attempted once it is due. Each outcome counts as an attempt and gives a
-    new `Delivery`: delivered and failed are final, a retry stays pending with a later due time.
+    A pending delivery is attempted once it is due. `begin_attempt` counts the attempt before the
+    network is called, so that after a crash in the middle of one the next attempt is known to be a
+    repeat. Each outcome gives a new `Delivery`: delivered and failed are final, a retry stays
+    pending with a later due time.
     """
 
     message_id: MessageId
@@ -70,21 +72,32 @@ class Delivery:
     def is_due(self, now: datetime) -> bool:
         return self.state is DeliveryState.PENDING and self.due_at <= now
 
+    def begin_attempt(self) -> Self:
+        """The same delivery with one more attempt counted: the hub is about to try it."""
+        self._check_pending()
+        return replace(self, attempts=self.attempts + 1)
+
     def delivered(self, *, truncated: bool = False) -> Self:
         """The endpoint has it; `truncated` when the network could take only part of the text."""
-        return self._attempted(DeliveryState.DELIVERED, truncated=truncated)
+        return self._ended(DeliveryState.DELIVERED, truncated=truncated)
 
     def retry(self, at: datetime, error: str) -> Self:
         """Not delivered this time; try again at `at`."""
         if at.utcoffset() is None:
             raise DomainError("a retry time must be timezone-aware")
-        return self._attempted(DeliveryState.PENDING, due_at=at, last_error=error)
+        return self._ended(DeliveryState.PENDING, due_at=at, last_error=error)
 
     def failed(self, error: str) -> Self:
         """Not delivered, and retrying cannot help."""
-        return self._attempted(DeliveryState.FAILED, last_error=error)
+        return self._ended(DeliveryState.FAILED, last_error=error)
 
-    def _attempted(
+    def _check_pending(self) -> None:
+        if self.state is not DeliveryState.PENDING:
+            raise DomainError(
+                f"the delivery of {self.message_id} to {self.destination} is already {self.state}"
+            )
+
+    def _ended(
         self,
         state: DeliveryState,
         *,
@@ -92,14 +105,10 @@ class Delivery:
         truncated: bool = False,
         last_error: str | None = None,
     ) -> Self:
-        if self.state is not DeliveryState.PENDING:
-            raise DomainError(
-                f"the delivery of {self.message_id} to {self.destination} is already {self.state}"
-            )
+        self._check_pending()
         return replace(
             self,
             state=state,
-            attempts=self.attempts + 1,
             due_at=self.due_at if due_at is None else due_at,
             truncated=truncated,
             last_error=last_error,

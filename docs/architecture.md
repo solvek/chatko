@@ -48,16 +48,17 @@ src/
   chatko/
     domain/          # entities and pure rules (§2.1): EndpointRef, Group, Account, Person, Message,
                      # Target, Delivery, Topology, fingerprint, label generator; no I/O
-    application/     # use cases: inbound pipeline, routing engine, routing invariants, outbox worker,
-                     # admin notices; ports: repositories, clock, id generator
+    application/     # use cases and ports (§5): pipeline, invariants, outbox (worker), hub
+                     # (HubContext), history, installation, routing (the router), ports
+      testing/       # in-memory fakes of the ports: FakeClock, SequentialIds, InMemoryStore, …
     extension_api/   # the ONLY package extensions may import (§3): extension (Extension), endpoints
                      # (EndpointProvider), hub (HubContext), messages, delivery (results, reports)
       testing/       # contract (the suite), hub (FakeHub), fake (FakeNetwork, FakeExtension)
     routing_api/     # the ONLY package a routing script may import (§4): messages (RoutedMessage),
                      # context (RoutingContext, RoutingHistory), helpers (to_endpoint, mirror, …)
       testing/       # FakeHistory; the fake installation and assertions come in S12
-    infrastructure/  # SQLite repositories, config loading (YAML + ${ENV}), extension discovery,
-                     # logging
+    infrastructure/  # the real clock and ids, SQLite repositories, config loading (YAML + ${ENV}),
+                     # extension discovery, logging
     app/             # composition root, CLI: `chatko run`, `chatko check-config`
   chatko_telegram/   # extension packages: separate top-level packages, so importing core internals
   chatko_meshtastic/ # is visible and forbidden by import-linter
@@ -158,11 +159,13 @@ When an instance's own section changes, the core stops it and starts a new insta
   | Result | Meaning | The core |
   |---|---|---|
   | `Delivered(truncated=False)` | the endpoint (recipient) has it; `truncated`: only part fit | marks it delivered |
-  | `Retry(reason, after=None)` | not now: the network is down, busy or did not confirm | tries again after `after`, or after its exponential backoff; holds back newer messages meanwhile; `hub.retry_now` ends the wait |
+  | `Retry(reason, after=None)` | not now: the network is down, busy or did not confirm | tries again after `after`, or after its exponential backoff; holds back newer messages meanwhile; `hub.retry_now` ends the wait; gives up (`Failed`) once the message is too old (§5.2) |
   | `Failed(reason)` | trying again cannot help: the chat is gone, the endpoint or recipient is no longer in the config | marks it failed and logs it |
 
-  An exception from `deliver` counts as `Retry` and is logged. Delivery is at least once: after a
-  crash an attempt may be repeated, and `OutboundMessage.attempt` tells a repeat from the first.
+  An exception from `deliver` counts as `Retry` and is logged; so does a call that takes longer than
+  the call timeout, and a delivery to an instance that is not running. Delivery is at least once:
+  the core counts each attempt in the outbox before it calls `deliver`, so after a crash an attempt
+  may be repeated, and `OutboundMessage.attempt` tells the repeat from the first.
 - **Reports.** When a delivery has ended, the core tells the extension that read the original:
   `delivery_report(DeliveryReport(source, transport_id, target, recipient, result))`. The Telegram
   extension shows a truncated delivery with a ✂️ reaction (design.md §6.3). The default ignores it.
@@ -184,7 +187,7 @@ only while the instance runs.
 | `await submit(InboundMessage)` | hands over a message read at one of the extension's endpoints; returns once the hub has stored it or recognized it as a copy, so only then may the extension confirm it to its network (a Briar post marked read). Safe to cancel; a resubmission is de-duplicated by the transport id. It never calls back into the extension |
 | `await heard(account, endpoint=None)` | the network showed the account to be there, at the endpoint if it was heard at one (any packet from a radio counts); the routing script reads it as `last_heard`. Submitted messages count without it |
 | `await retry_now(endpoint, recipient=None)` | the deliveries waiting for a retry there are due now, e.g. when a radio that missed messages is heard again (D26) |
-| `await notify_admin(text, *, key=None)` | an admin notice (design.md §2); notices with the same key (default: the text) are rate-limited together; never raises |
+| `await notify_admin(text, *, key=None)` | an admin notice (design.md §2); notices of the instance with the same key (default: the text) are rate-limited together; never raises |
 | `now()` | the hub's clock, timezone-aware |
 
 The architecture once had a key–value store for an extension's own state here. No v1 extension
@@ -305,14 +308,56 @@ endpoint and recipient: a message goes to each at most once, and never back to i
 
 ## 5. Core services (application layer)
 
-| Service | Responsibility |
-|---|---|
-| `InboundPipeline` | own-post and transport-id dedup → find the person for the account → peer-relayed author → fingerprint → persist message → `RoutingEngine` → invariants → labels → one outbox row per target and recipient |
-| `RoutingEngine` | load and hot-reload the routing script, check its `api_version`, call `route` and `label` (or the defaults), fall back to the defaults on errors and post an admin notice |
-| `OutboxWorker` | per endpoint and recipient, deliver the oldest pending row when it is due; a `Retry` holds back the newer rows (§3.2); apply `DeliveryResult` (the extension's `after`, else exponential backoff); report final results to the source's extension; survives restarts |
-| the hub (`HubContext`) | one per extension instance: `submit` into the `InboundPipeline`, `heard` into the last-heard state, `retry_now` into the outbox, `notify_admin` into the `AdminNotifier` |
-| `AdminNotifier` | post admin notices into the configured endpoint, rate-limited and de-duplicated per kind |
-| `ConfigService` | load, validate (core + each extension's models) and hot-reload `chatko.yaml`; keep the last valid one |
+`chatko.application` (D37). The services take their ports and collaborators as keyword arguments;
+the composition root (S15) wires them.
+
+| Service | Module | Responsibility |
+|---|---|---|
+| `InboundPipeline` | `pipeline` | for each submitted message, one at a time: drop it if its endpoint is unknown or it is a copy (same endpoint and transport id) → find the person for the account → (later: the peer-relayed author) → fingerprint → skip routing if the endpoint de-duplicates by fingerprint and the same message came lately → `Router.route` → `RoutingInvariants` → `Router.label` once per target without its own label → store the message with one outbox row per target and recipient, in one transaction → record it in the history → hand the rows to the `OutboxWorker`. Returns an `Outcome` |
+| `RoutingInvariants` | `invariants` | turns the targets into `Destination`s (target, recipient) that keep design.md §9.3: none back at the source, none at an unknown endpoint, each endpoint and recipient once (the first target that includes it wins), only the endpoint's own recipients |
+| `Router` | `routing` | the port the pipeline routes with: `route` and `label`, never raising. `DefaultRouter` (`mirror`, `default_label`) stands in until the `RoutingEngine` (S12): load and hot-reload the routing script, check its `api_version`, call `route` and `label`, fall back to the defaults on errors and post an admin notice |
+| `OutboxWorker` | `outbox` | delivers the pending rows, one lane per endpoint and recipient (§5.2); reports final results to the source's extension; loads the pending rows on `start` |
+| `ExtensionHub` | `hub` | the `HubContext` of one extension instance: `submit` into the pipeline, `heard` into the history, `retry_now` into the worker, `notify_admin` into `AdminNotices` (with the instance in the key), `now` from the clock. It ignores (and logs) calls about another instance's endpoints |
+| `HubHistory` | `history` | the routing script's `RoutingHistory`, in memory: the last time each account was heard (anywhere and per endpoint) and the fingerprints of the last 7 days |
+| `Installation` | `installation` | one consistent snapshot of the topology, the running extension instances and the endpoints that de-duplicate by fingerprint; the services ask an `InstallationSource` for the current one per message and per attempt, so a reload (S14, S15) only swaps the snapshot |
+| `AdminNotifier` | (S14) | post admin notices into the configured endpoint, rate-limited and de-duplicated per key |
+| `ConfigService` | (S14) | load, validate (core + each extension's models) and hot-reload `chatko.yaml`; keep the last valid one |
+
+### 5.1 Ports
+
+`application.ports` defines what the application needs from outside; `infrastructure` implements
+them and `application.testing` fakes them in memory (`FakeClock`, `SequentialIds`,
+`InMemoryStore`, `RecordingNotices`).
+
+| Port | Methods | Implementations |
+|---|---|---|
+| `Clock` | `now()`, `await sleep_until(when)` | `SystemClock`; `FakeClock` (moved by the test, wakes the sleepers that are due) |
+| `IdGenerator` | `new_message_id()` | `RandomIds` (UUID4 hex); `SequentialIds` (`m1`, `m2`, …) |
+| `MessageRepository` | `contains(endpoint, transport_id)`, `add(message, deliveries) -> bool` (both in one transaction; `False` and nothing stored for a copy), `get(id)` | SQLite (S13); `InMemoryStore` |
+| `OutboxRepository` | `pending()` (in the order stored), `save(delivery)` | SQLite (S13); `InMemoryStore` |
+| `AdminNotices` | `notify(text, key=…)` | `AdminNotifier` (S14); `RecordingNotices` |
+
+The message is routed before it is stored and stored together with its outbox rows, so a crash
+leaves either both or neither: no message is stored without its deliveries. `submit` runs the
+pipeline in a task of its own, so cancelling the caller does not cut it short.
+
+### 5.2 The outbox worker
+
+- **Lanes.** The pending deliveries to one endpoint and recipient form a lane, oldest first, with a
+  task of its own while it has any. The task attempts the oldest delivery once it is due; until
+  then the newer ones wait. Lanes run concurrently.
+- **An attempt** counts itself in the outbox (`Delivery.begin_attempt`), calls `deliver` with a
+  timeout, applies the result and saves it, and then reports a final one to the extension of the
+  message's source (`delivery_report`, with the same timeout; its errors are logged).
+- **Retries.** A `Retry` is due after its `after`, else after the backoff: 10 s, doubling up to
+  1 h. Once the message arrived 3 days ago or earlier, the next `Retry` makes the delivery fail
+  ("gave up: …"). `retry_now` makes the oldest delivery of the matching lanes due at once. A broken
+  repository is logged and the lane tries again after the first backoff. `OutboxSettings` holds
+  these numbers (S14 may put them in the config).
+- **Lifecycle.** `start` loads the pending deliveries (deliveries enqueued meanwhile follow them,
+  without duplicates); `enqueue` adds the ones the pipeline stored (while stopped it leaves them to
+  the next `start`); `stop` cancels the waiting lanes and gives the deliveries in progress 10 s.
+  Start the worker before the extensions and stop it after them.
 
 ## 6. Technology
 
@@ -320,7 +365,7 @@ endpoint and recipient: a message goes to each at most once, and never back to i
 |---|---|
 | Language | Python 3.12+, asyncio, full type hints |
 | Tooling | `uv` (environments, lock file), `ruff` (lint + format), `mypy --strict`, `import-linter`, `pre-commit` |
-| Tests | `pytest`, `pytest-asyncio`, `pytest-cov`/`coverage` (branch); `respx`/local test servers for HTTP fakes |
+| Tests | `pytest`, `pytest-asyncio`, `pytest-cov`/`coverage` (branch), `hypothesis` (property tests); `respx`/local test servers for HTTP fakes |
 | Config | `pydantic` v2 models, YAML (`PyYAML`, safe loader), `${ENV}` substitution, `watchfiles` for reload |
 | Storage | SQLite via `aiosqlite`, schema migrations in code |
 | Telegram | `aiogram` 3, wrapped behind the extension's `TelegramApi` port |
@@ -348,8 +393,10 @@ coverage gates, by `pre-commit` (`.pre-commit-config.yaml`). The coverage gates 
 The `import-linter` contracts (`[tool.importlinter]`) are:
 - layers `app > infrastructure > application > extension_api | routing_api > domain` (§1), the two
   APIs being independent siblings;
-- only tests import the test kits (`extension_api.testing`, `routing_api.testing`): no layer of the
-  core and no extension does;
+- only tests import the test kits (`extension_api.testing`, `routing_api.testing`) and the
+  application's fakes (`application.testing`): no module of the code base does, except the kits
+  themselves (a `protected` contract, which unlike a `forbidden` one also covers a package
+  importing its own kit);
 - the core never imports an extension; extensions import `chatko.extension_api` only (through it
   they may reach the domain indirectly) and not each other;
 - `briarctl` imports nothing of chatko and chatko never imports it.
@@ -363,3 +410,5 @@ Testing style:
 - Every bug fix starts with a failing test.
 - Fakes (in-memory repositories, `FakeExtension`, fake ports) live in the code base next to the ports
   they fake, not as ad-hoc mocks in tests.
+- Rules that must hold for any input (the routing invariants) are also `hypothesis` property tests.
+- Time-dependent code takes the `Clock` port, and its tests move a `FakeClock` instead of sleeping.

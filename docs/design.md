@@ -525,23 +525,29 @@ Configuration is split in two (D16):
 
 ### 9.1 The pipeline
 
-For every incoming message:
+For every incoming message, one at a time, in the order the extensions submit them:
 
 1. **Extension**: drops the hub's own posts (the bot's messages, the hub node's packets, the hub's Briar
    posts) and submits the rest with its transport id and author account.
 2. **Core, before routing**: de-duplicates by `(endpoint, transport id)` (Meshtastic packets often arrive
    once per gateway); finds the person for the account, if any; recognizes messages relayed by a peer
-   hub (§9.6); computes the message **fingerprint** (§9.5); stores the message.
+   hub (§9.6); computes the message **fingerprint** (§9.5). If the endpoint de-duplicates by
+   fingerprint and the same message came in lately by another path (§9.3), the message is stored
+   but not routed.
 3. **Routing script**: `route(message, ctx)` returns a list of **targets**.
 4. **Core, after routing**: applies the invariants (§9.3), computes the author label for each target
-   (§8), and writes one outbox row per remaining target; for an endpoint with **recipients** (the
-   nodes of a `dm` endpoint), one row per recipient.
+   (§8), and stores the message together with one outbox row per remaining target; for an endpoint
+   with **recipients** (the nodes of a `dm` endpoint), one row per recipient. The message and its
+   rows are stored in one go, so after a crash there is never a message without its rows. Only then
+   does the extension hear that the hub has the message.
 5. **Outbox worker**: delivers each row through its extension. The rows of one endpoint (or one
    recipient) go one at a time, in the order the messages came in, and a row waiting for a retry
-   holds back the newer ones, so messages never overtake each other. A failed delivery is retried
-   with backoff, or as soon as the extension says the place is reachable again (a radio heard
-   again), and survives a restart. When a delivery ends, the extension of the endpoint the message
-   came from gets a **delivery report**, e.g. to mark a message that was cut short (§6.3).
+   holds back the newer ones, so messages never overtake each other. A failed delivery (including
+   an extension error or no answer within 2 minutes) is retried with backoff (10 s, doubling up to
+   1 h), or as soon as the extension says the place is reachable again (a radio heard again), and
+   survives a restart. A delivery that still fails when its message is 3 days old is given up.
+   When a delivery ends, the extension of the endpoint the message came from gets a **delivery
+   report**, e.g. to mark a message that was cut short (§6.3).
 
 ### 9.2 Targets
 
@@ -556,12 +562,16 @@ The script cannot turn these off. They are what keeps echoes and duplicates out,
 does:
 
 - The hub's own posts never reach the router (step 1).
-- A message is never delivered back to the endpoint it came from.
+- A message is never delivered back to the endpoint it came from. For an endpoint with
+  recipients this means none of them: a direct message from one node of a `dm` endpoint does not go
+  to the other nodes of that endpoint.
 - A message is delivered to the same endpoint (to each of its recipients) at most once.
 - A message that another path already brought in (same fingerprint, §9.5) is routed only once, when
-  the admin enables fingerprint de-duplication for that endpoint (default: on for endpoints shared with a
-  peer hub).
-- Anything a script returns for an endpoint that does not exist is dropped and logged.
+  the admin enables fingerprint de-duplication for the endpoint it arrives at, with a time window
+  (default: on for endpoints shared with a peer hub). A copy that arrives within the window is
+  stored, but not routed.
+- Anything a script returns for an endpoint that does not exist is dropped and logged; recipients
+  that an endpoint does not have are ignored.
 
 ### 9.4 Default routing and errors
 

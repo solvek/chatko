@@ -57,7 +57,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S08 | 1 | Project skeleton, tooling and CI | Sonnet 5.5 | high | done |
 | S09 | 1 | Domain model and label generator | Opus 5.5 | high | done |
 | S10 | 1 | Extension API, routing API and contract test suite design | Opus 5.5 | xhigh | done |
-| S11 | 1 | Inbound pipeline, routing invariants and outbox worker | Opus 5.5 | high | todo |
+| S11 | 1 | Inbound pipeline, routing invariants and outbox worker | Opus 5.5 | high | done |
 | S12 | 1 | Routing engine: script loading, defaults, `label` hook, test kit, example script | Opus 5.5 | high | todo |
 | S13 | 1 | SQLite repositories and migrations | Sonnet 5.5 | high | todo |
 | S14 | 1 | Configuration: models, `${ENV}`, people, admin notices, hot reload, `check-config` | Sonnet 5.5 | high | todo |
@@ -189,6 +189,15 @@ hub's `HubContext` implementation (`submit`, `heard`, `retry_now`, `notify_admin
 `RoutingHistory` (last heard, recent fingerprints) (architecture.md §3, D35). The router is a stub
 that calls `mirror`. Use `FakeExtension` and `FakeNetwork` from `extension_api.testing` as the
 networks. Done when: design.md §9.1 and §9.3 are tests.
+Result: `chatko.application` (architecture.md §5), D37; 386 tests, coverage 100 %. The pipeline routes first and then stores the message with its outbox rows
+in one transaction, one message at a time; `Delivery.begin_attempt` counts an attempt before the
+call, so a repeat after a crash has `attempt == 2`. The worker gives up by age (3 days); backoff
+10 s doubling to 1 h; calls time out after 2 min. The invariants have `hypothesis` property tests
+(a new dev dependency), and an end-to-end test with two `FakeExtension` networks covers the whole
+of §9.1. `Installation` is the snapshot (topology, running instances, de-duplication windows) the
+services read per message. Fakes are in `application.testing`; the test-kit import contract became
+a `protected` one. Open for the owner: a direct message from one node of a `dm` endpoint does not
+reach the endpoint's other nodes (design.md §9.3).
 
 **S12. Routing engine.** `RoutingEngine`: load `routing.py` from the config directory, validate it
 (`route`, an optional `label(msg, target, ctx)`, an optional supported `api_version`, D36),
@@ -200,17 +209,24 @@ are tests, and the example script passes its own tests.
 
 **S13. Storage.** `aiosqlite` repositories and schema migrations for runtime state (messages, outbox,
 de-duplication, last heard, accounts seen). The same repository tests run against the fakes and SQLite.
+The ports are in `application.ports` (D37): `MessageRepository.add` stores a message with its
+deliveries in one transaction and refuses a copy; `OutboxRepository.pending` keeps the order the
+rows were stored in. Persist the `HubHistory` (last heard, recent fingerprints) and load it at
+start; prune old messages and delivered rows.
 Done when: all repository ports have a SQLite implementation passing the shared tests.
 
 **S14. Configuration.** Pydantic models for the core (groups with named sites (D34), sources, people,
-`admin_notices`, `routing`, room for `peers`) and hooks for each extension's models; YAML safe load; `${ENV}`
+`admin_notices`, `routing`, room for `peers`, the fingerprint de-duplication window per endpoint
+(D37)) and hooks for each extension's models; YAML safe load; `${ENV}`
 substitution; reload with `watchfiles`, keeping the last valid config and reporting errors as admin
 notices; `AdminNotifier`; `chatko check-config` (also loads and tests the routing script). Done when:
 `config.example.yaml` validates with fake extensions, and invalid configs give clear errors.
 
 **S15. Wiring.** Entry-point discovery (`chatko.extensions`, refusing extensions whose `api_version`
 is not supported, D35), the composition root (the lifecycle of architecture.md §3.1, including
-checking a new endpoint set on a fresh instance), `chatko run`; `FakeExtension` (in
+checking a new endpoint set on a fresh instance), the `Installation` snapshot that the pipeline
+and the worker read (D37), the outbox worker started before the extensions and stopped after them,
+`chatko run`; `FakeExtension` (in
 `extension_api.testing` since S10) registered for the test. Done when: an end-to-end test runs the hub with two fake extensions and a message crosses
 from one site to the other through SQLite.
 

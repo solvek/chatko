@@ -45,11 +45,23 @@ def test_target_text_replaces_the_message_text() -> None:
     assert Delivery.of(MESSAGE, Target(MESH, text="інше"), "NatAda", NOW).text == "інше"
 
 
+def test_an_attempt_is_counted_before_its_outcome() -> None:
+    attempting = pending().begin_attempt()
+
+    assert attempting.attempts == 1
+    assert attempting.state is DeliveryState.PENDING
+    assert attempting.delivered().attempts == 1
+
+
+def test_a_final_delivery_cannot_be_attempted_again() -> None:
+    with pytest.raises(DomainError, match="already delivered"):
+        pending().delivered().begin_attempt()
+
+
 def test_delivered_is_final() -> None:
-    delivered = pending().delivered()
+    delivered = pending().begin_attempt().delivered()
 
     assert delivered.state is DeliveryState.DELIVERED
-    assert delivered.attempts == 1
     assert not delivered.truncated
     assert not delivered.is_due(LATER)
     with pytest.raises(DomainError, match="already delivered"):
@@ -61,7 +73,7 @@ def test_delivered_may_be_truncated() -> None:
 
 
 def test_retry_stays_pending_until_the_given_time() -> None:
-    retried = pending().retry(LATER, "node busy")
+    retried = pending().begin_attempt().retry(LATER, "node busy")
 
     assert retried.state is DeliveryState.PENDING
     assert retried.attempts == 1
@@ -71,7 +83,15 @@ def test_retry_stays_pending_until_the_given_time() -> None:
 
 
 def test_attempts_add_up_and_success_clears_the_error() -> None:
-    delivered = pending().retry(LATER, "a").retry(LATER, "b").delivered()
+    delivered = (
+        pending()
+        .begin_attempt()
+        .retry(LATER, "a")
+        .begin_attempt()
+        .retry(LATER, "b")
+        .begin_attempt()
+        .delivered()
+    )
 
     assert delivered.attempts == 3
     assert delivered.last_error is None
