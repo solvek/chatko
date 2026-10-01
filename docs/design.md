@@ -89,7 +89,8 @@ state are backed up daily, so the hub can be moved to another server within an h
 - `meshtasticd` runs in Docker (native on Linux; Docker Desktop on macOS and Windows).
 - `briar-headless` is a JVM application with Tor inside. Upstream builds it for Linux (x86-64,
   aarch64, armhf), Windows and macOS; it builds with JDK 17 and runs on a Java 17 runtime. We build
-  the Linux jars in Docker and run them in a JRE image (spike S3).
+  the Linux jars of our fork (upstream plus the patch of §7.4) in Docker and run them in a JRE image
+  (spike S3).
 - The reference deployment is `docker compose` on a Linux server (x86-64 or ARM64). A development
   setup runs everything locally, including a local MQTT broker (§11).
 
@@ -266,8 +267,12 @@ placeholder name `Meshtastic b002`, which is not the node's name and is not used
 ### 7.1 The hub's Briar account
 
 The hub's `briar-headless` is a full Briar account (e.g. nickname `chatko`) that is online all the time
-over Tor. Briar also syncs with contacts on the same Wi-Fi network; whether `briar-headless` has this
-LAN transport is **(verify)** (spike S3). It matters for a future hub without internet (§9.6).
+over Tor. Tor is its only transport: unlike the app, it does not sync over Wi-Fi or Bluetooth (spike
+S3). Briar's Wi-Fi (LAN) transport is platform-independent code and could be switched on in
+`briar-headless` with a small patch, which a future hub without internet needs (§9.6, D29). It
+finds contacts by the last few LAN addresses that each side shares with its contacts, not by
+discovery, so a phone and the hub connect over Wi-Fi only if one of them already knows the other's
+current address, and a hub in Docker would need host networking.
 
 Two separate programs use this account (D24):
 
@@ -287,27 +292,49 @@ the group alive, so the recommended setup is: **the hub's account creates the gr
    (only contacts added in person are verified), which does not affect syncing.
 2. **Group.** `briarctl group create "Family"` prints the new group's id;
    `briarctl group invite <group> <contact>…` invites people. They accept in the app.
-3. **Endpoint.** The admin puts the group id into `chatko.yaml` (a leg of a group, or a source). From
-   then on the extension reads and posts there.
+3. **Endpoint.** The admin puts the group id, as `briarctl` prints it, into `chatko.yaml` (a leg of
+   a group, or a source). From then on the extension reads and posts there.
+
+Briar ids (groups, authors) are 32 bytes. `briarctl`, `chatko.yaml` and chatko's logs write them in
+URL-safe base64 without padding (43 characters of `A–Z a–z 0–9 - _`), the form the API takes in URL
+paths (§7.4).
 
 A group made by a person, who then invites the hub, works as well: `briarctl invitation accept` joins
 it. Then the hub syncs only through that person's phone (§7.3).
 
 A hub can be in any number of Briar groups, and a message can be routed into several of them.
 
-The extension posts routed messages into a Briar group as `NatAda: text` (no size limit). Posts reach
-the other Briar members natively. The extension copies them to other endpoints and never echoes them
-back into their own group (§9.3).
+The extension posts routed messages into a Briar group as `NatAda: text`. A post holds up to
+31 744 bytes of UTF-8 text, far more than any other network sends. Posts reach the other Briar members
+natively. The extension copies them to other endpoints and never echoes them back into their own group
+(§9.3).
 
 Briar cannot remove a member from a private group (spike S1, D15). To cut someone off, the admin
 dissolves the group and creates a new one without them (`briarctl group dissolve`, `create`, `invite`),
 then changes the endpoint in `chatko.yaml`. History on phones is lost, and every remaining member must
 reach the hub once to accept the new invitation (an invitation is not relayed by other members).
 
-### 7.2 Authors
+### 7.2 Posts and authors
 
 A post carries its author's Briar identity (`briar:<author id>`) and nickname. The author label comes
 from these (§8).
+
+- **In.** The extension gets other members' posts from `briar-headless`'s WebSocket. The WebSocket
+  only reaches a connected client, so after every start or lost connection the extension also lists
+  the messages of each configured group and submits the posts it has not handed over yet. It marks a
+  post as read in Briar once the hub has stored it, and Briar's read flag is used for nothing else.
+  Nothing is lost while chatko is down, and the overlap between the WebSocket and the list is removed
+  by the message id (§9.1).
+- **Own posts.** The hub's own posts are stored as read and marked as its own, and never submitted
+  (§9.1, step 1).
+- **Order.** Each post is chained to its author's previous message in the group, and Briar holds a
+  post back until that message has arrived. So one author's posts arrive in the order they were
+  written, even when they came through different members (§7.3).
+- **Not relayed:** join notices ("Ada joined the group") and replies as such (a reply is relayed as
+  plain text, §8).
+- **Dissolved.** When the hub joined someone else's group and its creator dissolves it, the extension
+  posts an admin notice, and posts into it are refused (§7.4). Briar also marks such a group
+  dissolved when the admin removes its creator from the hub's contacts.
 
 ### 7.3 Relay through other members
 
@@ -330,27 +357,55 @@ online (confirmed by spike S1 in both directions). Conditions:
 Private direct messages cannot be relayed this way: a two-person conversation syncs only between its
 two participants. That is one reason v1 has group messages only (D1).
 
-### 7.4 What briar-headless lacks
+### 7.4 The private-group API (our briar-headless patch)
 
-Its REST API covers contacts (the account's link, adding a pending contact, listing and removing
-contacts), private messages, blog posts and listing/creating forums. It has **no private-group API**.
-We therefore patch `briar-headless` (Kotlin) with a thin layer over Briar's existing
-`PrivateGroupManager` and `GroupInvitationManager`:
+`briar-headless`'s REST API covers contacts (the account's link, adding a pending contact, listing and
+removing contacts), private messages, blog posts and listing/creating forums. It has **no private-group
+API**, and private groups are even switched off in its core: it neither checks nor stores
+private-group messages, and it does not tell its contacts that it supports them, so a phone cannot
+invite it (spike S3). Everything else is in Briar's shared code (`PrivateGroupManager`,
+`GroupInvitationManager` and their factories), which the Android app calls through thin
+controllers. The patch (D29) switches private groups on and adds a thin REST layer that makes the same
+calls as the app. Briar sets the private-group clients up for an existing account at its next start
+and tells its contacts, so an existing account should need no migration (read in the source; S24
+checks it with the lab account).
 
-| Endpoint | Purpose | Used by |
+| Endpoint | What it does | Used by |
 |---|---|---|
-| `GET /v1/groups` | list the private groups of the account | both |
-| `POST /v1/groups` | create a private group `{ name }` | `briarctl` |
-| `GET /v1/groups/{groupId}/members` | list members | `briarctl` |
-| `POST /v1/groups/{groupId}/invitations` | invite a contact `{ contactId, text }` | `briarctl` |
-| `DELETE /v1/groups/{groupId}` | dissolve the group | `briarctl` |
-| `GET /v1/groups/invitations` | list invitations to groups made by others | `briarctl` |
-| `POST /v1/groups/invitations/{groupId}` | accept or decline such an invitation | `briarctl` |
-| `GET /v1/groups/{groupId}/messages` | list group messages | extension |
-| `POST /v1/groups/{groupId}/messages` | post `{ text }` | extension |
-| WS `GroupMessageAddedEvent` | a new message in a group | extension |
+| `GET /v1/groups` | the account's private groups: `id`, `name`, `creator` (author), `ourGroup` (the hub is the creator), `dissolved` | both |
+| `POST /v1/groups` `{name}` | create a group with the hub as its creator; returns the group | `briarctl` |
+| `DELETE /v1/groups/{groupId}` | the creator dissolves the group, a member leaves it; either way it disappears from the hub with its history | `briarctl` |
+| `GET /v1/groups/{groupId}/members` | members who have joined: `author`, `authorStatus`, `creator`, `contactId` (if the member is a contact the hub can see), `visibility` | `briarctl` |
+| `GET /v1/groups/{groupId}/invitations` | for each contact, whether it can be invited: `shareable`, `invite_sent`, `sharing` (joined, and also after leaving: Briar cannot invite a member who left back into the same group), `not_supported` (the contact's Briar has no private groups, or has not told the hub yet), `error` | `briarctl` |
+| `POST /v1/groups/{groupId}/invitations` `{contactId, text?}` | invite a `shareable` contact to a group the hub created | `briarctl` |
+| `GET /v1/groups/invitations` | invitations to groups made by others: `groupId`, `name`, `creator`, `contactId` | `briarctl` |
+| `POST /v1/groups/invitations/{groupId}` `{accept}` | accept or decline such an invitation | `briarctl` |
+| `GET /v1/groups/{groupId}/messages` | joins and posts, oldest first: `id`, `type` (`join`, `post`), `author`, `authorStatus` (`ourselves` for the hub's own), `parentId`, `timestamp` (the author's clock), `read`, `text` (posts only) | extension |
+| `POST /v1/groups/{groupId}/messages` `{text}` | post as the hub; returns the message | extension |
+| `POST /v1/groups/{groupId}/messages/read` `{messageId}` | mark a message read (the catch-up of §7.2) | extension |
+| WS `GroupMessageAddedEvent` | a join or post from another member, with the fields of a listed message and `groupId`; never the hub's own | extension |
+| WS `GroupDissolvedEvent` `{groupId}` | the creator dissolved a group the hub is a member of | extension |
 
-The patch lives in our fork (with tests, in upstream style) and is offered upstream to Briar.
+- Invitations to the hub and answers to its invitations already reach the WebSocket and the
+  conversation list once private groups are on: a `ConversationMessageReceivedEvent` of type
+  `GroupInvitationRequest` (its `sessionId` is the group id) or `GroupInvitationResponse`
+  (`shareableId`, `accepted`).
+- **Ids.** In JSON, ids are standard base64 like everywhere in the API. In a URL path, a group id is
+  URL-safe base64 (RFC 4648 §5, padding optional), because a standard base64 id can contain `/`.
+- **Errors**, in the API's existing style: 400 for a missing, empty or too long field (name over 100
+  bytes, post or invitation text over 31 744 bytes of UTF-8); 404 for an unknown group, contact or
+  invitation; 403 with `{"error": …}` when the state does not allow it: `NOT_CREATOR` (only the
+  creator can invite), `NOT_SHAREABLE` with the contact's status, `DISSOLVED` (no posts or
+  invitations in a dissolved group).
+- **Posts.** A post is signed by the hub, chained to the hub's previous message in the group, and
+  timestamped later than it: the patch takes the later of now and the group's latest message time
+  plus 1 ms, as the app does. It reads the chain, signs and stores in one database transaction, so
+  two posts at once cannot fork the chain. A post has no parent (replies are not used).
+- Not in the patch: "Reveal contacts" (members are visible to the creator anyway), replies, read
+  flags beyond the catch-up.
+
+The patch lives in our fork of `briar-headless`, on top of the pinned release tag, and is offered
+upstream (D29).
 
 ### 7.5 `briarctl`
 
@@ -362,10 +417,10 @@ with chatko's core or extensions (D24).
 |---|---|
 | `briarctl link` | print the hub's `briar://` link |
 | `briarctl contact add <link> [--alias NAME]`, `contact list`, `contact remove <contact>` | manage the account's contacts |
-| `briarctl group create <name>`, `group list`, `group members <group>` | create and inspect groups; `create` prints the id for `chatko.yaml` |
+| `briarctl group create <name>`, `group list`, `group members <group>` | create and inspect groups; `create` prints the id for `chatko.yaml`; `members` also shows the contacts invited but not joined yet |
 | `briarctl group invite <group> <contact>…` | invite contacts to a group the hub created |
 | `briarctl group dissolve <group>` | dissolve a group (to re-create it without someone) |
-| `briarctl invitation list`, `invitation accept <group>` | join a group someone else created |
+| `briarctl invitation list`, `invitation accept <group>`, `invitation decline <group>` | join a group someone else created, or refuse |
 
 Output is plain text by default and JSON with `--json`, so it can be scripted.
 

@@ -50,7 +50,7 @@ Escalate instead of looping: if a session fails at the same problem twice, resta
 | S03 | 0 | Spike S2b: PKI direct messages, keys, ACKs, persistence, provisioning | Opus 5.5 | xhigh | done |
 | S04 | 0 | Spike S2c: Kyiv broker, read-only; questions for the Kyiv community | Sonnet 5.5 | medium | partly done: waits for a claimed physical node (D27), not blocking |
 | S05 | 0 | Spike S3a: build and run briar-headless, contacts API with a phone | Opus 5.5 | high | done |
-| S06 | 0 | Spike S3b: private-group internals of Briar, read/post/join patch plan | Opus 5.5 | xhigh | todo |
+| S06 | 0 | Spike S3b: private-group internals of Briar, read/post/join patch plan | Opus 5.5 | xhigh | done |
 | S07 | 0 | Phase 0 wrap-up: all (verify) answered, design and roadmap revised | Opus 5.5 | high | todo |
 | S08 | 1 | Project skeleton, tooling and CI | Sonnet 5.5 | high | todo |
 | S09 | 1 | Domain model and label generator | Opus 5.5 | high | todo |
@@ -68,7 +68,7 @@ Escalate instead of looping: if a session fails at the same problem twice, resta
 | S21 | 3 | Meshtastic: `dm` endpoints, ACKs and retries | Opus 5.5 | xhigh | todo |
 | S22 | 3 | Meshtastic lab integration tests, radio ⇄ Telegram | Opus 5.5 | high | todo |
 | S23 | 3 | Field test on the Kyiv mesh (*with owner*, needs a gateway or hardware) | Sonnet 5.5 | medium | todo |
-| S24 | 4 | briar-headless fork: private-group API (Kotlin) | Opus 5.5 | xhigh | todo |
+| S24 | 4 | briar-headless fork: private-group API (Kotlin; a phone at the end, *with owner*) | Opus 5.5 | xhigh | todo |
 | S25 | 4 | briar-headless Docker image; upstream merge request | Sonnet 5.5 | high | todo |
 | S26 | 4 | Briar extension: port, endpoints, posts in and out, own-post filter | Opus 5.5 | high | todo |
 | S27 | 4 | `briarctl`: contacts, groups, invitations (command-line tool) | Sonnet 5.5 | high | todo |
@@ -125,6 +125,9 @@ app uses them. Write the patch plan of design.md §7.4 (D24): create, list, memb
 invitations from others, read and post messages, events; tests in upstream style; the upstream
 contribution rules. Check whether `briar-headless` has the LAN transport (for a future home hub, D17).
 Done when: the S3 checkboxes 4–5 are answered and design.md §7.4 matches the plan.
+Result: spikes.md S3 part 2 (the patch plan), design.md §7.2 and §7.4, D29. Private groups are switched
+off in headless's core and must be turned on; headless has no LAN transport (a later, small patch);
+upstream issue #1664 and the open headless merge requests make an upstream merge uncertain.
 
 **S07. Phase 0 wrap-up.** Walk through every (verify) in design.md. Record decisions that the spikes
 changed. Re-plan the sessions below if needed. Done when: design.md has no (verify) that affects v1,
@@ -215,17 +218,24 @@ channel), and the results are in spikes.md.
 
 ### Phase 4: Briar
 
-**S24. Private-group API.** The patch from S06 in our fork of briar-headless (design.md §7.4), with
-tests in upstream style. Done when: every endpoint of design.md §7.4 works against a phone.
+**S24. Private-group API.** The patch plan of spikes.md S3 part 2 in our fork of briar-headless
+(design.md §7.4, D29): a branch on `release-1.5.21`, the feature flag on, the `privategroups` package,
+routes, README sections, unit and integration tests in upstream style
+(`./gradlew --configure-on-demand briar-headless:test`, about 1 min). Point `lab/briar/` at the fork.
+First check, with the lab account and its phone contact from S05, that turning the flag on needs no
+migration (the phone sees the hub as able to join groups). Ends *with owner* (a phone). Done when:
+every endpoint and event of design.md §7.4 works against a phone, and the upstream tests pass.
 
 **S25. Packaging.** Docker image for the patched briar-headless (amd64, arm64), non-interactive account
-setup, the compose service; prepare the upstream merge request. Done when: the image runs in the lab and
-the merge request is ready for the owner to submit.
+setup, the compose service; prepare the upstream merge request (rebased on `master`, referring to
+issue #1664, following the pre-review checklist of spikes.md S3 part 2). Done when: the image runs in
+the lab and the merge request is ready for the owner to submit.
 
 **S26. Briar endpoints.** `BriarApi` port over `httpx` and `websockets` and its fake; the Briar groups
-in `chatko.yaml` as endpoints; posts in and out with author accounts; drop its own posts. No contacts,
-groups or invitations (D24). Done when: design.md §7.1 (the extension's part) and §7.2 are covered by
-tests, the extension passes the contract suite, coverage ≥ 85 %.
+in `chatko.yaml` as endpoints; posts in and out with author accounts; drop its own posts; catch-up by
+the read flag after every reconnect; an admin notice when a group is dissolved (design.md §7.2, D29).
+No contacts, groups or invitations (D24). Done when: design.md §7.1 (the extension's part) and §7.2
+are covered by tests, the extension passes the contract suite, coverage ≥ 85 %.
 
 **S27. briarctl.** The command-line tool of design.md §7.5 as the separate `briarctl` package: its own
 small REST client and fake, plain and `--json` output, an `import-linter` contract that keeps it apart
@@ -250,6 +260,7 @@ the README. Done when: findings are fixed or accepted, and v1 is tagged by the o
 Planned as sessions once v1 is released (D17, D20, D22):
 - a physical hub node: serial, BLE and TCP connections in the Meshtastic adapter, tested with hardware;
 - several hubs: `peers` in the config, peer-relayed authors, fingerprint de-duplication on shared
-  endpoints; a home hub on a Raspberry Pi (Briar on the local Wi-Fi, a physical node);
+  endpoints; a home hub on a Raspberry Pi (Briar on the local Wi-Fi, which needs the LAN-transport
+  patch for briar-headless and host networking, D29; a physical node);
 - a Signal extension over signal-cli-rest-api (D19);
 - a web UI, and commands if they turn out to be needed.

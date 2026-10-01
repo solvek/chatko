@@ -121,6 +121,12 @@ Rules for extension authors:
   response, which is the node's implicit ACK), and takes node keys from the node database it reads on
   connect and from its own `add_contact` calls, not from the library's node cache, which also takes
   keys from NodeInfo the node rejected (D26).
+- The Briar adapter owns the WebSocket to `briar-headless` and its reconnection. After every
+  (re)connect it authenticates the WebSocket first and then catches up: it lists the messages of each
+  configured group, submits the unread posts of other members and marks each read once `hub.submit`
+  has stored it, so that nothing posted while chatko was down is lost (design.md §7.2, D29). It keeps
+  Briar ids as bytes and converts between the API's standard base64 (JSON) and URL-safe base64 (URL
+  paths, config, logs).
 - Talk to the external system through a small internal port (e.g. `TelegramApi`, `BriarApi`), so that
   the extension logic is tested against a fake of that port.
 - Drop the hub's own posts before calling `hub.submit`.
@@ -176,7 +182,7 @@ tests (whatever the script returns, no echo and no duplicate delivery).
 | Storage | SQLite via `aiosqlite`, schema migrations in code |
 | Telegram | `aiogram` 3, wrapped behind the extension's `TelegramApi` port |
 | Meshtastic | official `meshtastic` Python library over TCP to `meshtasticd` (serial, BLE and TCP to a physical node later); image `meshtastic/meshtasticd`, tag pinned in the compose files |
-| Briar | `httpx` + `websockets` to `briar-headless` (upstream, built from a pinned tag with JDK 17, run in a Java 17 JRE image; D28) |
+| Briar | `httpx` + `websockets` to `briar-headless` (our fork: a pinned upstream tag plus the private-group patch, D29; built with JDK 17, run in a Java 17 JRE image, D28) |
 | License | GPL-3.0-or-later |
 
 ## 7. Quality gates

@@ -372,6 +372,48 @@ checked on the Kyiv mesh in S04 and S23):
   are evicted first, then the oldest others; favorites (every `add_contact`) and ignored nodes never.
 - A virtual node has no clock: `lastHeard` and `rxTime` are absent. The hub uses its own clock.
 
+**Result, part 3 (2026-09-30, session S04; Kyiv broker, read-only):**
+- *What the site <https://meshtastic.kyiv.ua/join> tells.* The QR code is a channel URL
+  (<https://meshtastic.org/e/#CjQSIFziz2R01sx4MpCcWd6Z49dJjCXa_IJYG5bDRi1CL3dcGghMb25nRmFzdCgBMAE6AgggCjISIHJheFM1Vm52VkNMcWZRcmVwUm9sYWh0TUpCNWxYWm81GgZLeWl2VUEoATABOgIIIBIOCAE4DkAFSAFQClgBaAE>);
+  decoded, it holds: region **EU_433** (433.125 MHz, not `EU_868`), preset `LONG_FAST`, hop limit 5,
+  TX power 10 dBm, and two channels: channel 0 **`LongFast`** with a **non-default 32-byte PSK**
+  (public, in the URL), and a secondary channel **`KyivUA`** with its own 32-byte PSK. Members are told
+  to use the secondary channel for chat. The site states the broker host in its page config:
+  `mqtt.meshtastic.kyiv.ua` (157.180.74.120; ports 1883 and 8883 accept TCP), and its statistics
+  show mostly text messages and no private ones. Nothing is published about the root topic, the
+  credentials, PKI topics, downlink or gateway firmware.
+- *Connection.* An anonymous connection to port 1883 is refused (`CONNACK` 4, bad user name or
+  password), so a read-only client needs credentials from the community. `lab/spike_kyiv.py` is the
+  listener: it subscribes to a filter, never publishes, and prints topic prefixes, channels, ports and
+  the `pki_encrypted` and `via_mqtt` flags of the envelopes. Credentials come from `KYIV_MQTT_USER` and
+  `KYIV_MQTT_PASSWORD` (or `--user`, `--password`), and `--tls` uses port 8883.
+- *Getting credentials (from the community chat).* Register on the site with Telegram, verify a node,
+  mark in its settings that it uses MQTT, and the site generates a login, password and host. The site
+  has no node-verification page, so the community has to be asked; the node probably has to be seen on
+  the mesh first, which a virtual node cannot do.
+- *How a node gets access (screenshots of a member's cabinet and node settings, 2026-10-01).* The
+  cabinet lists nodes of the registry; a user **claims** a node ("Ваша нода") and states its type,
+  antenna, place, and "MQTT: yes". Then the cabinet shows server `mqtt.meshtastic.kyiv.ua`, a login
+  that is the **node id** (hex, no `!`), a password, and the topic **`node/<node id>`**. In the node's
+  settings: MQTT address and credentials as shown, root topic `node/<node id>` (**not** `msh/EU_433`),
+  TLS **off** (port 1883), encryption on ("send encrypted packets"), JSON off, map reporting on. A
+  checkbox "enable routing" lets "remote nodes join the local network" (the site warns that MQTT
+  traffic may be large). So access is per node, tied to a node the registry has seen, and each node
+  publishes under its own root. A virtual node that never transmits is not in the registry, so it
+  cannot be claimed: the community's answer was to wait for a physical node to be confirmed (and even
+  that is not guaranteed). It is not clear what "routing" does with packets published under
+  `node/<id>` (whether the broker bridges them to other nodes' topics), nor whether a client may read
+  other nodes' topics.
+- *Consequences.* (1) The "public default-key `LongFast`" of the design does not exist on this mesh:
+  reading `LongFast` needs its PSK, and the hub's primary channel must be that one, or its NodeInfo,
+  ACKs and `dm` cannot work (design.md §6.2). (2) `EU_433` is a region with a duty-cycle limit too,
+  so the firmware probably turns `ignore_mqtt` on there as well (unchecked). (3) The example config
+  uses `EU_433`, the `KYIV_PRIMARY_PSK` secret and the root topic `node/<hub node id>`, TLS off.
+  (4) Without a claimed physical node the hub gets no access to the Kyiv broker, so development goes
+  on with our own Mosquitto (lab, D27).
+- *Open, questions for the Kyiv community (drafted in Ukrainian in the S04 chat for the owner to send):* credentials and root topic; PKI topic and downlink policy; gateway firmware; "Ignore MQTT"
+  on relays; downlink of `LongFast`; how many radios have "OK to MQTT"; may a bot node join the mesh.
+
 ## S3. briar-headless build and API
 
 **Question:** can we build and run `briar-headless` locally, and how big is the private-group patch?
@@ -382,12 +424,12 @@ Steps and answers needed:
 - [x] Contacts API end to end with a phone: exchange links, `ContactAddedEvent`, private messages both
   ways over the WebSocket. Confirm that a contact at a distance needs **both** sides to add the other's
   link, and write down the exact `curl` calls the admin will use (D23).
-- [ ] Read `PrivateGroupManager`, `GroupInvitationManager` and how the Android app uses them. List the
+- [x] Read `PrivateGroupManager`, `GroupInvitationManager` and how the Android app uses them. List the
   methods for the patch (§7.4 of the design): create, list, members, invite, dissolve, invitations from
   others, read and post (D24).
-- [ ] Does `briar-headless` include Briar's LAN (Wi-Fi) transport, so a hub without internet can sync
+- [x] Does `briar-headless` include Briar's LAN (Wi-Fi) transport, so a hub without internet can sync
   with phones on the same network? Not needed for v1; it decides the future home hub (D17).
-- [ ] Upstream contribution rules for briar-headless (code style, tests, merge request process).
+- [x] Upstream contribution rules for briar-headless (code style, tests, merge request process).
 
 **Result, part 1 (2026-10-01, session S05; build, Docker, contacts and private messages):**
 - *Build.* Upstream tag `release-1.5.21` (2026-09-27) builds with **JDK 17** (Temurin 17.0.20; the
@@ -451,44 +493,121 @@ Steps and answers needed:
 - *Tooling.* `lab/spike_briar.py` (`link`, `add`, `pending`, `contacts`, `watch`, `send`, `messages`)
   is the spike client; `lab/README.md` has the steps.
 
-**Result, part 3 (2026-09-30, session S04; Kyiv broker, read-only):**
-- *What the site <https://meshtastic.kyiv.ua/join> tells.* The QR code is a channel URL
-  (<https://meshtastic.org/e/#CjQSIFziz2R01sx4MpCcWd6Z49dJjCXa_IJYG5bDRi1CL3dcGghMb25nRmFzdCgBMAE6AgggCjISIHJheFM1Vm52VkNMcWZRcmVwUm9sYWh0TUpCNWxYWm81GgZLeWl2VUEoATABOgIIIBIOCAE4DkAFSAFQClgBaAE>);
-  decoded, it holds: region **EU_433** (433.125 MHz, not `EU_868`), preset `LONG_FAST`, hop limit 5,
-  TX power 10 dBm, and two channels: channel 0 **`LongFast`** with a **non-default 32-byte PSK**
-  (public, in the URL), and a secondary channel **`KyivUA`** with its own 32-byte PSK. Members are told
-  to use the secondary channel for chat. The site states the broker host in its page config:
-  `mqtt.meshtastic.kyiv.ua` (157.180.74.120; ports 1883 and 8883 accept TCP), and its statistics
-  show mostly text messages and no private ones. Nothing is published about the root topic, the
-  credentials, PKI topics, downlink or gateway firmware.
-- *Connection.* An anonymous connection to port 1883 is refused (`CONNACK` 4, bad user name or
-  password), so a read-only client needs credentials from the community. `lab/spike_kyiv.py` is the
-  listener: it subscribes to a filter, never publishes, and prints topic prefixes, channels, ports and
-  the `pki_encrypted` and `via_mqtt` flags of the envelopes. Credentials come from `KYIV_MQTT_USER` and
-  `KYIV_MQTT_PASSWORD` (or `--user`, `--password`), and `--tls` uses port 8883.
-- *Getting credentials (from the community chat).* Register on the site with Telegram, verify a node,
-  mark in its settings that it uses MQTT, and the site generates a login, password and host. The site
-  has no node-verification page, so the community has to be asked; the node probably has to be seen on
-  the mesh first, which a virtual node cannot do.
-- *How a node gets access (screenshots of a member's cabinet and node settings, 2026-10-01).* The
-  cabinet lists nodes of the registry; a user **claims** a node ("Ваша нода") and states its type,
-  antenna, place, and "MQTT: yes". Then the cabinet shows server `mqtt.meshtastic.kyiv.ua`, a login
-  that is the **node id** (hex, no `!`), a password, and the topic **`node/<node id>`**. In the node's
-  settings: MQTT address and credentials as shown, root topic `node/<node id>` (**not** `msh/EU_433`),
-  TLS **off** (port 1883), encryption on ("send encrypted packets"), JSON off, map reporting on. A
-  checkbox "enable routing" lets "remote nodes join the local network" (the site warns that MQTT
-  traffic may be large). So access is per node, tied to a node the registry has seen, and each node
-  publishes under its own root. A virtual node that never transmits is not in the registry, so it
-  cannot be claimed: the community's answer was to wait for a physical node to be confirmed (and even
-  that is not guaranteed). It is not clear what "routing" does with packets published under
-  `node/<id>` (whether the broker bridges them to other nodes' topics), nor whether a client may read
-  other nodes' topics.
-- *Consequences.* (1) The "public default-key `LongFast`" of the design does not exist on this mesh:
-  reading `LongFast` needs its PSK, and the hub's primary channel must be that one, or its NodeInfo,
-  ACKs and `dm` cannot work (design.md §6.2). (2) `EU_433` is a region with a duty-cycle limit too,
-  so the firmware probably turns `ignore_mqtt` on there as well (unchecked). (3) The example config
-  uses `EU_433`, the `KYIV_PRIMARY_PSK` secret and the root topic `node/<hub node id>`, TLS off.
-  (4) Without a claimed physical node the hub gets no access to the Kyiv broker, so development goes
-  on with our own Mosquitto (lab, D27).
-- *Open, questions for the Kyiv community (drafted in Ukrainian in the S04 chat for the owner to send):* credentials and root topic; PKI topic and downlink policy; gateway firmware; "Ignore MQTT"
-  on relays; downlink of `LongFast`; how many radios have "OK to MQTT"; may a bot node join the mesh.
+**Result, part 2 (2026-10-01, session S06; private groups, LAN, upstream; read in the source of tag
+`release-1.5.21` in `~/Projects/briar`, no phone):**
+- *Private groups are switched off in briar-headless.* `HeadlessModule.kt` returns `false` from
+  `FeatureFlags.shouldEnablePrivateGroupsInCore()`. With that, `PrivateGroupModule` and
+  `GroupInvitationModule` still create the managers but register no message validators, no
+  incoming-message hooks, no contact hook and no client versions. So the peer drops private-group
+  messages, never tells its contacts that it has the private-group clients (a phone then shows it as
+  "not supported" and cannot invite it), and creates no invitation sessions. The flag came with
+  commit `707802c45` (2022), when headless had no API for private groups; the headless tests already
+  run with it on (`TestFeatureFlagModule`). The patch must turn it on.
+- *Turning it on for an existing account* needs no migration: `GroupInvitationManagerImpl
+  .onDatabaseOpened` creates the client's local group and calls `addingContact` for every existing
+  contact, and `ClientVersioningManagerImpl.startService` sends the new client list to all contacts
+  when it changed. (To be confirmed in S24 with the lab account and its phone contact.)
+- *The model* (`briar-spec` clients "Private Group" and "Private Group Sharing"; `briar-core`
+  `privategroup/`). A group is a name, a 32-byte salt and its creator; its id is the hash of these.
+  **Only the creator can invite.** Each invitation runs as a session in the private conversation
+  between the creator and a contact, and the session id is the group id. A member's first message in
+  the group is a JOIN carrying the creator's signature from the invitation; a POST names the author's
+  previous message and must be later than it, and Briar delivers a post only after that message, so one
+  author's posts arrive in order. Everything is signed by its author. **Dissolving** is the creator
+  removing the group (`removePrivateGroup`): a hook sends LEAVE in every invitation session, and a
+  member marks the group dissolved (`GroupDissolvedEvent`) when that message arrives. LEAVE travels
+  in the private conversation, which syncs only directly between the creator and that member, never
+  through other members. A member who removes the group leaves it. Removing a contact who created a
+  group marks that group dissolved (`GroupInvitationManagerImpl.removingContact`). A contact who
+  joined and then left cannot be invited back into the same group: the creator's session stays in
+  `LEFT`, which `getSharingStatus` reports as `SHARING`.
+- *How the Android app does it* (`briar-android/.../privategroup/`); the patch makes the same calls:
+
+  | Operation | App | Calls |
+  |---|---|---|
+  | create | `CreateGroupControllerImpl.createGroup` | `PrivateGroupFactory.createPrivateGroup(name, localAuthor)`, `GroupMessageFactory.createJoinMessage(groupId, now, localAuthor)`, `PrivateGroupManager.addPrivateGroup(group, join, true)` |
+  | invite | `CreateGroupControllerImpl.sendInvitation` | `ConversationManager.getTimestampForOutgoingMessage(txn, c)`, `AutoDeleteManager.getAutoDeleteTimer(txn, c, timestamp)`, `GroupInvitationFactory.signInvitation(contact, groupId, timestamp, privateKey)`, `GroupInvitationManager.sendInvitation(groupId, c, text, timestamp, signature, timer)`; who can be invited: `getSharingStatus(contact, groupId)` |
+  | list | `GroupListViewModel.loadGroups` | `getPrivateGroups`, `isDissolved`, `getGroupCount` |
+  | members | `GroupMemberListControllerImpl.loadMembers` | `getMembers` |
+  | read | `GroupViewModel.loadItems` | `getHeaders` (joins are `JoinMessageHeader`), `getMessageText`, `setReadFlag` |
+  | post | `GroupViewModel.createAndStoreMessage` | `getPreviousMsgId`, `getGroupCount().latestMsgTime`, timestamp `max(now, latest + 1)`, `GroupMessageFactory.createGroupMessage(groupId, timestamp, parent, localAuthor, text, previousMsgId)`, `addLocalMessage` |
+  | dissolve, leave | `GroupListViewModel.removeGroup` | `removePrivateGroup` |
+  | invitations to us | `GroupInvitationControllerImpl` | `getInvitations` (group and creator contact), `respondToInvitation(contactId, group, accept)` |
+  | reveal contacts | `RevealContactsControllerImpl.reveal` | `revealRelationship(contactId, groupId)` (not needed by the hub) |
+
+- *Events.* `GroupMessageAddedEvent(groupId, header, text, local)` for every join (text `""`) and
+  post, the hub's own (`local`) included; `GroupDissolvedEvent` when a remote creator dissolves;
+  `GroupInvitationRequestReceivedEvent` and `GroupInvitationResponseReceivedEvent`, which are
+  `ConversationMessageReceivedEvent`s that headless **already** sends to the WebSocket and lists in
+  `GET /v1/messages/{contactId}` (`OutputEvent.kt`, `MessagingControllerImpl.JsonVisitor`); the
+  request's `sessionId` is the group id. `ContactRelationshipRevealedEvent` is not needed.
+- *Limits* (`PrivateGroupConstants`): name ≤ 100 bytes, post and invitation text ≤ 31 744 bytes of
+  UTF-8 (32 KiB minus 1 KiB).
+- *How briar-headless is built.* One package per feature (`contact/`, `messaging/`, `forums/`,
+  `blogs/`): a `…Controller` interface, a `@Singleton` `…ControllerImpl` with an `@Inject`
+  constructor, `Output….kt` extension functions that turn Briar objects into `JsonDict`, and a Dagger
+  `Headless…Module` that binds the controller and registers it on the `EventBus` when it forwards
+  events. `Router.kt` maps the routes under `/v1` (Javalin 3.5.0 on Jetty 9.4.20) behind the bearer
+  token. Errors are `BadRequestResponse`/`NotFoundResponse`, or a status with `{"error": "CODE"}`
+  (`CONTACT_EXISTS` with 403). Handlers call the managers on Javalin's threads; listeners send events
+  through `WebSocketController`, which only reaches connected, authenticated sessions. Byte ids are
+  standard base64 in JSON (Jackson), and the existing endpoints keep them out of URL paths (a pending
+  contact id and a message id go in the body), because base64 can contain `/`.
+- *The patch plan* (S24), all in `briar-headless`:
+  - `HeadlessModule.kt`: `shouldEnablePrivateGroupsInCore() = true`; include the new module (also in
+    the test `HeadlessTestModule.kt`).
+  - `privategroups/`: `PrivateGroupController`, `PrivateGroupControllerImpl` (endpoints and events of
+    design.md §7.4; it is an `EventListener` forwarding non-local `GroupMessageAddedEvent`s and
+    `GroupDissolvedEvent`s), `OutputPrivateGroup.kt` (group, message header, member, sharing status,
+    invitation item, events), `HeadlessPrivateGroupModule`.
+  - `Router.kt`: the routes under `/v1/groups`, with the literal `invitations` registered before
+    `:groupId`; `Context.getGroupIdFromPathParam()` (URL-safe base64 to `GroupId`, 404 otherwise)
+    next to `getContactIdFromPathParam()`.
+  - A post reads `getPreviousMsgId` and `getGroupCount`, signs and calls `addLocalMessage` in one write
+    transaction; an invitation gets its timestamp and timer, signs and sends in one write
+    transaction. Both refuse a dissolved group.
+  - `README.md`: a section per endpoint and event, in the existing format.
+  - No changes in `briar-core`, `bramble-*` or the app, and no new dependencies (so no witness
+    changes). Estimate: about 450 lines of Kotlin, 800 lines of tests, 300 lines of README.
+- *Tests in upstream style.* Unit tests per controller on `ControllerTest` with `mockk`, checking the
+  JSON with JSONAssert (`STRICT`), plus bad input (missing, empty, too long, unknown ids) and output
+  tests for events (`MessagingControllerImplTest`, `ForumControllerTest`). Integration tests on
+  `IntegrationTest` start a real peer on port 8000 without transports and call it with OkHttp;
+  `TestDataCreator` makes contacts, groups and incoming posts (`createPrivateGroups`,
+  `createRandomPrivateGroupMessages`). `./gradlew --configure-on-demand briar-headless:test` in
+  `eclipse-temurin:17-jdk` runs the 99 existing tests, all passing: 2 min with an empty Gradle cache,
+  1 min with a warm one.
+- *LAN transport: no.* `HeadlessModule.providePluginConfig` lists one duplex plugin, Tor for the OS,
+  and no simplex ones; the app adds LAN and Bluetooth. Briar's LAN plugin (`LanTcpPluginFactory`) is
+  in the platform-independent `bramble-core`, and `bramble-java` has a Bluetooth plugin
+  (`JavaBluetoothPluginFactory`), so adding LAN is a few lines in `providePluginConfig`. The LAN
+  plugin does no discovery: each peer shares its last few LAN addresses (IPv4 `ip:port`, IPv6) with
+  its contacts as transport properties, through any transport, and dials the contacts' addresses (plus
+  the Wi-Fi hotspot addresses) when it polls (`LanTcpPlugin`; Briar wiki "How Briar Connects to
+  Contacts"). So a phone and a home hub on the same Wi-Fi without internet connect only if one of them
+  knows the other's current address from an earlier sync; a fixed LAN address for the hub helps.
+  In Docker the hub would need host networking: in a bridge network it would share the container's
+  address, which phones cannot reach. Not needed for v1; a later patch for the home hub (D17, D29).
+- *Upstream contribution rules* (wiki pages "development-workflow", "pre-review-checklist",
+  "code-style", "development-101"; `.gitlab-ci.yml`). Code is on Briar's own GitLab,
+  <https://code.briarproject.org/briar/briar>. Work starts from a ticket; the branch is named after it
+  (`1664-…`); before a merge request all tests pass and the pre-review checklist is met (thread
+  safety, minimal visibility, checked exceptions, no blocking in event handlers, no transactions
+  while holding locks), the branch is rebased on `master`, and at least one maintainer reviews it.
+  CI runs `animalSnifferMain animalSnifferTest`, `assembleOfficialDebug :briar-headless:linuxJars`
+  and `check`. Style: Java with tabs and 80 columns, Kotlin in the official Kotlin style; static
+  imports where they do not hurt clarity; classes package-private (in Kotlin `internal`) behind
+  interfaces bound with Dagger. Dependencies are pinned with Gradle Witness. The code is GPL-3.0; the
+  pages read ask for no contributor agreement.
+- *Upstream state.* Issue [#1664](https://code.briarproject.org/briar/briar/-/issues/1664) "join forums
+  or groups in headless api" (feature request, "Good first issue", "Headless") is open since 2019.
+  Two community merge requests that add forum endpoints to headless,
+  [!1826](https://code.briarproject.org/briar/briar/-/merge_requests/1826) (2024-06) and
+  [!1831](https://code.briarproject.org/briar/briar/-/merge_requests/1831) (2024-09), are still open,
+  and since mid-2023 `briar-headless` has only had dependency and Tor upgrades. A merge of our patch is
+  therefore uncertain and probably slow, so we carry it in our fork (D29). Neither merge request can
+  be reused: both cover forums (`ForumManager`, `ForumSharingManager`), a different Briar client
+  with no creator, no dissolve and no signed invitations. !1826 answers half of its routes with 501,
+  prints debug output, mixes hex and base64 ids, puts standard base64 ids in URL paths and has no
+  tests. !1831 finds forums by name, answers errors with 200, sends no events despite its
+  description, and only fixes the existing test's constructor.

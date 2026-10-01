@@ -298,3 +298,29 @@ which would make the entrypoint simpler.
 **Consequences:** anyone with `.env` can open the hub's Briar account, as with the other secrets. A
 backup of `data/` is useless without `BRIAR_PASSWORD`, so the password must be kept with the backups'
 secrets. A wrong password makes the container exit and restart in a loop, which the logs show.
+
+## D29. The private-group API is a small additive patch that we carry in our fork of briar-headless
+Spike S3, part 2 read Briar 1.5.21: `briar-headless` switches private groups off in its core (a
+feature flag), so it cannot even be invited; everything else is in Briar's shared code, which the
+Android app calls through thin controllers; invitations and answers already reach headless's
+WebSocket once the flag is on. Its WebSocket reaches only a connected client. Upstream has had an
+open issue for joining groups in headless since 2019 (#1664), community merge requests for forum
+endpoints have been open since 2024, and headless gets only dependency upgrades.
+**Decision:**
+- The patch turns private groups on and adds one `privategroups` package (controller, output
+  functions, Dagger module), routes in `Router.kt` and README sections: the endpoints and events of
+  design.md §7.4. It changes nothing in Briar's core or the app and adds no dependencies. It follows
+  the upstream style and comes with unit and integration tests like the existing ones.
+- Group ids in URL paths are URL-safe base64; `briarctl`, `chatko.yaml` and chatko's logs show Briar
+  ids in that form, and the extension compares ids as bytes.
+- The WebSocket forwards only other members' joins and posts. The extension catches up after every
+  reconnect by listing each group's messages and submitting the unread posts of others, and marks each
+  post read once the hub has stored it (design.md §7.2). Briar's read flag is used for nothing else.
+- We keep our fork as a branch on top of each upstream release tag we use, build the image from it
+  (S25), and offer the patch upstream as a merge request that refers to #1664, without depending on
+  its merge. The LAN transport (a few lines, needed only by a home hub, D17) is a separate patch,
+  made later.
+**Consequences:** S24 implements the plan of spikes.md S3, part 2. Every Briar release we take means a
+rebase of the patch, which stays cheap because it mostly adds files and touches four existing ones
+(`HeadlessModule.kt`, `Router.kt`, the test module and the README). Once the patched peer runs, it
+tells all its contacts that it supports private groups. This refines D6 and D24.
