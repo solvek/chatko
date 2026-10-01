@@ -34,7 +34,7 @@ class Reaction:
 
 class FakeTelegramApi(TelegramApi):
     """The Bot API in memory. A test makes things happen in Telegram (`post`, `push`), reads
-    what the bot did (`sent`, `left`, `reactions`) and makes calls fail (`online`, `fail`).
+    what the bot did (`sent`, `reactions`) and makes calls fail (`online`, `fail`).
 
     Like Telegram, `get_updates` hands over every update from its offset on, and a poll that asks
     with an offset confirms the updates before it.
@@ -44,7 +44,6 @@ class FakeTelegramApi(TelegramApi):
         self.online = True
         self.closed = False
         self.sent: list[SentMessage] = []
-        self.left: list[int] = []
         self.reactions: list[Reaction] = []
         self.offsets: list[int | None] = []
         """The offset of each poll, in order."""
@@ -122,10 +121,6 @@ class FakeTelegramApi(TelegramApi):
         message = SentMessage(chat_id, text, next(self._message_ids))
         self.sent.append(message)
         return message.message_id
-
-    async def leave_chat(self, chat_id: int) -> None:
-        self._check("leave_chat")
-        self.left.append(chat_id)
 
     async def set_reaction(self, chat_id: int, message_id: int, emoji: str) -> None:
         self._check("set_reaction")

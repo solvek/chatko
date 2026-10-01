@@ -60,10 +60,10 @@ _START = re.compile(r"/start(@\w+)?(\s.*)?", re.DOTALL)
 class TelegramExtension(Extension[TelegramConfig], EndpointProvider[TelegramChat]):
     """Reads and posts in the Telegram chats of its endpoints, through one bot.
 
-    It serves only those chats: it leaves any other group or channel it is added to and tells
-    the admin the chat id, so the admin can add the chat to the config (design.md §5). When a
-    group becomes a supergroup, which changes its chat id, it follows the group until the hub
-    restarts and asks the admin to change the config.
+    It serves only those chats: it ignores the messages of any other group or channel it is in
+    and tells the admin the chat id once, so the admin can add the chat to the config or remove
+    the bot (design.md §5, D45). When a group becomes a supergroup, which changes its chat id, it
+    follows the group until the hub restarts and asks the admin to change the config.
 
     `api` replaces the Bot API (tests); without it, `start` connects through aiogram.
     """
@@ -95,6 +95,8 @@ class TelegramExtension(Extension[TelegramConfig], EndpointProvider[TelegramChat
         """Configured chat ids of groups that became supergroups, and the supergroups' ids."""
         self._by_chat: dict[int, EndpointRef] = {}
         """The endpoint of each chat the bot serves now."""
+        self._reported: set[int] = set()
+        """Chats not in the config that the admin was told about, since the last config."""
 
     # Endpoints.
 
@@ -107,6 +109,7 @@ class TelegramExtension(Extension[TelegramConfig], EndpointProvider[TelegramChat
             owners[config.chat] = endpoint
             chats[endpoint] = config.chat
         self._chats = chats
+        self._reported = set()
         self._index()
 
     def _index(self) -> None:
@@ -156,7 +159,7 @@ class TelegramExtension(Extension[TelegramConfig], EndpointProvider[TelegramChat
                 updates = await api.get_updates(offset, self._poll_timeout)
                 for update in updates:
                     if update.event is not None:
-                        await self._handle(api, update.event)
+                        await self._handle(update.event)
                     offset = update.update_id + 1
             except TelegramError as error:
                 failures += 1
@@ -183,14 +186,14 @@ class TelegramExtension(Extension[TelegramConfig], EndpointProvider[TelegramChat
         first, longest = self._poll_backoff
         return min(first * 2.0 ** min(failures - 1, 32), longest)
 
-    async def _handle(self, api: TelegramApi, event: Event) -> None:
+    async def _handle(self, event: Event) -> None:
         match event:
             case ChatMessage():
                 await self._on_message(event)
             case ChatMigrated():
                 await self._on_migrated(event.old_chat_id, event.new_chat_id)
             case BotAdded():
-                await self._on_added(api, event.chat)
+                self._on_added(event.chat)
             case BotRemoved():
                 await self._on_removed(event.chat)
 
@@ -217,6 +220,9 @@ class TelegramExtension(Extension[TelegramConfig], EndpointProvider[TelegramChat
                 "ignored a private message in chat %d, which is not an endpoint", chat.id
             )
             return
+        if chat.id in self._reported:
+            return
+        self._reported.add(chat.id)
         await self.hub.notify_admin(
             f"The bot of {self.instance} is in the Telegram {chat.kind} {chat.title!r} "
             f"(chat id {chat.id}), which is not in the config, and ignores its messages. Add "
@@ -224,21 +230,16 @@ class TelegramExtension(Extension[TelegramConfig], EndpointProvider[TelegramChat
             key=f"unknown:{chat.id}",
         )
 
-    async def _on_added(self, api: TelegramApi, chat: Chat) -> None:
+    def _on_added(self, chat: Chat) -> None:
         if chat.id in self._by_chat or chat.kind is ChatKind.PRIVATE:
             return
-        try:
-            await api.leave_chat(chat.id)
-        except TelegramError as error:
-            outcome = f"could not leave it ({error.reason})"
-        else:
-            outcome = "left it"
-        self.logger.info("added to chat %d, which is not an endpoint: %s", chat.id, outcome)
-        await self.hub.notify_admin(
-            f"The bot of {self.instance} was added to the Telegram {chat.kind} {chat.title!r} "
-            f"(chat id {chat.id}), which is not in the config, and {outcome}. To serve the "
-            "chat, add it to the config and add the bot again.",
-            key=f"foreign:{chat.id}",
+        # It stays: the chat may be a configured group that has just become this supergroup,
+        # which Telegram reports only after this (D45). Its first message tells the admin.
+        self.logger.info(
+            "added to the %s %r (chat id %d), which is not an endpoint: its messages are ignored",
+            chat.kind,
+            chat.title,
+            chat.id,
         )
 
     async def _on_removed(self, chat: Chat) -> None:

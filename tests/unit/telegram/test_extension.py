@@ -1,4 +1,4 @@
-"""The Telegram extension over the fake Bot API: what it reads, posts and leaves, and what it
+"""The Telegram extension over the fake Bot API: what it reads and posts, and what it
 tells the admin."""
 
 import asyncio
@@ -190,11 +190,31 @@ async def test_ignores_a_group_that_is_not_an_endpoint_and_tells_the_admin(
     await settle(api)
 
     assert hub.submitted == []
-    assert api.left == []
     [notice] = hub.notices
     assert str(FOREIGN.id) in notice.text
     assert "Strangers" in notice.text
     assert notice.key == f"unknown:{FOREIGN.id}"
+
+
+@pytest.mark.usefixtures("running")
+async def test_tells_the_admin_of_a_foreign_group_once(api: FakeTelegramApi, hub: FakeHub) -> None:
+    api.post(FOREIGN, ADA, "hello")
+    api.post(FOREIGN, ADA, "anyone?")
+    await settle(api)
+
+    assert len(hub.notices) == 1
+
+
+async def test_tells_the_admin_again_after_a_new_config(
+    running: TelegramExtension, api: FakeTelegramApi, hub: FakeHub
+) -> None:
+    api.post(FOREIGN, ADA, "hello")
+    await settle(api)
+    running.set_endpoints(DEFAULT_ENDPOINTS)
+    api.post(FOREIGN, ADA, "anyone?")
+    await settle(api)
+
+    assert len(hub.notices) == 2
 
 
 @pytest.mark.usefixtures("running")
@@ -208,31 +228,19 @@ async def test_confirms_the_updates_it_has_handled(api: FakeTelegramApi, hub: Fa
     assert api.offsets[-1] == 3
 
 
-# Joining and leaving.
+# Joining and being removed.
 
 
 @pytest.mark.usefixtures("running")
-async def test_leaves_a_group_it_is_added_to_and_tells_the_admin_its_id(
-    api: FakeTelegramApi, hub: FakeHub
+async def test_stays_in_a_group_it_is_added_to_and_only_logs_it(
+    api: FakeTelegramApi, hub: FakeHub, caplog: pytest.LogCaptureFixture
 ) -> None:
+    caplog.set_level(logging.INFO)
     api.push(BotAdded(FOREIGN))
     await settle(api)
 
-    assert api.left == [FOREIGN.id]
-    [notice] = hub.notices
-    assert str(FOREIGN.id) in notice.text
-    assert "left it" in notice.text
-    assert notice.key == f"foreign:{FOREIGN.id}"
-
-
-@pytest.mark.usefixtures("running")
-async def test_tells_the_admin_when_it_could_not_leave(api: FakeTelegramApi, hub: FakeHub) -> None:
-    api.fail("leave_chat", UnreachableError("timeout"))
-    api.push(BotAdded(FOREIGN))
-    await settle(api)
-
-    [notice] = hub.notices
-    assert "could not leave it (timeout)" in notice.text
+    assert hub.notices == []
+    assert f"added to the supergroup 'Strangers' (chat id {FOREIGN.id})" in caplog.text
 
 
 @pytest.mark.usefixtures("running")
@@ -241,7 +249,6 @@ async def test_stays_in_a_chat_that_is_an_endpoint(api: FakeTelegramApi, hub: Fa
     api.push(BotAdded(Chat(222, ChatKind.PRIVATE, "Bob")))  # Bob pressed Start
     await settle(api)
 
-    assert api.left == []
     assert hub.notices == []
 
 
@@ -320,6 +327,26 @@ async def test_takes_the_supergroups_id_from_the_config(
     await migrated.deliver(FAMILY, outbound())
 
     assert api.texts(SUPERGROUP_ID) == ["Ada: Добрий вечір"]
+
+
+async def test_follows_a_group_added_to_its_supergroup_before_the_migration(
+    extension: TelegramExtension, api: FakeTelegramApi, hub: FakeHub
+) -> None:
+    # The order Telegram reports it in (S18, D45): the bot in the new supergroup first.
+    extension.set_endpoints(endpoints(family=OLD_FAMILY.id))
+    await extension.start()
+    supergroup = Chat(SUPERGROUP_ID, ChatKind.SUPERGROUP, "Family")
+    api.push(BotAdded(supergroup))
+    api.push(ChatMigrated(OLD_FAMILY.id, SUPERGROUP_ID))  # told in the new supergroup
+    api.push(ChatMigrated(OLD_FAMILY.id, SUPERGROUP_ID))  # and in the old group
+    api.push(BotAdded(supergroup))  # made an admin
+    api.post(supergroup, ADA, "still here")
+    [message] = await hub.wait_for_submissions(1)
+    await extension.stop()
+
+    assert message.endpoint == FAMILY
+    [notice] = hub.notices
+    assert notice.key == f"migrated:{OLD_FAMILY.id}"
 
 
 @pytest.mark.usefixtures("running")

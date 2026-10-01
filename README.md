@@ -16,7 +16,7 @@ Meshtastic LoRa channels. A hub copies every message to all the other places.
   Without it, every message goes to all the other places of its group.
 - It can forward the mesh's primary Meshtastic chat (e.g. the Kyiv `LongFast`) to selected chats.
 
-> **Status: phase 1 (core) is done; phase 2 (Telegram) is in progress.** The project skeleton, tooling, domain model, the extension and routing APIs, the inbound pipeline with the outbox worker, the routing engine with a test kit for routing scripts, SQLite storage, the configuration and `chatko run` are in place and reviewed. The Telegram extension is written and tested, and waits for its first live test with a real bot; Meshtastic and Briar come next. Start with the [design](docs/design.md).
+> **Status: phases 1 (core) and 2 (Telegram) are done; phase 3 (Meshtastic) is next.** The project skeleton, tooling, domain model, the extension and routing APIs, the inbound pipeline with the outbox worker, the routing engine with a test kit for routing scripts, SQLite storage, the configuration and `chatko run` are in place and reviewed. The Telegram extension works with a real bot and groups; Meshtastic and Briar come next. Start with the [design](docs/design.md).
 
 ## Known limitations
 

@@ -64,7 +64,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S15 | 1 | Extension discovery, composition root, `chatko run`, fake extension end to end | Opus 5.5 | high | done |
 | S16 | 1 | Phase 1 review | Opus 5.5 | xhigh | done |
 | S17 | 2 | Telegram: port, group and private-chat endpoints, allowed chats | Opus 5.5 | high | done |
-| S18 | 2 | Telegram live test with two groups (*with owner*) | Sonnet 5.5 | medium | todo |
+| S18 | 2 | Telegram live test with two groups (*with owner*) | Sonnet 5.5 | medium | done |
 | S19 | 3 | Meshtastic: asyncio adapter over the `meshtastic` library (TCP to `meshtasticd`), provisioning from the config | Opus 5.5 | xhigh | todo |
 | S20 | 3 | Meshtastic: `channel` endpoints, splitting, rate limit, de-duplication, `LongFast` source | Opus 5.5 | high | todo |
 | S21 | 3 | Meshtastic: `dm` endpoints, ACKs and retries | Opus 5.5 | xhigh | todo |
@@ -294,6 +294,15 @@ supergroup with a new id; how ✍ reads; the bot's notices in the owner's privat
 
 **S18. Live Telegram test.** *With owner*: a bot from BotFather, two test groups, the hub running
 locally. Done when: two groups work independently, foreign groups are left, labels look right.
+*Done (D45):* bot `@chatko17_bot`, four test groups as two chatko groups and the owner's private
+chat for admin notices, the hub running locally with hot reload. Messages went only within their
+group, with `Sergi: text`; a `#long` text from a test routing script was cut in Telegram and got ✍
+on the source, which reads well. Making the bot an admin turned a group into a supergroup, and
+Telegram reported the bot added to the new supergroup before the migration, so the bot left its
+own group. The bot now never leaves a chat: a foreign group's first message gives the admin one
+notice with its id (the "Done when" changed to this, design.md §5); the fix was checked on the real
+updates of the second group's migration. The bot needs no admin rights, and BotFather's
+`/setjoingroups` keeps strangers out. 831 tests.
 
 ### Phase 3: Meshtastic
 

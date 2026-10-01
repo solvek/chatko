@@ -148,15 +148,6 @@ async def test_sends_plain_text_and_returns_the_message_id(
     }
 
 
-async def test_leaves_a_chat(api: AiogramTelegramApi, session: ScriptedSession) -> None:
-    session.answer(True)
-
-    await api.leave_chat(-100500)
-
-    [request] = session.requests
-    assert request.model_dump(include={"chat_id"}) == {"chat_id": -100500}
-
-
 async def test_sets_a_reaction(api: AiogramTelegramApi, session: ScriptedSession) -> None:
     session.answer(True)
 

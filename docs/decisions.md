@@ -808,3 +808,30 @@ registered in the `chatko.extensions` entry point group. `config.example.yaml` i
 the real Telegram models. Telegram's limits on posting (about 20 messages a minute in a group) are
 met only through flood control's `Retry`. The live test (S18) should check how a group's setup
 for the hub (privacy mode, the bot as admin) changes its id, and whether ✍ reads well.
+
+## D45. The Telegram bot stays in chats that are not in the config, and needs no admin rights
+**Status:** accepted (S18). Changes design.md §5 and D44's "leave only when added".
+The live test (S18) showed the order in which Telegram reports a group becoming a supergroup, all
+in one second: the bot added to the new supergroup (`my_chat_member`, left → member), then
+`migrate_from_chat_id` in the supergroup, `migrate_to_chat_id` in the old group, and the bot's
+promotion if that is what caused it. The extension saw a supergroup that was not in the config and
+left it before it learned that the supergroup was its own group. The bot came back only because the
+promotion, still on its way, re-added it.
+- **The bot never leaves a chat.** Waiting a while before leaving a supergroup would have fixed the
+  order, but leaving protects little: the admin notice comes anyway, the hub drops a foreign chat's
+  messages without storing them, and a mistyped chat id in the config would make the bot leave the
+  admin's own group. In a chat that is not in the config, the bot ignores the messages and the first
+  one makes an admin notice with the chat's title and id, once per chat until the config changes
+  (the notifier's rate limit alone would repeat it every 10 minutes). Being added to such a chat
+  is only logged, so a migration does not make a notice of its own. `TelegramApi.leave_chat` is gone.
+- **Strangers are kept out by BotFather**, not by the hub: `/setjoingroups` → Disable once the
+  groups are set up.
+- **The bot needs no admin rights.** With privacy mode disabled before it joined, the bot as a plain
+  member got every message of a basic group. Making it an admin, even with no rights, turned the
+  group into a supergroup with a new id. The hub follows such a change (D44), but the setup no longer
+  asks for it.
+Other results: ✍ on a message that another network got only in part reads as "it was cut"; the
+admin notices in the owner's private chat read well; the default label of a one-word Telegram name
+(`Sergi`) is the name itself.
+**Consequences:** design.md §5, `config.example.yaml` and architecture.md §3.7 say so. The phase 2
+goal is now "foreign groups are ignored and reported".

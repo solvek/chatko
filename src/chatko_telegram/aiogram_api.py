@@ -129,9 +129,6 @@ class AiogramTelegramApi(TelegramApi):
         message = await self._call(self._bot.send_message(chat_id, text, parse_mode=None))
         return message.message_id
 
-    async def leave_chat(self, chat_id: int) -> None:
-        await self._call(self._bot.leave_chat(chat_id))
-
     async def set_reaction(self, chat_id: int, message_id: int, emoji: str) -> None:
         await self._call(
             self._bot.set_message_reaction(

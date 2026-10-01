@@ -5,11 +5,12 @@
 extensions:
   tg:                              # one instance = one bot
     type: telegram
-    bot_token: ${TELEGRAM_BOT_TOKEN} # from BotFather; there, /setprivacy → Disable, so the bot sees all messages
-    # A chat is an endpoint by its id: `chat: -100…` for a group (make the bot its admin, with no extra
-    # rights), the person's id for a private chat with the bot (they press Start once; the hub logs
-    # the id of a private chat that is not here). Added to a group that is not here, the bot leaves
-    # it, and an admin notice gives the group's id.
+    bot_token: ${TELEGRAM_BOT_TOKEN} # from BotFather; there, /setprivacy → Disable before adding the bot
+                                     # to groups, so it sees all messages (it needs no admin rights)
+    # A chat is an endpoint by its id: a negative id for a group, the person's id for a private chat
+    # with the bot (they press Start once; the hub logs the id of a private chat that is not here).
+    # In a group that is not here, the bot ignores the messages, and the first one gives the admin
+    # the group's id. Once the groups are set up, /setjoingroups → Disable in BotFather.
 
   kyiv:                            # one instance = one hub node
     type: meshtastic

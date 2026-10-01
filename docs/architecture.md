@@ -267,15 +267,15 @@ delivers the label and the text to every recipient; answers `Retry` while the ne
 
 ### 3.7 The Telegram extension
 
-`chatko_telegram` (design.md §5, D44), registered as `telegram`. One instance is one bot.
+`chatko_telegram` (design.md §5, D44, D45), registered as `telegram`. One instance is one bot.
 
 | Module | Contents |
 |---|---|
 | `config` | `TelegramConfig(bot_token)` (a `SecretStr` of the form `<bot id>:<secret>`; `bot_id` is read from it, so the bot knows its own posts without asking Telegram) and `TelegramChat(chat)`, the endpoint (a non-zero integer, strictly) |
-| `api` | the `TelegramApi` port: `get_updates(offset, wait)`, `send_message`, `leave_chat`, `set_reaction`, `close`. Its own types, so that the extension never sees aiogram: `Update(update_id, event)` with an `Event` (`ChatMessage`, `ChatMigrated`, `BotAdded`, `BotRemoved`, or `None` for an update of no use), `Chat`, `Sender`; and its errors: `UnreachableError` (retry, after `retry_after` if Telegram says), `BotRefusedError` (the token or another poller: the admin's), `ChatUnavailableError` (not a member, blocked, no such chat; `migrated_to` for a supergroup), `RejectedError` (a request that cannot work) |
+| `api` | the `TelegramApi` port: `get_updates(offset, wait)`, `send_message`, `set_reaction`, `close`. Its own types, so that the extension never sees aiogram: `Update(update_id, event)` with an `Event` (`ChatMessage`, `ChatMigrated`, `BotAdded`, `BotRemoved`, or `None` for an update of no use), `Chat`, `Sender`; and its errors: `UnreachableError` (retry, after `retry_after` if Telegram says), `BotRefusedError` (the token or another poller: the admin's), `ChatUnavailableError` (not a member, blocked, no such chat; `migrated_to` for a supergroup), `RejectedError` (a request that cannot work) |
 | `aiogram_api` | `AiogramTelegramApi`, the port over an aiogram `Bot`: long polling for `message` and `my_chat_member` only; turns aiogram's types into the port's (one attachment kind per message; service messages, edits and chats of unknown kinds become `None`; a change of the bot's membership becomes `BotAdded` or `BotRemoved` only when it joins or leaves) and its exceptions into the port's errors, with the token taken out of their text. An answer that aiogram cannot read as a whole is read update by update, so that one update it cannot read is skipped instead of stopping the polling |
-| `extension` | `TelegramExtension`: one polling task that hands each update's event over before it confirms the update (the next poll's offset), so an update the hub could not take comes again; the chats of the endpoints and the supergroups they moved to; `deliver`, which maps the port's errors to `Retry` (with an admin notice where the admin must act) or `Failed`; the ✍ reaction for a truncated delivery |
-| `testing` | `FakeTelegramApi`: the port in memory (`post`, `push`, `fail`, `online`; `sent`, `left`, `reactions`, `offsets`; `idle()` waits until the extension has taken every update) |
+| `extension` | `TelegramExtension`: one polling task that hands each update's event over before it confirms the update (the next poll's offset), so an update the hub could not take comes again; the chats of the endpoints and the supergroups they moved to; one admin notice per chat not in the config that posts, until the config changes (it stays in such a chat, D45); `deliver`, which maps the port's errors to `Retry` (with an admin notice where the admin must act) or `Failed`; the ✍ reaction for a truncated delivery |
+| `testing` | `FakeTelegramApi`: the port in memory (`post`, `push`, `fail`, `online`; `sent`, `reactions`, `offsets`; `idle()` waits until the extension has taken every update) |
 
 `tests/contract/test_telegram_extension.py` runs the contract suite over `FakeTelegramApi`;
 `tests/unit/telegram` tests the extension over it and the adapter over a scripted aiogram

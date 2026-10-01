@@ -66,7 +66,7 @@ class BotAdded:
 
 @dataclass(frozen=True, slots=True)
 class BotRemoved:
-    """The bot is no longer a member of the chat: removed, or it left."""
+    """The bot is no longer a member of the chat."""
 
     chat: Chat
 
@@ -132,10 +132,6 @@ class TelegramApi(ABC):
     @abstractmethod
     async def send_message(self, chat_id: int, text: str) -> int:
         """Post a plain text (no markup) and return its message id."""
-
-    @abstractmethod
-    async def leave_chat(self, chat_id: int) -> None:
-        """Leave a group or a channel."""
 
     @abstractmethod
     async def set_reaction(self, chat_id: int, message_id: int, emoji: str) -> None:
