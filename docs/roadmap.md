@@ -65,7 +65,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S16 | 1 | Phase 1 review | Opus 5.5 | xhigh | done |
 | S17 | 2 | Telegram: port, group and private-chat endpoints, allowed chats | Opus 5.5 | high | done |
 | S18 | 2 | Telegram live test with two groups (*with owner*) | Sonnet 5.5 | medium | done |
-| S19 | 3 | Meshtastic: asyncio adapter over the `meshtastic` library (TCP to `meshtasticd`), provisioning from the config | Opus 5.5 | xhigh | todo |
+| S19 | 3 | Meshtastic: asyncio adapter over the `meshtastic` library (TCP to `meshtasticd`), provisioning from the config | Opus 5.5 | xhigh | done |
 | S20 | 3 | Meshtastic: `channel` endpoints, splitting, rate limit, de-duplication, `LongFast` source | Opus 5.5 | high | todo |
 | S21 | 3 | Meshtastic: `dm` endpoints, ACKs and retries | Opus 5.5 | xhigh | todo |
 | S22 | 3 | Meshtastic lab integration tests, radio ⇄ Telegram | Opus 5.5 | high | todo |
@@ -312,6 +312,22 @@ hub's node from the config (names, region, `ignore_mqtt`, private key, channels,
 client with user and password, contacts; waiting for each admin response; D25, D26), reconnection
 after node reboots, ACKs and NAKs matched by request id. The lab's Mosquitto gets users and an ACL
 like production (D30). Done when: the adapter is tested against the lab from S02 and S03.
+*Done (D46):* `chatko_meshtastic` has its config model (`MeshtasticConfig`), the `MeshApi` port
+(a factory of connections that end when the node closes them), `LibraryMeshApi` over the library
+with its own reconnect switched off (seven overridden hooks; the library is pinned below 2.8),
+`FakeMeshApi`, the provisioning plan and `MeshNode`, which reconnects, provisions on every
+connection (one admin message at a time, the reboot after a commit, then the contacts), matches
+ACKs and NAKs by request id, paces texts and keeps the node database as the node does. The lab's
+Mosquitto has users (`hub`, `radio`, `lab`) and an ACL to `msh/lab/#`; `lab/provision.py` and the
+spike scripts log in. The adapter is tested against a socket-pair node that speaks the stream
+protocol (in CI) and against the lab (`uv run pytest -m lab`, 8 tests, about 80 s: provisioning
+with two reboots, channel texts and direct messages both ways with the radio's ACK,
+`PKI_SEND_FAIL_PUBLIC_KEY`, `MAX_RETRANSMIT` with the radio stopped, a node restart). 958 tests
+outside the lab, coverage of `chatko_meshtastic` 97 %. For S20: the extension class is not
+registered yet (the example config's whole-config test still uses a stand-in for it; its `kyiv`
+section is checked against `MeshtasticConfig`); build `MeshtasticExtension` on `MeshNode`
+(`start`/`stop`, `on_packet`, `on_ready` for `hub.retry_now`), add the endpoint models and pass
+the contract suite over `FakeMeshApi`.
 
 **S20. Channel endpoints.** `channel` endpoints, splitting into ≤ 200-byte parts with at most 3 parts and
 truncation, placeholders for non-text, per-node send interval, de-duplication across gateways, drop own

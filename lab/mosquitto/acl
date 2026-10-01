@@ -1,0 +1,11 @@
+# Each user may use only the lab's root topic, as each gateway and hub node in production may use
+# only its own (design.md §11, D30).
+user hub
+topic readwrite msh/lab/#
+
+user radio
+topic readwrite msh/lab/#
+
+# The spike scripts and the lab tests, which watch the broker.
+user lab
+topic readwrite msh/lab/#

@@ -4,8 +4,8 @@
 # ///
 """Provision the lab's virtual nodes over their TCP API (spike S2).
 
-Sets each node's names, region, private key, private channel and MQTT client, so that the nodes
-reach each other through the lab's Mosquitto, then gives each node the other one's public key as
+Sets each node's names, region, private key, private channel and MQTT client (with the node's own
+login to the lab's Mosquitto), so that the nodes reach each other through the broker, then gives each node the other one's public key as
 a contact, so direct messages work at once. Idempotent: a node whose settings already match is
 left alone and not rebooted.
 
@@ -49,6 +49,14 @@ class LabNode:
     @property
     def private_key(self) -> bytes:
         return hashlib.sha256(b"chatko-lab-key-" + self.short_name.encode()).digest()
+
+    @property
+    def mqtt_user(self) -> str:
+        return self.name  # each node has its own login (lab/mosquitto/start.sh)
+
+    @property
+    def mqtt_password(self) -> str:
+        return f"chatko-lab-{self.name}"
 
 
 NODES = (
@@ -102,8 +110,8 @@ def settings_messages(iface: TCPInterface, node: LabNode) -> list[admin_pb2.Admi
         and mqtt.encryption_enabled
         and not mqtt.json_enabled
         and not mqtt.tls_enabled
-        and mqtt.username == ""
-        and mqtt.password == ""
+        and mqtt.username == node.mqtt_user
+        and mqtt.password == node.mqtt_password
     )
     if not wanted_mqtt:
         m = admin_pb2.AdminMessage()
@@ -115,8 +123,8 @@ def settings_messages(iface: TCPInterface, node: LabNode) -> list[admin_pb2.Admi
         new.encryption_enabled = True
         new.json_enabled = False
         new.tls_enabled = False
-        new.username = ""
-        new.password = ""
+        new.username = node.mqtt_user
+        new.password = node.mqtt_password
         messages.append(m)
 
     primary = local.channels[0]

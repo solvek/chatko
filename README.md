@@ -16,7 +16,7 @@ Meshtastic LoRa channels. A hub copies every message to all the other places.
   Without it, every message goes to all the other places of its group.
 - It can forward the mesh's primary Meshtastic chat (e.g. the Kyiv `LongFast`) to selected chats.
 
-> **Status: phases 1 (core) and 2 (Telegram) are done; phase 3 (Meshtastic) is next.** The project skeleton, tooling, domain model, the extension and routing APIs, the inbound pipeline with the outbox worker, the routing engine with a test kit for routing scripts, SQLite storage, the configuration and `chatko run` are in place and reviewed. The Telegram extension works with a real bot and groups; Meshtastic and Briar come next. Start with the [design](docs/design.md).
+> **Status: phases 1 (core) and 2 (Telegram) are done; phase 3 (Meshtastic) is under way.** The project skeleton, tooling, domain model, the extension and routing APIs, the inbound pipeline with the outbox worker, the routing engine with a test kit for routing scripts, SQLite storage, the configuration and `chatko run` are in place and reviewed. The Telegram extension works with a real bot and groups. The Meshtastic extension connects to and provisions the hub's node, tested in the local lab; its channel and direct-message endpoints come next, then Briar. Start with the [design](docs/design.md).
 
 ## Known limitations
 
@@ -72,6 +72,12 @@ Run the hub (until Ctrl+C or SIGTERM; its state goes to `data/chatko.sqlite3`, a
 
 ```bash
 uv run chatko run --config config/chatko.yaml --data data    # reads .env too
+```
+
+The tests with the local Meshtastic lab are opt-in (see [`lab/README.md`](lab/README.md)):
+
+```bash
+uv run pytest -m lab tests/integration/test_meshtastic_lab.py
 ```
 
 The gates and their limits are in [docs/architecture.md §7](docs/architecture.md#7-quality-gates).

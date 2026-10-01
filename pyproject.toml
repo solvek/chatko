@@ -9,6 +9,9 @@ requires-python = ">=3.12"
 dependencies = [
     "aiogram>=3.15",
     "aiosqlite>=0.22.1",
+    # The Meshtastic adapter overrides a few internals of TCPInterface (chatko_meshtastic.library_api):
+    # take a new minor version deliberately, once the lab tests (`pytest -m lab`) pass with it.
+    "meshtastic>=2.7.11,<2.8",
     "pydantic>=2.9",
     "pyyaml>=6.0",
     "watchfiles>=1.0",
@@ -36,6 +39,7 @@ dev = [
     "pytest-asyncio>=0.25",
     "pytest-cov>=6.0",
     "ruff>=0.8",
+    "types-protobuf>=7.35.1.20260906",
     "types-pyyaml>=6.0",
 ]
 
@@ -70,8 +74,10 @@ ignore = ["PLR2004"]
 # Cyrillic letters are data here, not look-alikes of Latin ones.
 # Fake routing scripts in tests keep the hook signatures of the routing API, like the example.
 # Tests write their files in place, also inside async tests (ASYNC240).
+# Their passwords are made up (S105, S106).
 "tests/**" = [
-    "S101", "ANN", "ARG001", "ARG002", "PLR0913", "RUF001", "RUF002", "RUF003", "ASYNC240",
+    "S101", "S105", "S106", "ANN", "ARG001", "ARG002", "PLR0913", "RUF001", "RUF002", "RUF003",
+    "ASYNC240",
 ]
 # The public test kits are test code that ships with the package.
 "src/chatko/*/testing/**" = ["S101", "RUF001"]
@@ -95,10 +101,19 @@ mypy_path = ["src"]
 explicit_package_bases = true
 warn_unreachable = true
 enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+# The meshtastic library's own methods have no annotations; the adapter calls and overrides them.
+untyped_calls_exclude = ["meshtastic"]
+
+[[tool.mypy.overrides]]
+# The library has no py.typed marker; its own code and the .pyi stubs of its protobufs are typed
+# enough to check the adapter against.
+module = ["meshtastic", "meshtastic.*"]
+follow_untyped_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers --strict-config"
+# The lab tests are opt-in: `pytest -m lab` runs them (tests/integration/test_meshtastic_lab.py).
+addopts = "-ra --strict-markers --strict-config -m 'not lab'"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = ["lab: needs the docker lab (Mosquitto, meshtasticd, briar-headless); opt-in"]

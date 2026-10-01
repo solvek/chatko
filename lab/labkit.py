@@ -25,6 +25,8 @@ HUB_PORT = 4403
 RADIO_PORT = 4404
 MQTT_PORT = 1883
 MQTT_TOPIC = "msh/lab/#"
+MQTT_USER = "lab"  # the broker's login for scripts (lab/mosquitto/start.sh)
+MQTT_PASSWORD = "chatko-lab-lab"
 COMPOSE_FILE = Path(__file__).with_name("docker-compose.yml")
 
 # Fields of a received packet dict worth recording (the library adds decoded and derived keys).
@@ -194,6 +196,7 @@ class BrokerSniffer:
             mqtt.CallbackAPIVersion.VERSION2, client_id=f"spike-sniffer-{uuid.uuid4().hex[:6]}"
         )
         self._client.on_message = self._on_message
+        self._client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
 
     def start(self) -> None:
         self._client.connect(HOST, MQTT_PORT)

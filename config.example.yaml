@@ -31,13 +31,15 @@ extensions:
       # Later, the Kyiv community broker (logins only for a claimed physical node, D27):
       # host: mqtt.meshtastic.kyiv.ua, port: 1883, tls: false, username: <node id in hex>,
       # root_topic: node/<node id>
-    channels:                      # the hub provisions its node with these
+    channels:                      # the hub provisions its node with these, in this order; the node's
+                                   # other channel slots are turned off. Names: up to 11 bytes, no spaces
       - name: LongFast             # index 0: the primary channel of the Kyiv mesh; its PSK is not the
         psk: ${KYIV_PRIMARY_PSK}   # default one: take it from the QR code at https://meshtastic.kyiv.ua/join
       - name: family
-        psk: ${MESH_FAMILY_PSK}    # base64, 16 or 32 bytes; give it to people as a channel URL/QR code
-    contacts:                      # optional: public keys of members' nodes (base64, from the Meshtastic app)
-      "!a1b2c3d4": "<public key of !a1b2c3d4>"
+        psk: ${MESH_FAMILY_PSK}    # base64, 16 or 32 bytes (AQ== is the default key); give it to people
+                                   # as a channel URL/QR code
+    contacts:                      # optional: public keys of members' nodes (base64, 32 bytes, from the
+      "!a1b2c3d4": "<public key of !a1b2c3d4>"   # Meshtastic app); the node keeps them as favorites
     min_send_interval_s: 4         # per hub node; at least 2 (the node drops texts that come sooner)
 
   briar:                           # groups are made with `briarctl` (the hub is their creator)

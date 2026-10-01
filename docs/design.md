@@ -1,6 +1,6 @@
 # chatko design
 
-Status: **draft**; phase 1 (the core) is written and reviewed; phase 2 (Telegram) is written and waits for its live test. This document describes **behaviour**. The
+Status: **draft**; phase 1 (the core) is written and reviewed; phase 2 (Telegram) is done, with its live test; phase 3 (Meshtastic) has the connection to the hub's node and its provisioning, and its endpoints come next. This document describes **behaviour**. The
 code structure is described in [architecture.md](architecture.md). Items marked **(verify)** must be
 confirmed by a spike ([spikes.md](spikes.md)) or by reading the upstream source before we rely on
 them. Phase 0 answered every (verify) that v1 relies on (session S07); the questions still open
@@ -167,21 +167,32 @@ for `channel` delivery, but `dm` delivery would need our own PKI, NodeInfo, ACK 
   unless the config sets `private_key` (a secret in `.env`); then the hub provisions it and the key
   survives a lost volume or a move to another server (D26). This matters because members' radios pin
   the hub's public key: with a new key, direct messages between the hub and every radio that knew the
-  old one fail until that radio is given the new key (spike S2). The hub logs its public key at start.
+  old one fail until that radio is given the new key (spike S2). The hub logs its public key when
+  its node is first ready.
 - The node's channels and their PSKs are set in the config, and the hub provisions the node from it. The
   admin gives the PSK (a channel URL or QR code from the Meshtastic app) to the people who should have it.
   Removing someone from a channel means a new PSK on all radios.
-- Provisioning (D25) goes through the node's admin API over the same connection the hub uses for
-  messages: names, region, `ignore_mqtt` off, the private key if configured, the MQTT client, each
-  channel with uplink and downlink on, and the configured `contacts` (below). It writes only what
-  differs from the node's current settings, sends one admin message at a time and waits for the node's
-  response to each (the node drops the oldest when more than 4 wait, D26), and reconnects when the node
-  reboots (a commit always reboots it; a `meshtasticd` reboot ends the process and its container
-  restarts it). `meshtasticd`'s own YAML sets only the simulated radio, the MAC address (which fixes
-  the node id) and logging.
+- Provisioning (D25, D46) goes through the node's admin API over the same connection the hub uses
+  for messages, every time the hub connects to its node: names, region, `ignore_mqtt` off and "OK to
+  MQTT" on, the private key if configured, the MQTT client with the node's own login, and every
+  channel slot: the configured channels in order (the first is the primary channel) with uplink and
+  downlink on, the other slots off. It writes only what differs from the node's current settings,
+  in one settings transaction, sends one admin message at a time and waits for the node's response
+  to each (the node drops the oldest when more than 4 wait, D26; without a response within 10 s
+  the hub connects again), and reconnects when the node reboots (a commit always reboots it; a
+  `meshtasticd` reboot ends the process and its container restarts it). Then it adds the
+  configured `contacts` (below), and only then does the node carry messages. A setting the node
+  refuses, or that still differs after the reboot that saved it, is reported to the admin; the hub
+  then goes on with the node as it is rather than reboot it again. `meshtasticd`'s own YAML sets only
+  the simulated radio, the MAC address (which fixes the node id) and logging.
+- The hub keeps its node connected: it tries again with a growing pause (up to 30 s) and tells the
+  admin when the node has been unreachable for 2 minutes, or when the node keeps closing the
+  connection, which means another client is connected to it (below).
 - A channel is matched over MQTT by its **name** (the topic `<root>/2/e/<name>/<gateway>` and the
   envelope carry it; the packet carries only a hash), then decrypted with its PSK. A private channel must
-  have the same name and PSK on the hub's node and on every radio.
+  have the same name and PSK on the hub's node and on every radio. A name has at most 11 bytes and
+  no spaces. The config names the primary channel too (`LongFast`): an unnamed primary channel
+  shows the modem preset's name, so naming it so changes neither its topic nor its hash.
 - `meshtasticd` serves one API client at a time: a new connection drops the previous one. The hub is the
   only client of its node; the admin does not connect the Meshtastic app or CLI to it while the hub runs.
 - A node has up to 8 channels. Channel 0 is usually the primary channel of the mesh (e.g. `LongFast`;
@@ -732,7 +743,8 @@ old fingerprints are pruned after the retention (7 days by default).
   person's radio, then as our gateway (§6.2), and later as a physical hub node. `briar-headless` is
   built locally. A read-only connection to the Kyiv broker (`lab/spike_kyiv.py`) waits for a claimed
   physical node (D27). The Meshtastic lab is in [`lab/`](../lab/README.md) (image
-  `meshtastic/meshtasticd`, pinned tag, amd64 and arm64).
+  `meshtastic/meshtasticd`, pinned tag, amd64 and arm64). Its Mosquitto is set up like production's:
+  no anonymous clients, a user per node, an ACL that keeps each to the lab's root topic (D46).
 - **Production:** a Linux server (cloud VM, x86-64 or ARM64), the same compose file, which also runs
   our Mosquitto (§6.2, D30). Inbound ports: SSH, and MQTT over TLS (8883) for our gateways. Mosquitto
   allows no anonymous clients: each gateway and each hub node has its own user, limited by an ACL to

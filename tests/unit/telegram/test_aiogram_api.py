@@ -32,7 +32,7 @@ from chatko_telegram.api import (
     UnreachableError,
 )
 
-TOKEN = "123456:secret-token"  # noqa: S105
+TOKEN = "123456:secret-token"
 GROUP_ID = -1001234567890
 GROUP = {"id": GROUP_ID, "type": "supergroup", "title": "Family"}
 ADA = {"id": 111, "is_bot": False, "first_name": "Ada", "last_name": "Lovelace", "username": "ada"}

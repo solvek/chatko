@@ -66,14 +66,15 @@ src/
   chatko_telegram/   # extension packages: separate top-level packages, so importing core internals
                      # is visible and forbidden by import-linter. Telegram (§3.7): config, api
                      # (the TelegramApi port), aiogram_api, extension, testing (FakeTelegramApi)
-  chatko_meshtastic/
+  chatko_meshtastic/ # Meshtastic (§3.8): config, api (the MeshApi port), library_api, provisioning,
+                     # node (MeshNode), testing (FakeMeshApi); the endpoints come in S20 and S21
   chatko_briar/
   briarctl/          # the admin's CLI for the hub's Briar account (design.md §7.5); a separate program:
                      # it imports neither chatko nor chatko_briar, and they never import it
 tests/
   unit/              # domain, the public APIs and application, with fakes
   contract/          # each extension against extension_api.testing
-  integration/       # real SQLite; opt-in docker lab (Mosquitto + meshtasticd, briar-headless)
+  integration/       # real SQLite; the docker lab (Mosquitto + meshtasticd), opt-in: pytest -m lab
 routing.example.py   # sample routing script, tested in CI like any other code
 lab/                 # docker compose lab: Mosquitto + two meshtasticd nodes, plus spike scripts
 ```
@@ -250,7 +251,7 @@ delivers the label and the text to every recipient; answers `Retry` while the ne
   NAKs to sent packets by request id itself (the library drops a response handler after the first
   response, which is the node's implicit ACK), and takes node keys from the node database it reads on
   connect and from its own `add_contact` calls, not from the library's node cache, which also takes
-  keys from NodeInfo the node rejected (D26).
+  keys from NodeInfo the node rejected (D26). How it does so is in §3.8 (D46).
 - The Briar adapter owns the WebSocket to `briar-headless` and its reconnection. After every
   (re)connect it authenticates the WebSocket first and then catches up: it lists the messages of each
   configured group, submits the unread posts of other members and marks each read once `hub.submit`
@@ -281,6 +282,28 @@ delivers the label and the text to every recipient; answers `Retry` while the ne
 `tests/unit/telegram` tests the extension over it and the adapter over a scripted aiogram
 session (`BaseSession`) that answers with Bot API JSON, so aiogram's own reading of answers and
 errors is part of the test.
+
+### 3.8 The Meshtastic extension
+
+`chatko_meshtastic` (design.md §6, D25, D26, D46). One instance drives one node, the hub's node,
+through the official `meshtastic` library. S19 wrote its base; the `channel` and `dm` endpoints
+and the extension class come in S20 and S21.
+
+| Module | Contents |
+|---|---|
+| `config` | `MeshtasticConfig`: `connection` (`TcpConnection`, `host:port`), names, `region`, `private_key`, `mqtt` (`MqttConfig`: host, port, TLS, login, root topic), `channels` (`ChannelConfig`: name and PSK, in slot order), `contacts` (node id → public key), `min_send_interval_s` (at least 2). Secrets are `SecretStr`s |
+| `api` | the `MeshApi` port: `connect()` returns a `MeshConnection` with `state` (`NodeState`: the node's number, `NodeSettings`, its database of `NodeEntry`s), `events()` (the `Packet`s it hands over until the connection ends: `Text`, `Routing` for an ACK or NAK with its `request_id`, `NodeInfo`, `Other`), `send_text`, `send_admin` (`BeginEdit`, `SetOwner`, `SetLora`, `SetPrivateKey`, `SetMqtt`, `SetChannel`, `AddContact`, `CommitEdit`) and `close`. Errors: `UnreachableError` (connect again), `RejectedError` (cannot work) |
+| `library_api` | `LibraryMeshApi`, the port over `TCPInterface`, the only module that imports the library. A subclass overrides seven of its hooks so that it never reconnects by itself and the adapter sees every message from the node (D46); each connection has a thread of its own for the blocking calls, and the reader thread hands packets over with `call_soon_threadsafe`. `open_socket` replaces the TCP connection in tests |
+| `provisioning` | `WantedNode` (the node as the config wants it), `settings_commands` (what differs, in a settings transaction, in the order the firmware needs), `contact_commands`, `describe` (for logs and notices, without secrets) |
+| `node` | `MeshNode`: connects and reconnects, provisions on every connection one admin message at a time, is `ready` once the node matches, and serves `send_text` (paced) with an `Outgoing` whose `outcome(within)` is the `Ack` or `Nak` matched by request id; hands other nodes' packets to `on_packet` and tells `on_ready`; keeps the node database (`node(num)`) as the node does; posts the admin notices of D46 |
+| `testing` | `FakeMeshApi`: the node in memory, as `meshtasticd` behaves (it applies and answers admin messages, reboots after a commit, turns `ignore_mqtt` on with a first duty-cycle region, serves one connection at a time, ACKs texts); `text_packet` |
+
+`tests/unit/meshtastic` tests `MeshNode` over `FakeMeshApi`, and `LibraryMeshApi` with the real
+library over a socket pair, whose other end (`device.FakeDevice`) speaks the node's stream
+protocol. `tests/integration/test_meshtastic_lab.py` runs `MeshNode` over `LibraryMeshApi`
+against the lab's two nodes: provisioning with the reboot, channel texts and direct messages both
+ways with their ACKs, the NAKs of a node without a key and of a radio that is away, and a node
+restart.
 
 ## 4. Routing API
 
@@ -518,7 +541,7 @@ INFO]` logs to stderr and runs the installed extensions (`discover_extensions`).
 | Config | `pydantic` v2 models, YAML (`PyYAML`, safe loader), `${ENV}` substitution, `watchfiles` for reload |
 | Storage | SQLite via `aiosqlite`, schema migrations in code |
 | Telegram | `aiogram` 3 (long polling), wrapped behind the extension's `TelegramApi` port (§3.7) |
-| Meshtastic | official `meshtastic` Python library over TCP to `meshtasticd` (serial, BLE and TCP to a physical node later); image `meshtastic/meshtasticd`, tag pinned in the compose files |
+| Meshtastic | official `meshtastic` Python library over TCP to `meshtasticd` (serial, BLE and TCP to a physical node later), pinned below 2.8 because the adapter overrides its hooks (§3.8); image `meshtastic/meshtasticd`, tag pinned in the compose files |
 | MQTT broker | Mosquitto 2 in the compose files: users and an ACL per hub node and gateway, TLS on 8883 for gateways (D30). The hub's code never talks MQTT itself; its `meshtasticd` nodes do |
 | Briar | `httpx` + `websockets` to `briar-headless` (our fork: a pinned upstream tag plus the private-group patch, D29; built with JDK 17, run in a Java 17 JRE image, D28) |
 | License | GPL-3.0-or-later |
@@ -551,6 +574,8 @@ The `import-linter` contracts (`[tool.importlinter]`) are:
 - `briarctl` imports nothing of chatko and chatko never imports it.
 
 Integration tests with the docker lab run on demand and nightly; they are not required for every PR.
+They are marked `lab` and deselected by default; `uv run pytest -m lab` runs them against a
+running lab (`lab/README.md`).
 
 Testing style:
 - Test behaviour through public APIs, not private helpers. One behaviour per test, with a descriptive

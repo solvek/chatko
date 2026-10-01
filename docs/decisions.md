@@ -835,3 +835,63 @@ admin notices in the owner's private chat read well; the default label of a one-
 (`Sergi`) is the name itself.
 **Consequences:** design.md §5, `config.example.yaml` and architecture.md §3.7 say so. The phase 2
 goal is now "foreign groups are ignored and reported".
+
+## D46. The Meshtastic adapter: a port of connections, the library without its reconnect, a node object that owns the rest
+**Status:** accepted (S19).
+Session S19 wrote the base of the Meshtastic extension (`chatko_meshtastic`, architecture.md
+§3.8): the `MeshApi` port, its adapter over the `meshtastic` library and its fake, the
+provisioning, and `MeshNode`. They are tested against a fake of the port, the adapter against a
+node that speaks the stream protocol at the other end of a socket pair, and both together against
+the lab (`pytest -m lab`). Choices that D25, D26 and architecture.md §3.6 left open:
+- **The port is a factory of connections.** `MeshApi.connect` returns a `MeshConnection` that
+  carries what the node told it on connect (`NodeState`: number, settings, node database) and
+  ends when the node closes it; `events` ends with it. A reboot, a crash and another client look
+  the same: the connection ends, and `MeshNode` makes a new one. The port's types are its own
+  (`Packet` with `Text`, `Routing`, `NodeInfo` or `Other`; admin commands such as `SetLora`), so
+  only `library_api` imports the library.
+- **The library's own reconnect is switched off by overriding its hooks.** `TCPInterface`
+  reconnects on its own when the node closes the socket, and that races with ours (D25). The
+  adapter subclasses it and overrides seven hooks of meshtastic 2.7 (`myConnect`, `_readBytes`,
+  `_writeBytes`, `_reconnect`, `_handleFromRadio`, `_disconnected`, `_waitConnected`), so that a
+  closed connection simply ends, waiting for the config stops when it does, and the adapter reads
+  every message from the node as it comes. The library is pinned below 2.8; a new minor version is
+  taken once the lab tests pass with it. The library's pubsub topics and its node cache are not
+  used: the node database is read from the messages of the connect (D26).
+- **Threads.** Each connection has one thread of its own for the blocking calls (connect, send),
+  so they keep their order and one that hangs (the library waits forever for room in the node's
+  queue) holds up nothing but its dead connection; closing frees such a call. The reader thread
+  hands packets over with `call_soon_threadsafe`. A cancelled connect closes what its thread
+  opens.
+- **`MeshNode` owns everything else.** It connects (backoff 1 s doubling to 30 s), provisions on
+  every connection, sends admin messages one at a time and waits up to 10 s for each answer (no
+  answer: connect again), waits for the reboot after a commit, adds the contacts once the settings
+  match, and only then is ready; `send_text` raises `NotReadyError` before. It matches every
+  answer to its request id itself, keeping answers that come before the hub has the packet id of
+  what it sent. A broadcast is delivered by the implicit ACK; a direct message only by the
+  destination's ACK, the implicit one setting `reached_broker`; any NAK ends the wait. It keeps
+  `min_send_interval` between texts, hands the packets of other nodes to the extension through a
+  queue of their own (a slow handler holds up no ACK), and keeps the node database as the node
+  does: a NodeInfo with another key than the pinned one, or with none, changes nothing.
+- **Provisioning writes only what differs, as the config says.** The names, the LoRa settings
+  (twice when the region changes, for the firmware's `ignore_mqtt`), the private key if
+  configured, the MQTT client with the node's login, and every channel slot: the configured ones
+  with uplink and downlink on, the others off. The primary channel is written with the name from
+  the config (`LongFast`), which gives the same MQTT topic and channel hash as an unnamed one. A
+  contact keeps the names the node already has for it. The MQTT broker is `host`, or `host:port`
+  when the port is not the default for the TLS setting, the form the firmware reads.
+- **What it tells the admin:** a node unreachable for 2 min (once per outage); a node that closed
+  five connections in a row within a minute of making them (another client, D25); a refused
+  setting or contact; settings that still differ after the reboot that saved them, after which it
+  goes on with the node as it is instead of rebooting it again. It logs the node's public key when
+  the node is first ready.
+- **The lab's broker is set up like production (D30):** no anonymous clients, a user per node
+  (`hub`, `radio`) and one for the scripts (`lab`), each limited by an ACL to `msh/lab/#`.
+  `lab/mosquitto/start.sh` makes the password file at start; the lab passwords are
+  `chatko-lab-<user>`, lab values like the lab's PSK and keys.
+**Consequences:** `meshtastic` (with `protobuf`, `pypubsub`, `bleak`, `pyserial`) is a dependency
+of the hub, and `types-protobuf` of development. S20 registers the extension, adds the endpoint
+models and builds the `channel` endpoints on `MeshNode`; S21 the `dm` endpoints, including the
+favorites for listed nodes and the key-mismatch notices, from `MeshNode.node` and the NAKs. A text
+handed over while the node is rebooting is lost to the node; the outbox retries what got no ACK.
+A half-open TCP connection (the node gone without closing it) is noticed only when a write fails;
+inside the Docker network this does not happen.
