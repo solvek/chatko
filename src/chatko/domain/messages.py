@@ -51,7 +51,9 @@ class Message:
     """An incoming message as the hub stores and routes it.
 
     `transport_id` is the id the network gave it, unique within its endpoint; the core uses it to
-    drop copies of one message that arrive more than once (design.md §9.1).
+    drop copies of one message that arrive more than once (design.md §9.1). `from_recipient` is the
+    recipient of the endpoint that posted it, at an endpoint with recipients (the node of a `dm`
+    endpoint that sent it): the message never goes back to that recipient (design.md §9.3).
     """
 
     id: MessageId
@@ -61,10 +63,15 @@ class Message:
     text: str
     received_at: datetime
     attachments: tuple[Attachment, ...] = ()
+    from_recipient: str | None = None
 
     def __post_init__(self) -> None:
         if not self.id:
             raise DomainError("a message needs an id")
+        if self.from_recipient is not None and not self.from_recipient.strip():
+            raise DomainError(
+                f"message {self.transport_id!r} from {self.endpoint} has an empty recipient"
+            )
         if not self.transport_id:
             raise DomainError(f"a message from {self.endpoint} needs a transport id")
         if self.received_at.utcoffset() is None:

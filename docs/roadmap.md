@@ -196,8 +196,9 @@ call, so a repeat after a crash has `attempt == 2`. The worker gives up by age (
 (a new dev dependency), and an end-to-end test with two `FakeExtension` networks covers the whole
 of §9.1. `Installation` is the snapshot (topology, running instances, de-duplication windows) the
 services read per message. Fakes are in `application.testing`; the test-kit import contract became
-a `protected` one. Open for the owner: a direct message from one node of a `dm` endpoint does not
-reach the endpoint's other nodes (design.md §9.3).
+a `protected` one. Follow-up, the owner's choice (D38): a direct message from one node of a `dm`
+endpoint also reaches the endpoint's other nodes (`InboundMessage.from_recipient`; the contract
+suite checks it).
 
 **S12. Routing engine.** `RoutingEngine`: load `routing.py` from the config directory, validate it
 (`route`, an optional `label(msg, target, ctx)`, an optional supported `api_version`, D36),

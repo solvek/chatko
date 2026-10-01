@@ -100,6 +100,7 @@ class InboundPipeline:
                 inbound.text,
                 now,
                 inbound.attachments,
+                inbound.from_recipient,
             )
             routed = RoutedMessage(message, topology.group_of(endpoint))
             window = installation.fingerprint_dedup.get(endpoint)
@@ -136,7 +137,7 @@ class InboundPipeline:
         )
         targets = self._router.route(routed, ctx)
         destinations = RoutingInvariants(installation.topology, recipients).apply(
-            routed.endpoint, targets
+            routed.endpoint, targets, routed.from_recipient
         )
         labels: dict[Target, str] = {}
         deliveries = []

@@ -108,3 +108,13 @@ def test_delivery_results_can_be_matched(result: DeliveryResult, outcome: str) -
             matched = "failed"
 
     assert matched == outcome
+
+
+def test_inbound_message_may_name_the_recipient_that_posted_it() -> None:
+    assert InboundMessage(TG, "1", ADA, "x").from_recipient is None
+    assert InboundMessage(TG, "1", ADA, "x", from_recipient="!a1").from_recipient == "!a1"
+
+
+def test_inbound_message_recipient_cannot_be_empty() -> None:
+    with pytest.raises(ValueError, match="empty recipient"):
+        InboundMessage(TG, "1", ADA, "x", from_recipient="")

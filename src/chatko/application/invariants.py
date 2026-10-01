@@ -24,7 +24,9 @@ class Destination:
 class RoutingInvariants:
     """Turns the targets of a message into destinations that keep the invariants:
 
-    - nothing goes back to the endpoint the message came from;
+    - nothing goes back to where the message came from: the endpoint, or for an endpoint with
+      recipients the recipient that posted it (`from_recipient`; the whole endpoint if it is not
+      known);
     - nothing goes to an endpoint the topology does not have (it is logged);
     - each endpoint, and each recipient of an endpoint that has recipients, gets the message at
       most once: the first target that includes it wins;
@@ -37,12 +39,19 @@ class RoutingInvariants:
         self._topology = topology
         self._recipients = recipients
 
-    def apply(self, source: EndpointRef, targets: Iterable[Target]) -> list[Destination]:
+    def apply(
+        self,
+        source: EndpointRef,
+        targets: Iterable[Target],
+        from_recipient: str | None = None,
+    ) -> list[Destination]:
         destinations: list[Destination] = []
-        taken: set[tuple[EndpointRef, str | None]] = set()
+        # The source endpoint is open to the other recipients only if it is known who posted.
+        source_open = from_recipient is not None and bool(self._recipients.get(source))
+        taken: set[tuple[EndpointRef, str | None]] = {(source, from_recipient)}
         for target in targets:
             endpoint = target.endpoint
-            if endpoint == source:
+            if endpoint == source and not source_open:
                 _log.debug("dropped a target back at the source %s", source)
                 continue
             if not self._topology.has_endpoint(endpoint):

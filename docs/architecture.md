@@ -87,7 +87,7 @@ its rules, and re-exports its public names from the package.
 |---|---|
 | `endpoints` | `EndpointRef(instance, name)`, the name being the admin's (`family.tg`, D34); `Group(name, sites)` with `other_sites(endpoint)` |
 | `accounts` | `AccountKey(kind, external_id)` (`telegram:123`, parsed from the config form); `Account(key, display_name, short_name)` as the network shows it now; `Person(label, accounts)`; `Author(account, person, relayed_label)`, where `relayed_label` marks a peer hub's relay (D17) |
-| `messages` | `MessageId`; `Attachment(kind)` with its `[photo]` placeholder; `plain_text(text, attachments)`; `Message` (endpoint, transport id, author, text, attachments, time) with `plain_text` and `fingerprint`; `Target(endpoint, text, label, recipients)`, where `recipients` narrows a delivery to some of the endpoint's recipients |
+| `messages` | `MessageId`; `Attachment(kind)` with its `[photo]` placeholder; `plain_text(text, attachments)`; `Message` (endpoint, transport id, author, text, attachments, time, `from_recipient`) with `plain_text` and `fingerprint`; `Target(endpoint, text, label, recipients)`, where `recipients` narrows a delivery to some of the endpoint's recipients |
 | `delivery` | `Delivery`: one outbox row (message, endpoint, recipient, author label, text, due time, attempts, last error). `delivered`, `retry(at)` and `failed` return a new value; delivered and failed are final |
 | `topology` | `Topology(groups, sources, people)`: lookups (`endpoint` by name, `group`, `group_of`, `source`, `person_of`, `author_of`) and the rules that every endpoint is the site of one group or one source, endpoint names are unique, and every account belongs to one person |
 | `fingerprint` | `Fingerprint`, `fingerprint(label, text)` and the normalization (design.md §9.5) |
@@ -172,7 +172,7 @@ When an instance's own section changes, the core stops it and starts a new insta
 
 | Type | Fields |
 |---|---|
-| `InboundMessage` | `endpoint`, `transport_id` (unique within the endpoint, the same each time the network hands over the same message), `author: Account` (its kind is the extension's `type_name`), `text`, `attachments` |
+| `InboundMessage` | `endpoint`, `transport_id` (unique within the endpoint, the same each time the network hands over the same message), `author: Account` (its kind is the extension's `type_name`), `text`, `attachments`, `from_recipient` (at an endpoint with recipients: the one that posted it, e.g. the node that sent the direct message; the hub relays the message to the endpoint's other recipients, never back to this one) |
 | `OutboundMessage` | `message_id`, `author_label`, `text`, `received_at` (when the hub got the original), `attachments`, `recipient`, `attempt`; `plain_text` (`[photo] caption`) and `formatted` (`NatAda: [photo] caption`). The core chose the label (design.md §8) and the text (a target may replace it); the extension renders them for its network, shortening a label that is too long and splitting a long text |
 | `DeliveryResult` | `Delivered(truncated)` \| `Retry(reason, after)` \| `Failed(reason)` |
 | `DeliveryReport` | `source`, `transport_id`, `target`, `recipient`, `result` (`Delivered` or `Failed`) |
@@ -224,8 +224,9 @@ extension derives from.
 The suite checks, without a network, that an extension: has a valid `type_name` and a supported
 `api_version`; provides endpoints; rejects unknown config keys; starts and stops without leaving
 tasks behind, and stops safely without a start; submits what someone posted at one of its
-endpoints, with the right endpoint, text, author kind and a transport id that is unique per post and
-stable when the network hands a post over again; never submits the hub's own posts, posts at other
+endpoints, with the right endpoint, text, author kind, a transport id that is unique per post and
+stable when the network hands a post over again, and at an endpoint with recipients the recipient
+that posted it; never submits the hub's own posts, posts at other
 places, at an endpoint removed by `set_endpoints`, or after `stop`; follows a new endpoint set;
 delivers the label and the text to every recipient; answers `Retry` while the network is down and
 `Failed` for an endpoint or recipient it does not have; and takes delivery reports.
@@ -276,10 +277,10 @@ def label(msg: RoutedMessage, target: Target, ctx: RoutingContext) -> str:   # o
 
 | Name | What |
 |---|---|
-| `RoutedMessage` | the message, read-only: `id`, `endpoint`, `group` (`None` for a source), `author` (`Author`: the account with its names, the person or `None`, a peer's `relayed_label`), `text`, `attachments`, `plain_text`, `fingerprint`, `received_at` |
+| `RoutedMessage` | the message, read-only: `id`, `endpoint`, `group` (`None` for a source), `author` (`Author`: the account with its names, the person or `None`, a peer's `relayed_label`), `from_recipient` (the recipient of the endpoint that posted it, or `None`), `text`, `attachments`, `plain_text`, `fingerprint`, `received_at` |
 | `RoutingContext` | the installation, read-only: `now`, `groups`, `sources`, `people`; `group(name)`, `group_of(endpoint)`, `source(name)`, `endpoint(name)` (`family.radio`), `person_of(account)`, `extension_type(endpoint)` (`meshtastic`), `recipients(endpoint)`; `last_heard(account, endpoint=None)`, `seen(fingerprint, within=…)` |
 | `to_endpoint(endpoint, *, text=None, label=None, recipients=None)` | a `Target`. `text` and `label` replace the message's text and the author label at that endpoint; `recipients` narrows the delivery to some of the endpoint's recipients (an empty list: none) and has no effect on an endpoint without recipients |
-| `mirror(msg, ctx)` | the default router: targets for all other sites of the message's group, none for a source |
+| `mirror(msg, ctx)` | the default router: targets for all other sites of the message's group, and for a message from one recipient of a site, the site narrowed to its other recipients; none for a source |
 | `default_label(author, ctx)` | the label the core uses without a hook (design.md §8) |
 | `RouteFunction`, `LabelFunction` | the types of `route` and `label` |
 | `RoutingHistory` | what `last_heard` and `seen` read; implemented by the core and by the test kit |
@@ -304,7 +305,8 @@ The routing engine (application layer) loads the script from the config director
 defines `route`, and keeps the last good version on reload errors. After `route` returns, it applies
 the invariants of design.md §9.3 in one place, `RoutingInvariants`, which is covered by property-style
 tests (whatever the script returns, no echo and no duplicate delivery). The invariants hold per
-endpoint and recipient: a message goes to each at most once, and never back to its own endpoint.
+endpoint and recipient: a message goes to each at most once, and never back to where it came from
+(its endpoint, or only the recipient that posted it when the extension names it, D38).
 
 ## 5. Core services (application layer)
 
@@ -314,7 +316,7 @@ the composition root (S15) wires them.
 | Service | Module | Responsibility |
 |---|---|---|
 | `InboundPipeline` | `pipeline` | for each submitted message, one at a time: drop it if its endpoint is unknown or it is a copy (same endpoint and transport id) → find the person for the account → (later: the peer-relayed author) → fingerprint → skip routing if the endpoint de-duplicates by fingerprint and the same message came lately → `Router.route` → `RoutingInvariants` → `Router.label` once per target without its own label → store the message with one outbox row per target and recipient, in one transaction → record it in the history → hand the rows to the `OutboxWorker`. Returns an `Outcome` |
-| `RoutingInvariants` | `invariants` | turns the targets into `Destination`s (target, recipient) that keep design.md §9.3: none back at the source, none at an unknown endpoint, each endpoint and recipient once (the first target that includes it wins), only the endpoint's own recipients |
+| `RoutingInvariants` | `invariants` | turns the targets into `Destination`s (target, recipient) that keep design.md §9.3: none back at the source (only at the recipient that posted it, if the extension named it, D38), none at an unknown endpoint, each endpoint and recipient once (the first target that includes it wins), only the endpoint's own recipients |
 | `Router` | `routing` | the port the pipeline routes with: `route` and `label`, never raising. `DefaultRouter` (`mirror`, `default_label`) stands in until the `RoutingEngine` (S12): load and hot-reload the routing script, check its `api_version`, call `route` and `label`, fall back to the defaults on errors and post an admin notice |
 | `OutboxWorker` | `outbox` | delivers the pending rows, one lane per endpoint and recipient (§5.2); reports final results to the source's extension; loads the pending rows on `start` |
 | `ExtensionHub` | `hub` | the `HubContext` of one extension instance: `submit` into the pipeline, `heard` into the history, `retry_now` into the worker, `notify_admin` into `AdminNotices` (with the instance in the key), `now` from the clock. It ignores (and logs) calls about another instance's endpoints |

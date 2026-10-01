@@ -184,6 +184,10 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
 - A node listed in several `dm` endpoints: its direct messages go to the first of them in the config;
   the routing script can send them elsewhere. Direct messages from nodes not listed anywhere are logged
   and dropped.
+- A direct message from a listed node reaches the group's other sites and, as direct messages, the
+  endpoint's other nodes, so the radios of one `dm` endpoint hear each other through the hub (D38).
+  It never goes back to the node that sent it. With N nodes, each message from a radio costs N−1
+  direct messages, each with its ACKs; a script can narrow them (`recipients`, §9.2).
 - **Keys for `dm`.** A text direct message needs the public keys on both sides: the hub's node refuses
   to send without the person's key, and radios drop old channel-encrypted direct texts. Keys travel in
   NodeInfo on the primary channel (each node broadcasts it 30 s after boot and every 3 h), and a node
@@ -562,9 +566,10 @@ The script cannot turn these off. They are what keeps echoes and duplicates out,
 does:
 
 - The hub's own posts never reach the router (step 1).
-- A message is never delivered back to the endpoint it came from. For an endpoint with
-  recipients this means none of them: a direct message from one node of a `dm` endpoint does not go
-  to the other nodes of that endpoint.
+- A message is never delivered back to where it came from: the endpoint, or for an endpoint with
+  recipients the recipient that posted it (the node that sent a direct message). The endpoint's other
+  recipients may get it. If the extension does not say which recipient posted, the whole endpoint
+  is excluded (D38).
 - A message is delivered to the same endpoint (to each of its recipients) at most once.
 - A message that another path already brought in (same fingerprint, §9.5) is routed only once, when
   the admin enables fingerprint de-duplication for the endpoint it arrives at, with a time window
@@ -576,7 +581,8 @@ does:
 ### 9.4 Default routing and errors
 
 - Without `routing.py`, the core uses its **default router**: a message from a site goes to all other
-  sites of the same group, and a source goes nowhere. The same function is available to scripts as
+  sites of the same group and, from one recipient of a site (a `dm` node), to the site's other
+  recipients; a source goes nowhere. The same function is available to scripts as
   `mirror(message, ctx)`, so a script usually handles a few special cases and ends with
   `return mirror(message, ctx)`.
 - `routing.py` is reloaded on change, like the YAML. A script that fails to load keeps the previous one
@@ -596,7 +602,8 @@ gives:
   extension still shortens a label its network cannot show (it counts towards the 200-byte
   Meshtastic packet);
 - the message: source endpoint, group (if the endpoint is a site), author (account, display name, person
-  if any, or an author relayed by a peer hub), text, attachments, fingerprint, time;
+  if any, or an author relayed by a peer hub), the recipient that posted it (a `dm` node), text,
+  attachments, fingerprint, time;
 - the installation: groups and their sites, sources, endpoints by name (`family.radio`), people, the
   extension type of an endpoint (`meshtastic`), the recipients of an endpoint, later peers;
 - state the core already tracks, e.g. when a node was last heard on a channel (`last_heard`): any

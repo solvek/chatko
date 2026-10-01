@@ -30,6 +30,9 @@ type Subscriber = Callable[[FakePost], None]
 
 @dataclass(frozen=True, slots=True)
 class FakePost:
+    """A post at a place. At a place with recipients, `recipient` is the one the post is between
+    the hub and: the addressee of the hub's post, or the sender of anyone else's."""
+
     id: str
     place: str
     author: Account
@@ -174,6 +177,12 @@ class FakeExtension(Extension[FakeConfig], EndpointProvider[FakeEndpointConfig])
             endpoint = self._by_place.get(post.place)
             if endpoint is None or post.author.key == self.account.key:
                 continue
+            recipients = self._endpoints[endpoint].recipients
+            if recipients and post.recipient not in recipients:
+                continue  # like a direct message from a node in no `dm` list
+            from_recipient = post.recipient if recipients else None
             await self.hub.submit(
-                InboundMessage(endpoint, post.id, post.author, post.text, post.attachments)
+                InboundMessage(
+                    endpoint, post.id, post.author, post.text, post.attachments, from_recipient
+                )
             )

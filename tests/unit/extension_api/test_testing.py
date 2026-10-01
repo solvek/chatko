@@ -125,3 +125,17 @@ def test_fake_extension_rejects_two_endpoints_at_one_place() -> None:
 def test_fake_endpoint_config_needs_a_place() -> None:
     with pytest.raises(ValidationError):
         FakeEndpointConfig(place="")
+
+
+async def test_fake_extension_reads_a_place_with_recipients_only_from_them() -> None:
+    hub, network = FakeHub(), FakeNetwork()
+    ext = FakeExtension("fake", FakeConfig(), hub, network=network)
+    ext.set_endpoints({FAMILY: FakeEndpointConfig(place="family", recipients=("!a1",))})
+    await ext.start()
+
+    network.post("family", ADA, "stranger", recipient="!zz")
+    network.post("family", ADA, "listed", recipient="!a1")
+    [message] = await hub.wait_for_submissions(1)
+    await ext.stop()
+
+    assert (message.text, message.from_recipient) == ("listed", "!a1")

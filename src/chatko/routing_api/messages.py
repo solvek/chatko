@@ -31,6 +31,12 @@ class RoutedMessage:
         return self._message.endpoint
 
     @property
+    def from_recipient(self) -> str | None:
+        """The recipient of the endpoint that posted the message (the node that sent a direct
+        message to a `dm` endpoint); `None` at an endpoint without recipients."""
+        return self._message.from_recipient
+
+    @property
     def group(self) -> Group | None:
         return self._group
 

@@ -113,3 +113,14 @@ def test_target_with_no_recipients_includes_nobody() -> None:
 def test_target_label_cannot_be_empty() -> None:
     with pytest.raises(DomainError, match="label"):
         Target(TG, label=" ")
+
+
+def test_a_message_names_the_recipient_that_posted_it_if_any() -> None:
+    author = Author(NATA)
+    assert Message(MessageId("m1"), TG, "1", author, "x", NOW).from_recipient is None
+    assert Message(MessageId("m1"), TG, "1", author, "x", NOW, (), "!a1").from_recipient == "!a1"
+
+
+def test_the_recipient_that_posted_cannot_be_empty() -> None:
+    with pytest.raises(DomainError, match="empty recipient"):
+        Message(MessageId("m1"), TG, "1", Author(NATA), "x", NOW, (), " ")

@@ -189,3 +189,32 @@ def test_default_label_is_the_domain_default() -> None:
 
     assert default_label(nata, context()) == "NatAda"
     assert default_label(stranger, context()) == "SerPet"
+
+
+def dm(from_recipient: str | None) -> RoutedMessage:
+    base = message(FAMILY_RADIO)
+    msg = Message(base.id, FAMILY_RADIO, "7", base.author, "x", NOW, from_recipient=from_recipient)
+    return RoutedMessage(msg, FAMILY)
+
+
+def test_a_routed_message_names_the_recipient_that_posted_it() -> None:
+    assert dm("!a1b2c3d4").from_recipient == "!a1b2c3d4"
+    assert routed().from_recipient is None
+
+
+def test_mirror_sends_a_recipients_message_to_the_sites_other_recipients() -> None:
+    assert mirror(dm("!a1b2c3d4"), context()) == [
+        Target(FAMILY_TG),
+        Target(FAMILY_BRIAR),
+        to_endpoint(FAMILY_RADIO, recipients=["!0badc0de"]),
+    ]
+
+
+def test_mirror_keeps_away_from_a_site_with_recipients_if_the_sender_is_unknown() -> None:
+    assert mirror(dm(None), context()) == [Target(FAMILY_TG), Target(FAMILY_BRIAR)]
+
+
+def test_mirror_skips_a_site_whose_only_recipient_posted() -> None:
+    ctx = RoutingContext(TOPOLOGY, now=NOW, recipients={FAMILY_RADIO: ("!a1b2c3d4",)})
+
+    assert mirror(dm("!a1b2c3d4"), ctx) == [Target(FAMILY_TG), Target(FAMILY_BRIAR)]

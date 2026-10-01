@@ -47,7 +47,7 @@ def skip_radios_on_the_channel(target: Target, ctx: RoutingContext) -> Target:
     quiet = [
         node
         for node in ctx.recipients(target.endpoint)
-        if not heard_lately(AccountKey("meshtastic", node), channel, ctx)
+        if target.includes(node) and not heard_lately(AccountKey("meshtastic", node), channel, ctx)
     ]
     return to_endpoint(target.endpoint, recipients=quiet)
 

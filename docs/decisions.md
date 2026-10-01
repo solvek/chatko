@@ -540,3 +540,24 @@ order of the rows) and should persist and reload the `HubHistory`; S14 configure
 de-duplication windows and possibly `OutboxSettings`; S15 builds the `Installation` snapshots and
 starts the worker before the extensions. Open for the owner: a direct message from one node of a
 `dm` endpoint does not reach the endpoint's other nodes (design.md §9.3).
+
+## D38. A direct message from one node of a `dm` endpoint reaches its other nodes
+D37 left open that the invariant "never back to the endpoint it came from" kept a `dm` endpoint's
+nodes from hearing each other: a direct message from one node went to the group's other sites, but
+not to the other nodes of the same endpoint, and no script could change that. The core could not
+narrow the rule to the sender, because only the extension knows which recipient a post came from
+(that a node id is both the author and the recipient is Meshtastic's business). The owner chose to
+let the radios hear each other.
+**Decision:**
+- `InboundMessage.from_recipient` (optional, at the end): at an endpoint with recipients, the
+  recipient that posted the message. The domain `Message` stores it and `RoutedMessage` shows it.
+- The invariant excludes only that recipient of the source endpoint; the others may get the
+  message. If the extension does not name the sender, the whole source endpoint stays excluded.
+- `mirror` adds the source site narrowed to its other recipients, so this is the default; a script
+  can narrow or drop it (airtime: N−1 direct messages with ACKs for N nodes).
+- The contract suite checks that an extension names the recipient that posted at an endpoint with
+  recipients; `FakeExtension` reads a place with recipients only from them.
+- The API version stays `(1, 0)`: nothing is released yet. After a release this would be a minor
+  version (a field with a default at the end).
+**Consequences:** the Meshtastic extension (S21) sets `from_recipient` to the sending node for `dm`
+endpoints. The SQLite schema (S13) stores it with the message.

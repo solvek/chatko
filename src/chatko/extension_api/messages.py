@@ -15,6 +15,11 @@ class InboundMessage:
     another gateway), so that the hub can drop the copies. `author` is the account that posted it,
     with the names the network shows now; its kind is the extension's `type_name`. Non-text content
     goes into `attachments`, and its caption, if any, into `text`.
+
+    `from_recipient` is set at an endpoint with recipients: the one of them that posted the message
+    (the node that sent a direct message to a `dm` endpoint). The hub then relays the message to the
+    endpoint's other recipients, and never back to this one. Leave it `None` at an endpoint without
+    recipients.
     """
 
     endpoint: EndpointRef
@@ -22,10 +27,15 @@ class InboundMessage:
     author: Account
     text: str
     attachments: tuple[Attachment, ...] = ()
+    from_recipient: str | None = None
 
     def __post_init__(self) -> None:
         if not self.transport_id:
             raise ValueError(f"a message from {self.endpoint} needs a transport id")
+        if self.from_recipient is not None and not self.from_recipient.strip():
+            raise ValueError(
+                f"message {self.transport_id!r} from {self.endpoint} has an empty recipient"
+            )
         if not self.text.strip() and not self.attachments:
             raise ValueError(f"message {self.transport_id!r} from {self.endpoint} is empty")
 

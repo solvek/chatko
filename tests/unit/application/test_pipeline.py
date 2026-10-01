@@ -80,6 +80,22 @@ async def test_a_site_message_goes_to_every_other_site_of_its_group() -> None:
     ]
 
 
+async def test_a_direct_message_from_a_node_reaches_the_sites_other_nodes() -> None:
+    rig = Rig()
+
+    await rig.pipeline.submit(
+        InboundMessage(FAMILY_RADIO, "p1", ADA, "Привіт", from_recipient="!a1")
+    )
+
+    assert destinations(rig.store.deliveries) == [
+        "tg/family.tg",
+        "mesh/family.radio:!b2",
+        "mesh/family.channel",
+    ]
+    [message] = rig.store.messages.values()
+    assert message.from_recipient == "!a1"
+
+
 async def test_the_message_is_stored_with_its_author_and_time() -> None:
     rig = Rig()
     photo = (Attachment(AttachmentKind.PHOTO),)

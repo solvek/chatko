@@ -32,8 +32,10 @@ KNOWN = sorted(PLACES)
 RECIPIENTS_OF = {FAMILY_RADIO: RECIPIENTS}
 
 
-def apply(source: EndpointRef, targets: Sequence[Target]) -> list[Destination]:
-    return RoutingInvariants(TOPOLOGY, RECIPIENTS_OF).apply(source, targets)
+def apply(
+    source: EndpointRef, targets: Sequence[Target], from_recipient: str | None = None
+) -> list[Destination]:
+    return RoutingInvariants(TOPOLOGY, RECIPIENTS_OF).apply(source, targets, from_recipient)
 
 
 def slots(destinations: Sequence[Destination]) -> list[tuple[EndpointRef, str | None]]:
@@ -50,8 +52,20 @@ def test_nothing_goes_back_to_the_source() -> None:
     assert apply(FAMILY_TG, [to_endpoint(FAMILY_TG)]) == []
 
 
-def test_nothing_goes_back_to_a_source_with_recipients() -> None:
+def test_nothing_goes_back_to_a_source_with_recipients_if_the_sender_is_unknown() -> None:
     assert apply(FAMILY_RADIO, [to_endpoint(FAMILY_RADIO)]) == []
+
+
+def test_a_recipients_message_goes_to_the_other_recipients_of_its_endpoint() -> None:
+    target = to_endpoint(FAMILY_RADIO)
+
+    assert apply(FAMILY_RADIO, [target], "!a1") == [Destination(target, "!b2")]
+
+
+def test_a_recipient_that_is_no_recipient_of_the_source_changes_nothing_elsewhere() -> None:
+    target = to_endpoint(FAMILY_TG)
+
+    assert apply(STREET_TG, [target], "!a1") == [Destination(target)]
 
 
 def test_an_unknown_endpoint_is_dropped_and_logged(caplog: pytest.LogCaptureFixture) -> None:
@@ -106,35 +120,49 @@ targets = st.builds(
 target_lists = st.lists(targets, max_size=12)
 
 
-def covers(target: Target, source: EndpointRef, slot: tuple[EndpointRef, str | None]) -> bool:
+senders = st.none() | st.sampled_from([*RECIPIENTS, "!zz"])
+
+
+def covers(
+    target: Target,
+    source: EndpointRef,
+    sender: str | None,
+    slot: tuple[EndpointRef, str | None],
+) -> bool:
     endpoint, recipient = slot
-    if target.endpoint != endpoint or endpoint in (source, UNKNOWN):
+    if target.endpoint != endpoint or endpoint == UNKNOWN:
+        return False
+    if endpoint == source and (sender is None or recipient in (None, sender)):
         return False
     names = RECIPIENTS_OF.get(endpoint, ())
     return recipient is None if not names else recipient in names and target.includes(recipient)
 
 
-@given(st.sampled_from(KNOWN), target_lists)
-def test_no_destination_is_the_source_or_unknown(source: EndpointRef, ts: list[Target]) -> None:
-    for destination in apply(source, ts):
-        assert destination.endpoint != source
+@given(st.sampled_from(KNOWN), target_lists, senders)
+def test_nothing_goes_back_to_the_sender_or_to_an_unknown_endpoint(
+    source: EndpointRef, ts: list[Target], sender: str | None
+) -> None:
+    for destination in apply(source, ts, sender):
+        if destination.endpoint == source:
+            assert sender is not None
+            assert destination.recipient not in (None, sender)
         assert TOPOLOGY.has_endpoint(destination.endpoint)
 
 
-@given(st.sampled_from(KNOWN), target_lists)
+@given(st.sampled_from(KNOWN), target_lists, senders)
 def test_each_endpoint_and_recipient_gets_at_most_one(
-    source: EndpointRef, ts: list[Target]
+    source: EndpointRef, ts: list[Target], sender: str | None
 ) -> None:
-    found = slots(apply(source, ts))
+    found = slots(apply(source, ts, sender))
 
     assert len(found) == len(set(found))
 
 
-@given(st.sampled_from(KNOWN), target_lists)
+@given(st.sampled_from(KNOWN), target_lists, senders)
 def test_recipients_are_the_endpoints_own_and_the_targets_choice(
-    source: EndpointRef, ts: list[Target]
+    source: EndpointRef, ts: list[Target], sender: str | None
 ) -> None:
-    for destination in apply(source, ts):
+    for destination in apply(source, ts, sender):
         names = RECIPIENTS_OF.get(destination.endpoint, ())
         if names:
             assert destination.recipient in names
@@ -143,15 +171,15 @@ def test_recipients_are_the_endpoints_own_and_the_targets_choice(
             assert destination.recipient is None
 
 
-@given(st.sampled_from(KNOWN), target_lists)
+@given(st.sampled_from(KNOWN), target_lists, senders)
 def test_every_allowed_destination_comes_from_the_first_target_that_covers_it(
-    source: EndpointRef, ts: list[Target]
+    source: EndpointRef, ts: list[Target], sender: str | None
 ) -> None:
-    found = {(d.endpoint, d.recipient): d.target for d in apply(source, ts)}
+    found = {(d.endpoint, d.recipient): d.target for d in apply(source, ts, sender)}
     every_slot = [(e, r) for e in [*KNOWN, UNKNOWN] for r in RECIPIENTS_OF.get(e, (None,))]
 
     for slot in every_slot:
-        first = next((t for t in ts if covers(t, source, slot)), None)
+        first = next((t for t in ts if covers(t, source, sender, slot)), None)
         assert found.get(slot) == first
 
 
@@ -170,15 +198,17 @@ class RandomRouter:
 def test_the_pipeline_stores_no_echo_and_no_duplicate_whatever_the_script_returns(
     source: EndpointRef, ts: list[Target]
 ) -> None:
+    sender = "!a1" if source == FAMILY_RADIO else None
     rig = Rig(router=RandomRouter(ts))
 
-    asyncio.run(rig.pipeline.submit(InboundMessage(source, "t1", ADA, "Привіт")))
+    asyncio.run(
+        rig.pipeline.submit(InboundMessage(source, "t1", ADA, "Привіт", from_recipient=sender))
+    )
 
     keys = [(d.endpoint, d.recipient) for d in rig.store.deliveries]
     assert len(keys) == len(set(keys))
-    assert all(
-        d.endpoint != source and TOPOLOGY.has_endpoint(d.endpoint) for d in rig.store.deliveries
-    )
+    assert (source, sender) not in keys
+    assert all(TOPOLOGY.has_endpoint(d.endpoint) for d in rig.store.deliveries)
 
 
 def test_sites_of_another_group_are_valid_targets() -> None:

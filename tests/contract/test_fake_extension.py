@@ -16,6 +16,7 @@ from chatko.extension_api.testing import (
 
 HUB = AccountKey("fake", "hub")
 ADA = Account(AccountKey("fake", "ada"), "Ada Lovelace")
+RECIPIENTS = ("!a1b2c3d4", "!0badc0de")
 
 
 class FakeExtensionDriver(ContractDriver[FakePost]):
@@ -31,16 +32,20 @@ class FakeExtensionDriver(ContractDriver[FakePost]):
 
     def endpoint_config(self, place: int) -> dict[str, Any]:
         # Place 0 has recipients, so the suite also covers an endpoint that is delivered to each.
-        recipients = ["!a1b2c3d4", "!0badc0de"] if place == 0 else []
+        recipients = list(RECIPIENTS) if place == 0 else []
         return {"place": f"place-{place}", "recipients": recipients}
 
     def create(self, instance: str, config: BaseModel, hub: HubContext) -> Extension[Any]:
         assert isinstance(config, FakeConfig)
         return FakeExtension(instance, config, hub, network=self.network)
 
-    async def receive(self, place: int, text: str, *, by_hub: bool = False) -> FakePost:
+    async def receive(
+        self, place: int, text: str, *, by_hub: bool = False, recipient: str | None = None
+    ) -> FakePost:
         author = Account(HUB, "chatko") if by_hub else ADA
-        return self.network.post(f"place-{place}", author, text)
+        if recipient is None and place == 0:
+            recipient = RECIPIENTS[0]
+        return self.network.post(f"place-{place}", author, text, recipient=recipient)
 
     async def receive_again(self, post: FakePost) -> None:
         self.network.hand_over(post)

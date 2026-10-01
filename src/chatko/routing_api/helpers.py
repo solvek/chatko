@@ -27,11 +27,21 @@ def to_endpoint(
 
 
 def mirror(msg: RoutedMessage, ctx: RoutingContext) -> list[Target]:
-    """The default routing: all other sites of the message's group; nothing for a source."""
+    """The default routing: all other sites of the message's group, in their order; nothing for
+    a source. A message from one recipient of a site (a node of a `dm` endpoint) also goes to the
+    site's other recipients."""
     group = ctx.group_of(msg.endpoint)
     if group is None:
         return []
-    return [to_endpoint(site) for site in group.other_sites(msg.endpoint)]
+    targets = []
+    for site in group.sites:
+        if site != msg.endpoint:
+            targets.append(to_endpoint(site))
+            continue
+        others = [r for r in ctx.recipients(site) if r != msg.from_recipient]
+        if msg.from_recipient is not None and others:
+            targets.append(to_endpoint(site, recipients=others))
+    return targets
 
 
 def default_label(author: Author, ctx: RoutingContext) -> str:

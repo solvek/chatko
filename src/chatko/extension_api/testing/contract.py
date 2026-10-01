@@ -64,9 +64,16 @@ class ContractDriver[P](ABC):
         validated `config()`."""
 
     @abstractmethod
-    async def receive(self, place: int, text: str, *, by_hub: bool = False) -> P:
+    async def receive(
+        self, place: int, text: str, *, by_hub: bool = False, recipient: str | None = None
+    ) -> P:
         """Let the network hand the extension a text posted at `place` by another account, or
-        by the hub's own account if `by_hub`. Returns the post."""
+        by the hub's own account if `by_hub`. Returns the post.
+
+        At a place with recipients the post comes from one of them: from `recipient` if it is
+        given, else from any. `recipient` is one of `EndpointProvider.recipients` of the place's
+        endpoint, and only given for such a place.
+        """
 
     @abstractmethod
     async def receive_again(self, post: P) -> None:
@@ -183,6 +190,18 @@ class ExtensionContract(ABC):
         assert message.text == "Привіт усім 👋"
         assert message.transport_id
         assert message.author.key.kind == running.type_name
+        assert message.from_recipient in (_provider(running).recipients(FIRST) or (None,))
+
+    @pytest.mark.asyncio
+    async def test_names_the_recipient_that_posted(
+        self, running: Extension[Any], driver: ContractDriver[Any], hub: FakeHub
+    ) -> None:
+        recipients = _provider(running).recipients(FIRST)
+        for recipient in recipients:
+            await driver.receive(0, f"from {recipient}", recipient=recipient)
+
+        submitted = await hub.wait_for_submissions(len(recipients))
+        assert [message.from_recipient for message in submitted] == list(recipients)
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("running")

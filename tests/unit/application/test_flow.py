@@ -34,6 +34,19 @@ async def test_a_post_reaches_every_other_site_and_each_recipient() -> None:
     await rig.stop()
 
 
+async def test_radios_of_a_dm_site_hear_each_other_through_the_hub() -> None:
+    rig = Rig()
+    await rig.start()
+
+    rig.networks["mesh"].post(place(FAMILY_RADIO), ADA, "Я на місці", recipient="!a1")
+    await settle()
+
+    assert rig.posted(FAMILY_RADIO, recipient="!b2") == ["AdaLov: Я на місці"]
+    assert not rig.posted(FAMILY_RADIO, recipient="!a1")
+    assert rig.posted(FAMILY_TG) == ["AdaLov: Я на місці"]
+    await rig.stop()
+
+
 async def test_the_hubs_own_posts_never_come_back_in() -> None:
     # §9.3: the hub's own posts never reach the router (FakeExtension drops them, step 1).
     rig = Rig()
