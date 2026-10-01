@@ -63,11 +63,12 @@ sources:
   owner: { ext: tg, chat: 123456789 }                        # the owner's private chat with the bot
 
 # Endpoints that drop a message another path brought lately: the same author label and text within
-# this many seconds (docs/design.md §9.3). Needed where two paths reach the hub (several hubs, a late
-# Briar sync). Names are sites (`family.briar`) or sources.
+# this many seconds (docs/design.md §9.3), no longer than retention_days. Needed where two paths reach
+# the hub (several hubs, a late Briar sync). Names are sites (`family.briar`) or sources.
 # fingerprint_dedup_s: { family.briar: 21600 }
 
-# How long messages and fingerprints are kept (days, default 7). Keep it longer than any network's replay.
+# How long messages and fingerprints are kept (days, default 7, at most 3650). Keep it longer than any
+# network's replay.
 # retention_days: 7
 
 # Where the hub posts admin notices: errors, foreign Telegram groups.

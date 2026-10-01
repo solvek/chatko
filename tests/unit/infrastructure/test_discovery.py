@@ -3,7 +3,7 @@ from typing import Any, ClassVar
 from pydantic import BaseModel
 
 from chatko.extension_api import Extension
-from chatko.extension_api.testing import FakeExtension
+from chatko.extension_api.testing import FakeConfig, FakeExtension
 from chatko.infrastructure.discovery import discover_extensions
 
 
@@ -64,6 +64,41 @@ def test_every_kind_of_broken_extension_is_refused_with_a_reason() -> None:
         "extension 'value': is not a subclass of chatko.extension_api.Extension",
         "extension 'renamed': is registered as 'renamed' but its type_name is 'fake'",
         "extension 'fake': is registered twice",
+    ]
+
+
+def bare(**attributes: object) -> type[Extension[Any]]:
+    """An extension class with only the given class attributes."""
+
+    class Bare(Extension[FakeConfig]):
+        async def start(self) -> None:
+            pass
+
+        async def stop(self) -> None:
+            pass
+
+    for name, value in attributes.items():
+        setattr(Bare, name, value)
+    return Bare
+
+
+def test_an_extension_without_a_name_or_a_valid_version_is_refused() -> None:
+    found = discover_extensions(
+        [
+            Entry("nameless", bare(api_version=(1, 0))),
+            Entry("unversioned", bare(type_name="unversioned")),
+            Entry("short", bare(type_name="short", api_version=(1,))),
+            Entry("text", bare(type_name="text", api_version="1.0")),
+            Entry("fake", FakeExtension),
+        ]
+    )
+
+    assert list(found.types) == ["fake"]
+    assert found.problems == [
+        "extension 'nameless': is registered as 'nameless' but its type_name is None",
+        "extension 'unversioned': its api_version is not (major, minor) but None",
+        "extension 'short': its api_version is not (major, minor) but (1,)",
+        "extension 'text': its api_version is not (major, minor) but '1.0'",
     ]
 
 

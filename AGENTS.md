@@ -35,11 +35,14 @@
   the routing engine with the admin's test kit for routing scripts (S12, D39), the SQLite
   repositories (S13, D40), the configuration with `chatko check-config`, the admin notifier and
   extension discovery (S14, D41) and the running hub, `HubRuntime` with `chatko run` (S15, D42),
-  exist; no network extension is written yet, so the hub runs only with fake extensions in tests. Every extension passes the contract suite in `chatko.extension_api.testing`. Phase 0 (spikes S1–S3) is closed (D30): the Briar relay on phones, the local
-  Meshtastic lab in `lab/` (channel and direct messages, keys, ACKs, provisioning), briar-headless in
-  Docker in `lab/briar/` and the plan for its private-group patch (D29). Only the Kyiv broker questions
-  are open (design.md §6.6); they do not block v1. Phase 1 (core) is under way: the next session is the first one marked
-  `todo` in `docs/roadmap.md`.
+  exist, and the phase 1 review (S16, D43) fixed what it found. No network extension is written
+  yet, so the hub runs only with fake extensions in tests. Every extension passes the contract
+  suite in `chatko.extension_api.testing`. Phase 0 (spikes S1–S3) is closed (D30): the Briar relay
+  on phones, the local Meshtastic lab in `lab/` (channel and direct messages, keys, ACKs,
+  provisioning), briar-headless in Docker in `lab/briar/` and the plan for its private-group patch
+  (D29). Only the Kyiv broker questions are open (design.md §6.6); they do not block v1. Phase 1
+  (core) is closed; phase 2 (Telegram) is next: the next session is the first one marked `todo` in
+  `docs/roadmap.md`.
 - The upstream Briar clone for reading and patching is `~/Projects/briar` (tag `release-1.5.21`).
 - Development runs locally on the owner's Linux machine. There is no hardware Meshtastic node yet, so
   a second virtual node (`meshtasticd`) plays the member's radio. The production host will be some Linux

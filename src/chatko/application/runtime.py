@@ -128,7 +128,6 @@ class HubRuntime:
             settings=self._settings.outbox,
         )
         self._notifier = AdminNotifier(
-            target=self._admin_endpoint,
             installation=self.installation,
             messages=ports.messages,
             outbox=self._worker,
@@ -322,6 +321,7 @@ class HubRuntime:
             self._instances,
             current.fingerprint_dedup if config is None else config.fingerprint_dedup,
             running=self._running & self._instances.keys(),
+            admin_endpoint=current.admin_endpoint if config is None else config.admin_endpoint,
         )
 
     def _hub(self, name: str) -> ExtensionHub:
@@ -334,10 +334,6 @@ class HubRuntime:
             clock=self._ports.clock,
             accounts=self._accounts,
         )
-
-    def _admin_endpoint(self) -> EndpointRef | None:
-        config = self._config.current
-        return None if config is None else config.admin_endpoint
 
     async def _every(
         self, period: timedelta, action: Callable[[], Awaitable[None]], at_once: bool

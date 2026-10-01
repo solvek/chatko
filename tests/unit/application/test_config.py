@@ -1,4 +1,5 @@
 import copy
+import math
 from datetime import timedelta
 from typing import Any
 
@@ -100,6 +101,10 @@ def test_an_instance_without_endpoints_is_listed() -> None:
     [
         (changed(unknown=1) | {"unknown": 1}, "unknown: Extra inputs are not permitted"),
         (changed(retention_days=0), "retention_days: Input should be greater than or equal to 1"),
+        (
+            changed(retention_days=1_000_000),
+            "retention_days: Input should be less than or equal to 3650",
+        ),
         (changed(routing=""), "routing: String should have at least 1 character"),
         (
             changed(extensions={"tg": {"type": "nope"}}, groups={}, sources={}, admin_notices=None),
@@ -137,6 +142,14 @@ def test_an_instance_without_endpoints_is_listed() -> None:
         (
             changed(groups={"g": {"sites": {}}}),
             "groups.g.sites: Dictionary should have at least 1 item after validation, not 0",
+        ),
+        (
+            changed(groups={" ": {"sites": {"a": {"ext": "tg", "place": "x"}}}}),
+            "groups. : a group needs a name",
+        ),
+        (
+            changed(sources={" ": {"ext": "tg", "place": "x"}}),
+            "sources. : an endpoint of 'tg' needs a name",
         ),
     ],
 )
@@ -189,7 +202,17 @@ def test_what_names_an_endpoint_is_checked_against_the_endpoints() -> None:
     assert len(errors) == 3
     assert any(e.startswith("admin_notices.to: no site or source 'nowhere'") for e in errors)
     assert any(e.startswith("fingerprint_dedup_s.nowhere: no site or source") for e in errors)
-    assert "fingerprint_dedup_s.family.tg: the window must be positive" in errors
+    assert any(e.startswith("fingerprint_dedup_s.family.tg: the window must be") for e in errors)
+
+
+@pytest.mark.parametrize("seconds", [math.nan, math.inf, 3 * 86400 + 1])
+def test_a_deduplication_window_is_no_longer_than_the_retention(seconds: float) -> None:
+    raw = changed(fingerprint_dedup_s={"family.tg": seconds})  # retention_days: 3
+
+    assert problems(raw) == (
+        "fingerprint_dedup_s.family.tg: the window must be positive and no longer than the "
+        "retention (retention_days: 3), for which fingerprints are kept",
+    )
 
 
 def test_the_admin_endpoint_may_be_a_site() -> None:

@@ -124,7 +124,8 @@ class ConfigLoader(Protocol):
 
     async def load(self) -> Mapping[str, Any]:
         """The config as plain data. Raises `OSError` when it cannot be read and `ConfigError`
-        when it is not YAML, is not a mapping, or uses an environment variable that is not set."""
+        when it is not UTF-8 YAML, is not a mapping, or uses an environment variable that is not
+        set."""
         ...
 
 

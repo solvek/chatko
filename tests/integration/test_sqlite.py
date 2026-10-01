@@ -85,6 +85,22 @@ async def test_a_failed_transaction_is_rolled_back() -> None:
     await database.close()
 
 
+@pytest.mark.parametrize("steps", range(6))
+async def test_a_transaction_cancelled_at_any_step_leaves_the_database_usable(steps: int) -> None:
+    database = await Database.open(":memory:")
+    store = SqliteStore(database)
+    try:
+        adding = asyncio.create_task(store.add(message(1), []))
+        for _ in range(steps):  # wherever it waits: BEGIN, a statement, COMMIT
+            await asyncio.sleep(0)
+        adding.cancel()
+        await asyncio.wait({adding})
+
+        assert await store.add(message(2), [])
+    finally:
+        await database.close()
+
+
 async def test_concurrent_writers_do_not_interleave() -> None:
     database = await Database.open(":memory:")
     store = SqliteStore(database)

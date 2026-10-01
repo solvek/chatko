@@ -66,7 +66,13 @@ class Engine:
 
     async def load(self, code: str | None) -> ReloadOutcome:
         self.source.code = code
-        return await self.engine.reload()
+        return await self.reload()
+
+    async def reload(self) -> ReloadOutcome:
+        """Reload, and let the notices that the engine posts in tasks arrive."""
+        outcome = await self.engine.reload()
+        await settle()
+        return outcome
 
     @property
     def texts(self) -> list[str]:
@@ -102,6 +108,11 @@ def test_an_error_in_code_the_script_calls_is_refused_with_the_scripts_line() ->
 
     with pytest.raises(ScriptError, match=f"^{re.escape(message)}$"):
         load_script("import nowhere\n", "routing.py")
+
+
+def test_a_script_that_exits_while_loading_is_refused() -> None:
+    with pytest.raises(ScriptError, match=r"^line 2: SystemExit: 3$"):
+        load_script("import sys\nsys.exit(3)\n", "routing.py")
 
 
 def test_code_with_a_null_byte_is_refused() -> None:
@@ -142,7 +153,7 @@ def test_a_script_may_use_dataclasses_and_postponed_annotations() -> None:
 async def test_without_a_script_the_defaults_run() -> None:
     hub = Engine()
 
-    assert await hub.engine.reload() is ReloadOutcome.DEFAULTS
+    assert await hub.reload() is ReloadOutcome.DEFAULTS
     assert hub.engine.script is None
     assert hub.engine.route(routed(), CTX) == MIRRORED
     assert hub.engine.label(routed(), Target(FAMILY_RADIO), CTX) == "NatAda"
@@ -250,7 +261,7 @@ async def test_a_script_that_cannot_be_read_keeps_the_previous_one_running() -> 
     await hub.load(TO_OWNER)
     hub.source.error = PermissionError(13, "Permission denied", "routing.py")
 
-    assert await hub.engine.reload() is ReloadOutcome.REFUSED
+    assert await hub.reload() is ReloadOutcome.REFUSED
 
     assert hub.engine.route(routed(), CTX) == [Target(OWNER)]
     assert hub.texts == [
@@ -263,10 +274,10 @@ async def test_after_a_read_error_the_script_is_loaded_again() -> None:
     hub = Engine()
     await hub.load(TO_OWNER)
     hub.source.error = UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
-    await hub.engine.reload()
+    await hub.reload()
     hub.source.error = None
 
-    assert await hub.engine.reload() is ReloadOutcome.LOADED
+    assert await hub.reload() is ReloadOutcome.LOADED
 
 
 async def test_a_lost_load_notice_is_logged(caplog: pytest.LogCaptureFixture) -> None:
@@ -393,6 +404,23 @@ async def test_when_label_fails_the_default_label_is_used(text: str, error: str)
 
     assert error in hub.texts[0]
     assert "got the default label" in hub.texts[0]
+
+
+async def test_a_script_that_exits_while_routing_falls_back_on_the_defaults() -> None:
+    hub = Engine()
+    await hub.load(
+        "import sys\n\ndef route(msg, ctx):\n    sys.exit()\n\n"
+        "def label(msg, target, ctx):\n    raise SystemExit('bye')\n"
+    )
+
+    assert hub.engine.route(routed(), CTX) == MIRRORED
+    assert hub.engine.label(routed(), Target(FAMILY_RADIO), CTX) == "NatAda"
+    await settle()
+
+    assert [notice.key for notice in hub.notices.notices] == [
+        "routing:route:SystemExit:4",
+        "routing:label:SystemExit:7",
+    ]
 
 
 async def test_a_lost_error_notice_is_logged(caplog: pytest.LogCaptureFixture) -> None:

@@ -27,6 +27,9 @@ _MODULE = "chatko_routing_script"
 
 LOAD_NOTICE_KEY = "routing:load"
 
+_SCRIPT_ERRORS = (Exception, SystemExit)
+"""What a script's errors are: a stray `exit()` in it is a bug of the script, not a stop."""
+
 
 class Router(Protocol):
     """Decides where a message goes and how its author is signed. Never raises: the routing
@@ -65,7 +68,7 @@ def load_script(code: str, origin: str) -> RoutingScript:
     sys.modules[_MODULE] = module  # Only while it runs: what it defines keeps its globals.
     try:
         exec(compiled, module.__dict__)  # noqa: S102 - the admin's script, trusted like the config
-    except Exception as error:
+    except _SCRIPT_ERRORS as error:
         raise ScriptError(_describe(error, origin)) from error
     finally:
         sys.modules.pop(_MODULE, None)
@@ -98,7 +101,9 @@ class RoutingEngine:
     label, that target gets `default_label`. The error is logged, and the admin is told once per
     kind of error (the function, the exception type and the line of the script it came from)
     until the script changes. Notices are posted in tasks of their own, so routing never waits
-    for them (an admin notifier may itself go through the pipeline, which is busy routing).
+    for them (an admin notifier may itself go through the pipeline, which is busy routing), and
+    a refusal during a config reload goes to the admin of the snapshot that the reload publishes
+    in the same step as the script's swap.
     """
 
     def __init__(self, *, source: RoutingScriptSource, notices: AdminNotices) -> None:
@@ -123,7 +128,7 @@ class RoutingEngine:
             code = await self._source.read()
         except (OSError, UnicodeDecodeError) as error:
             self._read = False  # Whatever comes next is news.
-            return await self._refuse(f"it cannot be read: {error}")
+            return self._refuse(f"it cannot be read: {error}")
         if self._read and code == self._code:
             return ReloadOutcome.UNCHANGED
         self._read, self._code = True, code
@@ -135,7 +140,7 @@ class RoutingEngine:
         try:
             script = load_script(code, origin)
         except ScriptError as error:
-            return await self._refuse(str(error))
+            return self._refuse(str(error))
         self._use(script)
         _log.info("the routing script %s is loaded", origin)
         return ReloadOutcome.LOADED
@@ -146,7 +151,7 @@ class RoutingEngine:
             return self._defaults.route(msg, ctx)
         try:
             return _targets(script.route(msg, ctx))
-        except Exception as error:
+        except _SCRIPT_ERRORS as error:
             self._failed("route", msg, error, "the default routing")
             return self._defaults.route(msg, ctx)
 
@@ -156,7 +161,7 @@ class RoutingEngine:
             return self._defaults.label(msg, target, ctx)
         try:
             return _label(script.label(msg, target, ctx))
-        except Exception as error:
+        except _SCRIPT_ERRORS as error:
             self._failed("label", msg, error, "the default label")
             return self._defaults.label(msg, target, ctx)
 
@@ -164,7 +169,7 @@ class RoutingEngine:
         self._script = script
         self._reported.clear()
 
-    async def _refuse(self, reason: str) -> ReloadOutcome:
+    def _refuse(self, reason: str) -> ReloadOutcome:
         running = (
             "The previous version keeps running"
             if self._script is not None
@@ -172,10 +177,12 @@ class RoutingEngine:
         )
         text = f"The routing script {self._source.origin} was not loaded: {reason}. {running}."
         _log.error("%s", text)
-        await self._notify(text)
+        self._post(text, LOAD_NOTICE_KEY)
         return ReloadOutcome.REFUSED
 
-    def _failed(self, function: str, msg: RoutedMessage, error: Exception, fallback: str) -> None:
+    def _failed(
+        self, function: str, msg: RoutedMessage, error: BaseException, fallback: str
+    ) -> None:
         line = _line_of(error, self._source.origin)
         kind = (function, type(error).__qualname__, line)
         where = "" if line is None else f" at line {line}"
@@ -198,18 +205,20 @@ class RoutingEngine:
             msg.endpoint,
             exc_info=error,
         )
-        task = asyncio.get_running_loop().create_task(
-            self._notify(
-                f"The routing script's {function}(){where} failed: {type(error).__name__}: "
-                f"{error}. A message from {msg.endpoint.name} got {fallback}, and so will others "
-                "with this error until the script changes; they are not reported again.",
-                key=f"routing:{function}:{kind[1]}:{line}",
-            )
+        self._post(
+            f"The routing script's {function}(){where} failed: {type(error).__name__}: "
+            f"{error}. A message from {msg.endpoint.name} got {fallback}, and so will others "
+            "with this error until the script changes; they are not reported again.",
+            f"routing:{function}:{kind[1]}:{line}",
         )
+
+    def _post(self, text: str, key: str) -> None:
+        """Post an admin notice in a task of its own, without waiting for it."""
+        task = asyncio.get_running_loop().create_task(self._notify(text, key))
         self._notices_posting.add(task)
         task.add_done_callback(self._notices_posting.discard)
 
-    async def _notify(self, text: str, *, key: str = LOAD_NOTICE_KEY) -> None:
+    async def _notify(self, text: str, key: str) -> None:
         try:
             await self._notices.notify(text, key=key)
         except Exception:
@@ -244,6 +253,6 @@ def _line_of(error: BaseException, origin: str) -> int | None:
     return lines[-1] if lines else None
 
 
-def _describe(error: Exception, origin: str) -> str:
+def _describe(error: BaseException, origin: str) -> str:
     # Raised while the script's module ran, so the traceback has a frame in the script.
     return f"line {_line_of(error, origin)}: {type(error).__name__}: {error}"

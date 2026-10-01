@@ -21,6 +21,7 @@ type ExtensionTypes = Mapping[str, type[Extension[Any]]]
 """The installed extension classes, by `type_name`."""
 
 DEFAULT_RETENTION_DAYS = 7
+MAX_RETENTION_DAYS = 3650
 
 
 class ConfigError(Exception):
@@ -87,7 +88,7 @@ class _Core(_Section):
     people: dict[str, list[str]] = {}
     routing: str | None = Field(default=None, min_length=1)
     fingerprint_dedup_s: dict[str, float] = {}
-    retention_days: int = Field(default=DEFAULT_RETENTION_DAYS, ge=1)
+    retention_days: int = Field(default=DEFAULT_RETENTION_DAYS, ge=1, le=MAX_RETENTION_DAYS)
     peers: dict[str, list[str]] = {}
 
 
@@ -237,10 +238,16 @@ class _Validator:
 
     def _dedup(self, topology: Topology) -> dict[EndpointRef, timedelta]:
         window = {}
+        retention = self._core.retention_days
         for name, seconds in self._core.fingerprint_dedup_s.items():
             where = f"fingerprint_dedup_s.{name}"
-            if seconds <= 0:
-                self._error(where, "the window must be positive")
+            # `seen` cannot look further back than the fingerprints are kept; NaN fails too.
+            if not 0 < seconds <= timedelta(days=retention).total_seconds():
+                self._error(
+                    where,
+                    "the window must be positive and no longer than the retention "
+                    f"(retention_days: {retention}), for which fingerprints are kept",
+                )
             elif (endpoint := self._known_endpoint(topology, name, where)) is not None:
                 window[endpoint] = timedelta(seconds=seconds)
         return window

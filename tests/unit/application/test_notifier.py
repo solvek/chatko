@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import timedelta
 
 import pytest
@@ -23,16 +24,15 @@ class Queue:
 
 class Rig:
     def __init__(self, target: EndpointRef | None = OWNER) -> None:
-        self.target = target
         self.store = InMemoryStore()
         self.queue = Queue()
         self.clock = FakeClock()
         mesh = FakeExtension("mesh", FakeConfig(), FakeHub())
         mesh.set_endpoints({RADIO: FakeEndpointConfig(place="r", recipients=("!a1", "!b2"))})
-        installation = Installation(Topology(), {"mesh": mesh})
+        topology = Topology(sources={"owner": OWNER, "radio": RADIO})
+        self.installation = Installation(topology, {"mesh": mesh}, admin_endpoint=target)
         self.notifier = AdminNotifier(
-            target=lambda: self.target,
-            installation=lambda: installation,
+            installation=lambda: self.installation,
             messages=self.store,
             outbox=self.queue,
             clock=self.clock,
@@ -63,6 +63,15 @@ async def test_an_endpoint_with_recipients_gets_a_delivery_for_each() -> None:
     await rig.notifier.notify("hello", key="k")
 
     assert [d.recipient for d in rig.queue.queued] == ["!a1", "!b2"]
+
+
+async def test_the_admin_endpoint_is_the_current_snapshots() -> None:
+    rig = Rig()
+    rig.installation = replace(rig.installation, admin_endpoint=RADIO)
+
+    await rig.notifier.notify("moved", key="k")
+
+    assert {d.endpoint for d in rig.queue.queued} == {RADIO}
 
 
 async def test_without_an_admin_endpoint_the_notice_is_only_logged(

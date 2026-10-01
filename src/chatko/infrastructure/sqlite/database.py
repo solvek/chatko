@@ -1,8 +1,9 @@
 """The SQLite connection: one per hub, with its schema migrated and its transactions serialized."""
 
 import asyncio
+import sqlite3
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Self
 
@@ -45,15 +46,22 @@ class Database:
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[aiosqlite.Connection]:
         """The connection inside a transaction: committed if the block ends, rolled back if it
-        raises."""
+        raises or is cancelled, also while the transaction begins or commits."""
         async with self._lock:
-            await self._connection.execute("BEGIN IMMEDIATE")
             try:
+                await self._connection.execute("BEGIN IMMEDIATE")
                 yield self._connection
+                await self._connection.execute("COMMIT")
             except BaseException:
-                await self._connection.execute("ROLLBACK")
+                await self._rollback()
                 raise
-            await self._connection.execute("COMMIT")
+
+    async def _rollback(self) -> None:
+        # The connection's thread runs the statements in order, also those whose await was
+        # cancelled, so this follows the BEGIN or COMMIT it may have to undo. If the BEGIN
+        # failed or the COMMIT went through, there is nothing to undo.
+        with suppress(sqlite3.OperationalError):
+            await self._connection.execute("ROLLBACK")
 
     async def version(self) -> int:
         async with self._connection.execute("PRAGMA user_version") as cursor:

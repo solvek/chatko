@@ -144,8 +144,9 @@ registered in the `chatko.extensions` entry point group under its `type_name`.
 
 When an instance's own section changes, the core stops it and starts a new instance (steps 2–4);
 so it does with an instance whose `start` failed, at the next config that loads. To stop an
-instance while the hub runs, the core first gives it no new deliveries and waits for those in
-progress (each ends within the call timeout), and only then calls `stop` (§5.5).
+instance while the hub runs, the core first gives it no new deliveries and no new delivery
+reports, waits for the calls into it in progress (each ends within the call timeout), and only
+then calls `stop` (§5.5).
 
 ### 3.2 Endpoints and deliveries
 
@@ -258,6 +259,8 @@ delivers the label and the text to every recipient; answers `Retry` while the ne
   the extension logic is tested against a fake of that port, and the contract suite runs against it.
   Create the port's connection in `start`, not in the constructor.
 - Drop the hub's own posts before calling `hub.submit`.
+- Give a `Retry` an `after` only when the network says when to try again: the core waits exactly
+  that long, so a zero wait repeats the attempt at once.
 - Pass the contract suite (§3.5).
 
 ## 4. Routing API
@@ -334,14 +337,14 @@ infrastructure under it (§5.5, D42).
 | `InboundPipeline` | `pipeline` | for each submitted message, one at a time: drop it if its endpoint is unknown or it is a copy (same endpoint and transport id) → find the person for the account → (later: the peer-relayed author) → fingerprint → skip routing if the endpoint de-duplicates by fingerprint and the same message came lately → `Router.route` → `RoutingInvariants` → `Router.label` once per target without its own label → store the message with one outbox row per target and recipient, in one transaction → record it in the history → hand the rows to the `OutboxWorker`. Returns an `Outcome`; `drain()` waits for the messages in hand |
 | `RoutingInvariants` | `invariants` | turns the targets into `Destination`s (target, recipient) that keep design.md §9.3: none back at the source (only at the recipient that posted it, if the extension named it, D38), none at an unknown endpoint, each endpoint and recipient once (the first target that includes it wins), only the endpoint's own recipients |
 | `Router` | `routing` | the port the pipeline routes with: `route` and `label`, synchronous and never raising. `DefaultRouter`: `mirror` and `default_label` |
-| `RoutingEngine` | `routing` | the `Router` of a running hub (§5.3): the routing script, or `DefaultRouter` without one. `reload()` reads the script from a `RoutingScriptSource`, loads it with `load_script` and keeps the last good version; `route` and `label` fall back to the defaults on a script's errors and post an admin notice once per error kind |
-| `OutboxWorker` | `outbox` | delivers the pending rows, one lane per endpoint and recipient (§5.2); reports final results to the source's extension; loads the pending rows on `start` |
+| `RoutingEngine` | `routing` | the `Router` of a running hub (§5.3): the routing script, or `DefaultRouter` without one. `reload()` reads the script from a `RoutingScriptSource`, loads it with `load_script` and keeps the last good version; `route` and `label` fall back to the defaults on a script's errors (an `exit()` in it too) and post an admin notice once per error kind |
+| `OutboxWorker` | `outbox` | delivers the pending rows, one lane per endpoint and recipient (§5.2); reports final results to the source's extension; loads the pending rows on `start`; `finish_attempts(instance)` waits for the calls into an instance in progress |
 | `ExtensionHub` | `hub` | the `HubContext` of one extension instance: `submit` into the pipeline, `heard` into the history, `retry_now` into the worker, `notify_admin` into `AdminNotices` (with the instance in the key), `now` from the clock; the authors of stored messages and the accounts heard go to `NewAccounts`. It ignores (and logs) calls about another instance's endpoints |
 | `NewAccounts` | `accounts` | notes every account an extension shows in the `AccountRegistry`; for a key seen for the first time that belongs to no person, posts a notice (key `account:<key>`) if `admin_notices.new_accounts` is on (design.md §8). Never raises |
 | `HubHistory` | `history` | the routing script's `RoutingHistory`, in memory: the last time each account was heard (anywhere and per endpoint) and the fingerprints of the last 7 days |
 | `HistoryPersistence` | `history` | keeps a `HubHistory` in a `HistoryRepository`: `load(now)` at start, `flush()` saves what `HubHistory.take_unsaved()` hands over (kept for the next flush if the repository fails), `prune(now)` drops arrivals past the retention. The `HubRuntime` flushes every 10 s and at stop, and prunes with the messages at start and daily |
-| `Installation` | `installation` | one consistent snapshot of the topology, the extension instances (`running` names the started ones: only they get deliveries and reports, while the recipients and types of all are known) and the endpoints that de-duplicate by fingerprint; the services ask an `InstallationSource` for the current one per message and per attempt, so a reload only swaps the snapshot |
-| `AdminNotifier` | `notifier` | implements `AdminNotices`: stores a notice as a message from `NOTICE_SOURCE` with one delivery per recipient of the admin endpoint (`target()`, from the config), rate-limited per key; it only logs without an endpoint and never raises (D41) |
+| `Installation` | `installation` | one consistent snapshot of the topology, the extension instances (`running` names the started ones: only they get deliveries and reports, while the recipients and types of all are known), the endpoints that de-duplicate by fingerprint and the admin endpoint; the services ask an `InstallationSource` for the current one per message, notice and attempt, so a reload only swaps the snapshot |
+| `AdminNotifier` | `notifier` | implements `AdminNotices`: stores a notice as a message from `NOTICE_SOURCE` with one delivery per recipient of the admin endpoint, both from the current snapshot (D43), rate-limited per key; it only logs without an endpoint and never raises (D41) |
 | `validate_config`, `Config` | `config` | the models of `chatko.yaml` and the validation: core sections, each extension's and endpoint's models, topology, the check of every instance on a fresh object (§5.4) |
 | `ConfigService` | `config_service` | `reload()` loads and validates through a `ConfigLoader` and keeps the last valid `Config` (`current`), reporting a refusal once with the key `config:load` (D41) |
 | `HubRuntime` | `runtime` | the running hub (§5.5): builds the services above over `HubPorts`, runs the extension instances of the config, applies reloads (`refresh`), saves the history and prunes |
@@ -361,11 +364,12 @@ them and `application.testing` fakes them in memory (`FakeClock`, `SequentialIds
 | `HistoryRepository` | `load(since) -> HistoryChanges`, `record(changes)` (one transaction; a last-heard time never moves back), `prune(before)` (arrivals only) | `SqliteHistory`; `InMemoryHistoryStore` |
 | `AccountRegistry` | `note(account, at) -> bool` (`True` the first time the key is seen; names and last-seen time are updated) | `SqliteAccounts`; `InMemoryAccounts` |
 | `AdminNotices` | `notify(text, key=…)` | `AdminNotifier`; `RecordingNotices` |
-| `ConfigLoader` | `await load() -> Mapping` (`OSError`; `ConfigError` for bad YAML or an unset variable) | `FileConfigLoader(path, env)` (`infrastructure.config`); `InMemoryConfigLoader` |
+| `ConfigLoader` | `await load() -> Mapping` (`OSError`; `ConfigError` for a file that is not UTF-8, bad YAML or an unset variable) | `FileConfigLoader(path, env)` (`infrastructure.config`); `InMemoryConfigLoader` |
 | `RoutingScriptSource` | `origin`, `await read() -> str \| None` (`None`: no script; `OSError` or `UnicodeDecodeError`: one that cannot be read) | `FileScriptSource(path)` (`config/routing.py`, read in a thread); `ConfiguredScriptSource(directory, name)`, the file the current config names (§5.5); `InMemoryScriptSource` |
 
 SQLite (`chatko.infrastructure.sqlite`, D40): `Database` is one `aiosqlite` connection whose every use is
-a transaction under a lock; its schema is the tuple `MIGRATIONS`, applied in order and numbered by
+a transaction under a lock, rolled back if it raises or is cancelled, also while it begins or
+commits (D43); its schema is the tuple `MIGRATIONS`, applied in order and numbered by
 `PRAGMA user_version` (a database from a newer chatko is refused with `SchemaError`).
 `SqliteStore`, `SqliteHistory` and `SqliteAccounts` implement the ports above. The same repository
 tests (`tests/integration/test_repositories.py`) run against these and against the in-memory fakes.
@@ -383,10 +387,10 @@ pipeline in a task of its own, so cancelling the caller does not cut it short.
   timeout, applies the result and saves it, and then reports a final one to the extension of the
   message's source (`delivery_report`, with the same timeout; its errors are logged).
 - **Retries.** A `Retry` is due after its `after`, else after the backoff: 10 s, doubling up to
-  1 h. Once the message arrived 3 days ago or earlier, the next `Retry` makes the delivery fail
-  ("gave up: …"). `retry_now` makes the oldest delivery of the matching lanes due at once. A broken
-  repository is logged and the lane tries again after the first backoff. `OutboxSettings` holds
-  these numbers (S14 may put them in the config).
+  1 h (and staying there, however many attempts). Once the message arrived 3 days ago or earlier,
+  the next `Retry` makes the delivery fail ("gave up: …"). `retry_now` makes the oldest delivery
+  of the matching lanes due at once. A broken repository is logged and the lane tries again after
+  the first backoff. `OutboxSettings` holds these numbers; they are not in the config.
 - **Endpoints that are gone.** A delivery to an endpoint that is no longer in the topology fails
   ("… is no longer in the config"), so a reload that removes or renames an endpoint drops its
   pending deliveries (D34). A delivery report goes to the source's extension only if it runs when
@@ -394,8 +398,9 @@ pipeline in a task of its own, so cancelling the caller does not cut it short.
 - **Lifecycle.** `start` loads the pending deliveries (deliveries enqueued meanwhile follow them,
   without duplicates); `enqueue` adds the ones the pipeline stored (while stopped it leaves them to
   the next `start`, which finds them in the outbox); `stop` cancels the waiting lanes and gives the
-  deliveries in progress 10 s. `finish_attempts(instance)` waits for the attempts in progress to
-  one instance's endpoints, so that the instance can be stopped. The `HubRuntime` starts the worker
+  deliveries in progress 10 s. `finish_attempts(instance)` waits for the calls into one instance
+  in progress, the attempts to its endpoints and the delivery reports to it, so that the instance
+  can be stopped. The `HubRuntime` starts the worker
   after the extensions and stops it before them (D42), so the worker calls only started instances.
 
 ### 5.3 The routing engine
@@ -406,12 +411,12 @@ pipeline in a task of its own, so cancelling the caller does not cut it short.
   error becomes a `ScriptError` with the script's line: `line 3: NameError: …`.
 - **Reloading.** `reload()` is called at start and whenever the file may have changed (the
   config watcher through `HubRuntime.refresh`, §5.5). It returns a `ReloadOutcome`: `LOADED`;
-  `DEFAULTS` (no script, or it was removed); `REFUSED` (unreadable or not loadable: the previous
-  version, or the defaults, keep running, and an admin notice says why, with the key
-  `routing:load`); `UNCHANGED` (the same code as last read, also for a refused one, so a refusal
+  `DEFAULTS` (no script, or it was removed); `REFUSED` (unreadable or not loadable, including a
+  script that calls `exit()` while it loads: the previous version, or the defaults, keep running,
+  and an admin notice says why, with the key `routing:load`); `UNCHANGED` (the same code as last read, also for a refused one, so a refusal
   is reported once). It reads the file in a thread, so it does not block the event loop.
 - **Running.** `route` and `label` call the script synchronously, from the pipeline (§4). A
-  `route` that raises, or returns `None`, a single `Target`, a string or anything else that is not
+  `route` that raises (an `exit()` included), or returns `None`, a single `Target`, a string or anything else that is not
   an iterable of `Target`s, is an error: the message goes by `mirror`. A `label` that raises or
   returns anything but a non-blank string is an error: the target gets `default_label`. The kind
   of an error is the function, the exception type and the script line of the innermost frame in
@@ -420,26 +425,31 @@ pipeline in a task of its own, so cancelling the caller does not cut it short.
   the script forgets the reported kinds.
 - **Notices without waiting.** `route` and `label` run inside the pipeline's lock, so the engine
   posts their notices in tasks of its own instead of awaiting them: an admin notifier that goes
-  through the pipeline (S14) cannot deadlock it. Lost notices are logged.
+  through the pipeline (S14) cannot deadlock it. So does `reload` with its refusals: during a
+  config reload the task runs after the snapshot that the runtime publishes in the same step as
+  the script's swap, so the notice goes to that snapshot's admin endpoint (D43). Lost notices are
+  logged.
 - A script that never returns blocks the hub: it is trusted code, like the config (design.md §9.5).
 
 ### 5.4 The config
 
 - **Loading.** `infrastructure.config.parse_config(text, env)` is `yaml.safe_load` plus `${NAME}`
-  substitution in values (D41). `FileConfigLoader` reads the file in a thread.
+  substitution in values (D41). `FileConfigLoader` reads the file in a thread; a file that is not
+  UTF-8 is a `ConfigError` with the line of the first bad byte.
 - **Validating.** `validate_config(raw, types)` takes the installed extension classes by `type_name`
-  (`infrastructure.discovery.discover_extensions` finds them, refusing the unsupported ones) and
-  returns a `Config`: `extensions` (`ExtensionSetup`: type and validated config) and `endpoints` per
-  instance in config order, the `Topology` (sites are named `<group>.<site>`, D34), `fingerprint_dedup`
-  per endpoint, `admin_endpoint`, `new_accounts`, `routing`, `retention` and `peers`. Otherwise it
-  raises a `ConfigError` listing the problems with their places and without values. Its last step
-  builds each instance and calls `set_endpoints` on a fresh one with an inert hub, so the same call
-  serves `check-config` and every reload.
+  (`infrastructure.discovery.discover_extensions` finds them, refusing the unsupported and the
+  malformed ones) and returns a `Config`: `extensions` (`ExtensionSetup`: type and validated
+  config) and `endpoints` per instance in config order, the `Topology` (sites are named
+  `<group>.<site>`, D34), `fingerprint_dedup` per endpoint (no longer than the retention),
+  `admin_endpoint`, `new_accounts`, `routing`, `retention` (at most 3650 days) and `peers`.
+  Otherwise it raises a `ConfigError` listing the problems with their places and without values.
+  Its last step builds each instance and calls `set_endpoints` on a fresh one with an inert hub, so
+  the same call serves `check-config` and every reload.
 - **Reloading.** `watch_files(paths, on_change, stop)` (over `watchfiles`) calls
   `HubRuntime.refresh()` when `chatko.yaml` or the routing script changes; the runtime applies a
   `LOADED` outcome (§5.5).
 - **`chatko check-config`** (`app.check_config`): validate, load the routing script with
-  `load_script`, run `test_*.py` next to the config with `pytest` in a subprocess (optional extra
+  `load_script`, run the files `test_*.py` next to the config with `pytest` in a subprocess (optional extra
   `chatko[test]`; skipped with a message if missing). Exit 0 if all pass, 1 otherwise.
 
 ### 5.5 The running hub
@@ -460,7 +470,8 @@ over the in-memory fakes. `HubSettings` holds the outbox's settings and the upke
   take out of service each instance that is gone, whose `ExtensionSetup` changed or that is not
   running (its deliveries in progress end, then `stop`); reload the routing script; give each
   remaining instance whose endpoints changed the new ordered set; construct the new instances;
-  publish the new `Installation`; start the new instances. The script's swap and the new
+  publish the new `Installation`, with the new admin endpoint; start the new instances. Until the
+  new snapshot is published, admin notices go to the admin endpoint of the old one (D43). The script's swap and the new
   snapshot happen in one step of the event loop, so no message is routed by a new script against
   the old topology or the other way round. Without a new config, only the script is reloaded.
 - **`stop`.** Stop the upkeep, the worker (its grace), each instance, wait for the submissions in

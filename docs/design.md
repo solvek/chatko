@@ -1,6 +1,6 @@
 # chatko design
 
-Status: **draft**; phase 1 (the core) is being written. This document describes **behaviour**. The
+Status: **draft**; phase 1 (the core) is written and reviewed, phase 2 (Telegram) is next. This document describes **behaviour**. The
 code structure is described in [architecture.md](architecture.md). Items marked **(verify)** must be
 confirmed by a spike ([spikes.md](spikes.md)) or by reading the upstream source before we rely on
 them. Phase 0 answered every (verify) that v1 relies on (session S07); the questions still open
@@ -587,16 +587,16 @@ does:
   `mirror(message, ctx)`, so a script usually handles a few special cases and ends with
   `return mirror(message, ctx)`.
 - `routing.py` is reloaded on change, like the YAML; the same code read again changes nothing. A
-  script that cannot be read or fails to load (a syntax error, an exception while it runs, no
-  `route(msg, ctx)`, a `route` or `label` that does not take the hook's arguments) keeps the
-  previous one running, or the defaults at start, and is reported as an admin notice with the
-  line it failed at; so does a script written for a routing API version this hub does not
-  support (§9.5). A removed script leaves the defaults running.
-- Each function falls back on its own default. If `route()` raises for a message or returns
-  something that is not a list of targets, that message goes by `mirror`; if `label()` raises or
-  returns no label (not a string, or blank), that target gets `default_label`. The error is
-  logged, and the admin is told once per error kind (the function, the exception type and the
-  script line it came from) until the script changes (D39).
+  script that cannot be read or fails to load (a syntax error, an exception or an `exit()` while
+  it runs, no `route(msg, ctx)`, a `route` or `label` that does not take the hook's arguments)
+  keeps the previous one running, or the defaults at start, and is reported as an admin notice
+  with the line it failed at; so does a script written for a routing API version this hub does
+  not support (§9.5). A removed script leaves the defaults running.
+- Each function falls back on its own default. If `route()` raises (or calls `exit()`) for a
+  message or returns something that is not a list of targets, that message goes by `mirror`; if
+  `label()` raises or returns no label (not a string, or blank), that target gets
+  `default_label`. The error is logged, and the admin is told once per error kind (the function,
+  the exception type and the script line it came from) until the script changes (D39).
 - `chatko check-config` loads the script and runs its tests (§9.5) as well.
 
 ### 9.5 Helpers for scripts
@@ -677,15 +677,19 @@ Two files in `config/`, both edited only by the admin and reloaded on change:
 - `routing.py`: the routing script (§9). Optional; without it the defaults are used. See
   [`routing.example.py`](../routing.example.py).
 
-If a new version is invalid, the hub keeps the previous one and reports the error as an admin notice.
+Both are UTF-8 text. If a new version is invalid, the hub keeps the previous one and reports the
+error as an admin notice.
 A valid new version applies while the hub runs: an extension instance whose own section changed is
 restarted (so is one that failed to start), one whose endpoints changed gets the new set without a
 restart, new instances start and removed ones stop, after the deliveries in progress to them end.
 A new routing script takes effect in the same moment as the new config it comes with.
 `chatko run` runs the hub until SIGTERM or Ctrl+C; `chatko check-config` checks both files (and runs the routing script's tests) without starting the hub.
 Beside the sections of the example, the config has `fingerprint_dedup_s` (§9.3: the window per endpoint,
-in seconds) and `retention_days`. Admin notices go through the outbox like any message; notices
+in seconds, no longer than the retention, since fingerprints are kept only that long) and
+`retention_days` (at most 3650). Admin notices go through the outbox like any message; notices
 with the same cause are rate-limited together, and the next one says how many were held back.
+While a new config is being applied, notices still go to the admin endpoint of the one in effect,
+and a refused routing script that comes with the new config is reported to the new one.
 Secrets (tokens, passwords, PSKs, the hub node's private key) come from environment variables
 (`${VAR}` in YAML, values in `.env`), never from the files.
 

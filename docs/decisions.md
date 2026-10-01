@@ -720,3 +720,44 @@ waits for S17. A change saved in the moment between the start and the watcher's 
 noticed until the next save, because `watchfiles` does not say when it watches. Extensions get
 `set_endpoints` while they run, and `stop` only after their deliveries ended. Tests may write files
 inside async tests (`ruff`'s `ASYNC240` is off for `tests/`).
+
+## D43. Phase 1 review: notices take one snapshot, the core survives its inputs
+**Status:** accepted (S16).
+Session S16 reviewed the whole core (`/code-review` at high effort over `src/chatko` and
+`routing.example.py`, the coverage and the import contracts). Its ten findings are fixed, each
+with a test that failed first. Choices that the fixes made:
+- **An admin notice is a message of one snapshot.** The notifier took its endpoint from the
+  latest config but the endpoint's recipients and the topology from the published `Installation`,
+  which lags while a reload stops instances; at start the routing script is loaded before the
+  first snapshot. A notice could get a delivery without the recipient of a `dm` endpoint, or one to
+  an endpoint "no longer in the config". Now `Installation.admin_endpoint` is part of the snapshot,
+  and the routing engine posts its load refusals in tasks, as it already did its errors, so a
+  refusal during a reload goes out with the snapshot published in the same step as the script's
+  swap. While a reload stops instances, notices go to the admin of the config in effect.
+- **Calls into a stopping instance include its delivery reports.** `finish_attempts(instance)` also
+  waits for the reports to the instance from other lanes, so `stop` comes after every call into
+  it, as architecture.md §3.1 promises.
+- **A transaction is rolled back also when it is cancelled while it begins or commits.**
+  `aiosqlite` runs a statement whose await was cancelled anyway, so a cancelled `BEGIN` left the
+  shared connection in a transaction and every later one failed. The outbox's stop and the
+  runtime's timers cancel tasks that may be in a transaction; the drained submissions and the last
+  history flush at shutdown were lost.
+- **The config's numbers are bounded.** `retention_days` is at most 3650 (`now - retention` must
+  stay a date), and a `fingerprint_dedup_s` window is positive and no longer than the retention,
+  since `seen` cannot look further back than the fingerprints are kept (this also refuses NaN and
+  infinity). The config file must be UTF-8: anything else is a `ConfigError` with the line, like a
+  YAML error, instead of a traceback; so is a character YAML does not allow.
+- **A routing script's `exit()` is a script error**, at load time and in `route` and `label`
+  (`SystemExit` is caught with `Exception`; `KeyboardInterrupt` still stops the hub).
+- **Discovery refuses an extension class without a `type_name` or an `api_version` of the form
+  `(major, minor)`**, instead of failing on it.
+- **The backoff stays at its longest wait** however many attempts there were (a `dm` node heard
+  often makes many attempts; the power overflowed after 1024).
+- `check-config` runs only the `test_*.py` files next to the config, as documented.
+**Consequences:** `AdminNotifier` no longer takes a `target`; the runtime publishes the admin
+endpoint with each snapshot. Coverage is back to 100 % except one defensive line. Left as they
+are, for their low impact: a delivery whose instance is not running counts as an attempt, so the
+extension may see `attempt > 1` for a message it never got; a routing script in a directory that
+does not exist when the hub starts is watched only after `chatko.yaml` changes; an extension that
+answers `Retry(after=0)` every time is retried at once every time. Phase 1 is closed; S17 starts
+phase 2.

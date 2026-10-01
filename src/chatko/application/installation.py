@@ -19,17 +19,21 @@ class Installation:
     given deliveries and reports, but the recipients and types of all are known, so that a
     message routed while an instance (re)starts gets its rows. `fingerprint_dedup` gives the
     endpoints whose messages are routed only if no message with the same fingerprint arrived
-    within the window before (design.md §9.3). The `HubRuntime` makes a new snapshot when the
-    config or the running instances change; each message is handled with one snapshot from start
-    to end.
+    within the window before (design.md §9.3). `admin_endpoint` is where admin notices go
+    (`None`: they are only logged). The `HubRuntime` makes a new snapshot when the config or the
+    running instances change; each message, admin notices included, is handled with one snapshot
+    from start to end.
     """
 
     topology: Topology
     extensions: Mapping[str, Extension[Any]] = field(default_factory=dict)
     fingerprint_dedup: Mapping[EndpointRef, timedelta] = field(default_factory=dict)
     running: Collection[str] | None = None
+    admin_endpoint: EndpointRef | None = None
 
     def __post_init__(self) -> None:
+        if self.admin_endpoint is not None and not self.topology.has_endpoint(self.admin_endpoint):
+            raise ValueError(f"the admin endpoint {self.admin_endpoint} is not in the topology")
         object.__setattr__(self, "extensions", MappingProxyType(dict(self.extensions)))
         object.__setattr__(
             self, "fingerprint_dedup", MappingProxyType(dict(self.fingerprint_dedup))

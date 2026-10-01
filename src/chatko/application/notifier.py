@@ -1,7 +1,6 @@
 """Admin notices: messages from the hub to the admin (docs/design.md §2)."""
 
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -27,18 +26,18 @@ class _Posted:
 class AdminNotifier:
     """Implements `AdminNotices`: posts a notice at the admin's endpoint through the outbox.
 
-    A notice is stored as a message of its own with one delivery per recipient of the endpoint, so
-    it is retried like any message. Notices with the same key are rate-limited together: after one
-    is posted, the others of its key within `min_interval` are held back, and the next one that
-    gets through says how many were. Keys that never had a notice held back are forgotten after
-    the interval. Without an admin endpoint the notice is only logged. It never
-    raises.
+    The endpoint and its recipients come from one snapshot of the installation, the current one
+    when the notice is posted (`Installation.admin_endpoint`). A notice is stored as a message of
+    its own with one delivery per recipient of the endpoint, so it is retried like any message.
+    Notices with the same key are rate-limited together: after one is posted, the others of its
+    key within `min_interval` are held back, and the next one that gets through says how many
+    were. Keys that never had a notice held back are forgotten after the interval. Without an
+    admin endpoint the notice is only logged. It never raises.
     """
 
     def __init__(
         self,
         *,
-        target: Callable[[], EndpointRef | None],
         installation: InstallationSource,
         messages: MessageRepository,
         outbox: DeliveryQueue,
@@ -46,7 +45,6 @@ class AdminNotifier:
         ids: IdGenerator,
         min_interval: timedelta = timedelta(minutes=10),
     ) -> None:
-        self._target = target
         self._installation = installation
         self._messages = messages
         self._outbox = outbox
@@ -62,7 +60,8 @@ class AdminNotifier:
             _log.exception("an admin notice was lost: %s", text)
 
     async def _notify(self, text: str, key: str) -> None:
-        endpoint = self._target()
+        installation = self._installation()
+        endpoint = installation.admin_endpoint
         if endpoint is None:
             _log.warning("admin notice (no endpoint for notices is configured): %s", text)
             return
@@ -87,7 +86,7 @@ class AdminNotifier:
             body,
             now,
         )
-        recipients = self._installation().recipients(endpoint) or (None,)
+        recipients = installation.recipients(endpoint) or (None,)
         deliveries = [
             Delivery.of(message, Target(endpoint), NOTICE_LABEL, now, recipient)
             for recipient in recipients

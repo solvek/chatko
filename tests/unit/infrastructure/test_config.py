@@ -68,6 +68,15 @@ def test_a_yaml_error_gives_the_place_and_not_the_text() -> None:
     assert "s3cr3t" not in error.value.errors[0]
 
 
+def test_a_character_yaml_does_not_allow_is_an_error_with_its_line() -> None:
+    with pytest.raises(ConfigError) as error:
+        parse_config("a: 1\ntoken: s3\x07cr3t\n", {})
+
+    assert error.value.errors == (
+        "the file is not valid YAML: special characters are not allowed (line 2)",
+    )
+
+
 def test_the_env_file_has_name_value_lines() -> None:
     text = (
         "# comment\n\nA=1\nexport B = two words \n"
@@ -93,3 +102,13 @@ async def test_the_loader_reads_the_file_with_the_environment(tmp_path: Path) ->
 async def test_the_loader_raises_oserror_for_a_missing_file(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         await FileConfigLoader(tmp_path / "missing.yaml", {}).load()
+
+
+async def test_the_loader_refuses_a_file_that_is_not_utf8_with_its_line(tmp_path: Path) -> None:
+    path = tmp_path / "chatko.yaml"
+    path.write_bytes("people:\n  Наталія: [telegram:1]\n".encode("cp1251"))
+
+    with pytest.raises(ConfigError) as error:
+        await FileConfigLoader(path, {}).load()
+
+    assert error.value.errors == ("the file is not UTF-8 text (line 2)",)

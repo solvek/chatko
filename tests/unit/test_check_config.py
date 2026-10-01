@@ -110,6 +110,13 @@ def test_a_missing_config_file_is_an_error(tmp_path: Path) -> None:
     assert "cannot read" in run.err.getvalue()
 
 
+def test_a_config_that_is_not_utf8_is_an_error(run: Run) -> None:
+    (run.directory / "chatko.yaml").write_bytes("people:\n  Ада: [fake:1]\n".encode("cp1251"))
+
+    assert run.check() == 1
+    assert "the file is not UTF-8 text (line 2)" in run.err.getvalue()
+
+
 def test_a_missing_routing_script_is_an_error(run: Run) -> None:
     (run.directory / "routing.py").unlink()
 

@@ -62,7 +62,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S13 | 1 | SQLite repositories and migrations | Sonnet 5.5 | high | done |
 | S14 | 1 | Configuration: models, `${ENV}`, people, admin notices, hot reload, `check-config` | Sonnet 5.5 | high | done |
 | S15 | 1 | Extension discovery, composition root, `chatko run`, fake extension end to end | Opus 5.5 | high | done |
-| S16 | 1 | Phase 1 review | Opus 5.5 | xhigh | todo |
+| S16 | 1 | Phase 1 review | Opus 5.5 | xhigh | done |
 | S17 | 2 | Telegram: port, group and private-chat endpoints, allowed chats | Opus 5.5 | high | todo |
 | S18 | 2 | Telegram live test with two groups (*with owner*) | Sonnet 5.5 | medium | todo |
 | S19 | 3 | Meshtastic: asyncio adapter over the `meshtastic` library (TCP to `meshtasticd`), provisioning from the config | Opus 5.5 | xhigh | todo |
@@ -265,6 +265,15 @@ changed while it runs, SIGTERM. 676 tests, coverage 99 %. For S16: the pre-exist
 
 **S16. Phase 1 review.** `/code-review` at high effort, coverage and architecture check, docs in sync
 with the code. Done when: findings are fixed or recorded as sessions.
+*Done (D43):* the review covered all of `src/chatko` and `routing.example.py`; its ten findings
+are fixed, each with a test that failed first: a transaction cancelled while it began broke the
+SQLite connection for good; admin notices took their endpoint from the new config but its
+recipients from the old snapshot (`Installation.admin_endpoint` now); `finish_attempts` did not
+wait for delivery reports to the instance; a non-UTF-8 `chatko.yaml`, out-of-range
+`retention_days` and `fingerprint_dedup_s` values, a malformed extension class and a script's
+`exit()` escaped as tracebacks; the backoff overflowed after 1024 attempts; docs and docstrings
+had drifted. The import contracts hold and match architecture.md §1; coverage is 100 % but for
+one defensive line. 705 tests. Three low-impact points are recorded in D43 and left as they are.
 
 ### Phase 2: Telegram
 

@@ -100,6 +100,17 @@ async def test_a_file_that_cannot_be_read_or_parsed_is_refused() -> None:
     assert await service.reload() is ConfigOutcome.LOADED  # the same as before, but news again
 
 
+async def test_a_file_that_still_cannot_be_read_is_reported_once() -> None:
+    service, loader, notices = rig(GOOD)
+    await service.reload()
+    loader.error = PermissionError(13, "Permission denied")
+
+    await service.reload()
+    assert await service.reload() is ConfigOutcome.REFUSED
+
+    assert len(notices.notices) == 1
+
+
 async def test_a_lost_notice_does_not_break_the_reload() -> None:
     service, _, notices = rig(BAD)
 

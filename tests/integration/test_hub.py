@@ -53,6 +53,7 @@ class World:
     networks: dict[str, FakeNetwork] = field(default_factory=dict)
     started: dict[str, asyncio.Event] = field(default_factory=dict)
     endpoints: dict[str, list[EndpointRef]] = field(default_factory=dict)
+    stopped: set[str] = field(default_factory=set)
 
     def types(self) -> dict[str, type[FakeExtension]]:
         world = self
@@ -69,6 +70,10 @@ class World:
             async def start(self) -> None:
                 await super().start()
                 world.started.setdefault(self.instance, asyncio.Event()).set()
+
+            async def stop(self) -> None:
+                await super().stop()
+                world.stopped.add(self.instance)
 
         return {"fake": Networked}
 
@@ -215,3 +220,21 @@ async def test_sigterm_stops_the_hub_in_order(config: Path, tmp_path: Path) -> N
     os.kill(os.getpid(), signal.SIGTERM)
 
     assert await asyncio.wait_for(hub, 15) == 0
+
+
+async def test_without_signal_handlers_a_cancelled_run_still_stops_in_order(
+    config: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unsupported(*args: object) -> None:
+        raise NotImplementedError  # as in the Windows event loop
+
+    monkeypatch.setattr(asyncio.get_running_loop(), "add_signal_handler", unsupported)
+    world = World()
+    hub = asyncio.create_task(serve(config, ENV, world.types(), data=tmp_path / "data"))
+    await world.until_started("tg", "mesh")
+
+    hub.cancel()  # what `asyncio.run` does on Ctrl+C there
+
+    await asyncio.wait({hub}, timeout=15)
+    assert hub.cancelled()
+    assert world.stopped == {"tg", "mesh"}

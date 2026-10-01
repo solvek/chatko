@@ -76,8 +76,8 @@ class HubHistory:
 class HistoryPersistence:
     """Keeps a `HubHistory` in a repository: loads it at start, saves what is new, prunes the old.
 
-    `flush` is called after each message and now and then; if the repository fails the changes are
-    kept and the next flush saves them with the new ones.
+    The `HubRuntime` calls `flush` every few seconds and at stop; if the repository fails the
+    changes are kept and the next flush saves them with the new ones.
     """
 
     def __init__(self, history: HubHistory, repository: HistoryRepository) -> None:

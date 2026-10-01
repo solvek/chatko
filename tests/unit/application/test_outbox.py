@@ -55,6 +55,8 @@ class Scripted(Extension[FakeConfig], EndpointProvider[FakeEndpointConfig]):
         self.calls: list[tuple[EndpointRef, OutboundMessage]] = []
         self.reports: list[DeliveryReport] = []
         self.report_error: Exception | None = None
+        self.report_gate = asyncio.Event()
+        self.report_gate.set()
         self._active: Counter[tuple[EndpointRef, str | None]] = Counter()
         self.most_active: Counter[tuple[EndpointRef, str | None]] = Counter()
         self.in_flight = 0
@@ -88,6 +90,7 @@ class Scripted(Extension[FakeConfig], EndpointProvider[FakeEndpointConfig]):
             self.in_flight -= 1
 
     async def delivery_report(self, report: DeliveryReport) -> None:
+        await self.report_gate.wait()
         if self.report_error is not None:
             raise self.report_error
         self.reports.append(report)
@@ -268,6 +271,16 @@ def test_the_backoff_stops_growing_at_the_longest_wait() -> None:
     assert [settings.backoff(n).total_seconds() for n in range(1, 5)] == [10, 30, 60, 60]
 
 
+def test_the_backoff_does_not_overflow_after_many_attempts() -> None:
+    assert OutboxSettings().backoff(5000) == timedelta(hours=1)
+
+
+def test_a_backoff_factor_of_one_waits_the_same_each_time() -> None:
+    settings = OutboxSettings(first_retry=timedelta(seconds=10), backoff_factor=1)
+
+    assert settings.backoff(1) == settings.backoff(5000) == timedelta(seconds=10)
+
+
 @pytest.mark.parametrize(
     "settings",
     [
@@ -424,6 +437,23 @@ async def test_finish_attempts_waits_for_the_instances_deliveries_in_progress(
     rig.mesh.gate.set()
     await asyncio.wait_for(finishing, 1)
     assert rig.state().state is DeliveryState.DELIVERED
+
+
+async def test_finish_attempts_waits_for_the_reports_in_progress_to_the_instance(
+    rig: OutboxRig,
+) -> None:
+    rig.tg.report_gate.clear()
+    await rig.add("1")  # from tg to mesh
+    await settle()
+    assert rig.mesh.texts() == ["1"]
+
+    finishing = asyncio.create_task(rig.worker.finish_attempts("tg"))
+    await settle()
+    assert not finishing.done()
+
+    rig.tg.report_gate.set()
+    await asyncio.wait_for(finishing, 1)
+    assert len(rig.tg.reports) == 1
 
 
 async def test_a_failing_report_is_logged_and_ignored(

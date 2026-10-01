@@ -101,6 +101,9 @@ class Tracked(FakeExtension):
         late = self.rig.submit_on_stop.get(self.instance)
         if late is not None:
             await self.hub.submit(late)
+        notice = self.rig.notice_on_stop.get(self.instance)
+        if notice is not None:
+            await self.hub.notify_admin(notice)
         await super().stop()
         self.stopped = True
         if self.instance in self.rig.failing_stop:
@@ -145,6 +148,7 @@ class Rig:
         self.failing_start: set[str] = set()
         self.failing_stop: set[str] = set()
         self.submit_on_stop: dict[str, InboundMessage] = {}
+        self.notice_on_stop: dict[str, str] = {}
         self.created: list[Tracked] = []
         owner = self
 
@@ -274,6 +278,18 @@ class TestStart:
 
         [notice] = rig.notices()
         assert "was not loaded" in notice
+        await rig.runtime.stop()
+
+    async def test_a_refused_routing_script_at_start_reaches_each_recipient_of_the_admin(
+        self,
+    ) -> None:
+        rig = Rig(edited(admin_notices={"to": "family.radio"}), script="def route(:\n")
+        await rig.runtime.start()
+        await settle()
+
+        for node in ("!a1", "!b2"):
+            [notice] = rig.posted("mesh", "family-dm", recipient=node)
+            assert "was not loaded" in notice
         await rig.runtime.stop()
 
     async def test_the_deliveries_pending_from_before_are_delivered(self) -> None:
@@ -442,6 +458,23 @@ class TestReload:
         to_radio = [d for d in rig.store.deliveries if d.endpoint == FAMILY_RADIO]
         assert {d.state for d in to_radio} == {DeliveryState.FAILED}
         assert {d.last_error for d in to_radio} == {"family.radio is no longer in the config"}
+        await rig.runtime.stop()
+
+    async def test_a_notice_while_a_reload_stops_an_instance_goes_by_the_running_config(
+        self,
+    ) -> None:
+        rig = Rig()
+        await rig.runtime.start()
+        rig.notice_on_stop["mesh"] = "mesh is going"
+        extensions = copy.deepcopy(CONFIG["extensions"])
+        extensions["mesh"]["account"] = "hub2"
+        sources = {**CONFIG["sources"], "admin": {"ext": "tg", "place": "admin"}}
+
+        await rig.reload(
+            edited(extensions=extensions, sources=sources, admin_notices={"to": "admin"})
+        )
+
+        assert rig.notices() == ["chatko: mesh is going"]
         await rig.runtime.stop()
 
     async def test_an_invalid_config_keeps_the_running_one(self) -> None:

@@ -2,11 +2,13 @@
 
 import asyncio
 import logging
+import math
 from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum, auto
+from typing import Any
 
 from chatko.application.installation import Installation, InstallationSource
 from chatko.application.ports import Clock, MessageRepository, OutboxRepository
@@ -55,8 +57,10 @@ class OutboxSettings:
 
     def backoff(self, attempts: int) -> timedelta:
         """The wait after the `attempts`-th attempt answered `Retry` without a time of its own."""
-        exponent = max(attempts - 1, 0)
         longest = self.longest_retry / self.first_retry
+        exponent = max(attempts - 1, 0)
+        if self.backoff_factor > 1:  # Beyond this the wait is the longest anyway: no overflow.
+            exponent = min(exponent, math.ceil(math.log(longest, self.backoff_factor)))
         return self.first_retry * min(self.backoff_factor**exponent, longest)
 
 
@@ -107,6 +111,8 @@ class OutboxWorker:
         self._state = _State.STOPPED
         self._lanes: dict[_LaneKey, _Lane] = {}
         self._early: list[Delivery] = []
+        self._reporting: dict[asyncio.Task[Any], str] = {}
+        """The attempts that are reporting to an instance now, with its name."""
 
     async def start(self) -> None:
         """Load the pending deliveries and start delivering them."""
@@ -151,16 +157,17 @@ class OutboxWorker:
                 lane.wake.set()
 
     async def finish_attempts(self, instance: str) -> None:
-        """Wait until the attempts in progress to the endpoints of `instance` have ended, so that
-        it can be stopped (architecture.md §3.1). Take it out of the installation's running
-        instances first, or new attempts follow."""
-        attempts = [
+        """Wait until the calls in progress into `instance` have ended, the attempts to its
+        endpoints and the delivery reports to it, so that it can be stopped (architecture.md
+        §3.1). Take it out of the installation's running instances first, or new calls follow."""
+        calls: set[asyncio.Task[Any]] = {
             lane.attempt
             for lane in self._lanes.values()
             if lane.key[0].instance == instance and lane.attempt is not None
-        ]
-        if attempts:
-            await asyncio.wait(attempts)
+        }
+        calls.update(task for task, to in self._reporting.items() if to == instance)
+        if calls:
+            await asyncio.wait(calls)
 
     async def stop(self) -> None:
         """Stop delivering. The deliveries in progress get `stop_grace` to end."""
@@ -298,8 +305,13 @@ class OutboxWorker:
         report = DeliveryReport(
             source, message.transport_id, ended.endpoint, ended.recipient, result
         )
+        attempt = asyncio.current_task()
+        assert attempt is not None  # noqa: S101 - an attempt is a task (`_run`)
+        self._reporting[attempt] = source.instance
         try:
             async with asyncio.timeout(self._settings.call_timeout.total_seconds()):
                 await provider.delivery_report(report)
         except Exception:
             _log.exception("%s raised on a delivery report", source.instance)
+        finally:
+            del self._reporting[attempt]

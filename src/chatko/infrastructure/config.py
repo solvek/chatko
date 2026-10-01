@@ -25,7 +25,7 @@ def parse_config(text: str, env: Mapping[str, str]) -> dict[str, Any]:
     try:
         document = yaml.safe_load(text)
     except yaml.YAMLError as error:
-        raise ConfigError([f"the file is not valid YAML: {_first_line(error)}"]) from None
+        raise ConfigError([f"the file is not valid YAML: {_first_line(error, text)}"]) from None
     if document is None:
         document = {}
     if not isinstance(document, dict):
@@ -54,6 +54,16 @@ def read_env_file(text: str) -> dict[str, str]:
     return env
 
 
+def decode_config(data: bytes) -> str:
+    """The text of a config file, which must be UTF-8. Raises `ConfigError` with the line of the
+    first byte that is not, and without the bytes themselves."""
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as error:
+        line = data.count(b"\n", 0, error.start) + 1
+        raise ConfigError([f"the file is not UTF-8 text (line {line})"]) from None
+
+
 class FileConfigLoader:
     """Implements `ConfigLoader` over a YAML file and the environment."""
 
@@ -62,8 +72,8 @@ class FileConfigLoader:
         self._env = env
 
     async def load(self) -> dict[str, Any]:
-        text = await asyncio.to_thread(self.path.read_text, encoding="utf-8")
-        return parse_config(text, self._env)
+        data = await asyncio.to_thread(self.path.read_bytes)
+        return parse_config(decode_config(data), self._env)
 
 
 def _substitute(value: object, env: Mapping[str, str], where: str, missing: list[str]) -> object:
@@ -89,8 +99,11 @@ def _replace(match: re.Match[str], env: Mapping[str, str], where: str, missing: 
     return env[name]
 
 
-def _first_line(error: yaml.YAMLError) -> str:
+def _first_line(error: yaml.YAMLError, text: str) -> str:
     # A YAML error may quote the offending line, which may hold a secret: give only the place.
+    if isinstance(error, yaml.reader.ReaderError):  # a character that YAML does not allow
+        line = text.count("\n", 0, error.position) + 1
+        return f"{error.reason} (line {line})"
     mark = getattr(error, "problem_mark", None)
     problem = getattr(error, "problem", None) or "syntax error"
     if mark is None:

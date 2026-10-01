@@ -10,7 +10,7 @@ from typing import TextIO
 
 from chatko.application.config import ConfigError, ExtensionTypes, validate_config
 from chatko.application.routing import load_script
-from chatko.infrastructure.config import parse_config
+from chatko.infrastructure.config import FileConfigLoader
 from chatko.routing_api import ScriptError
 
 PYTEST_NO_TESTS = 5
@@ -33,7 +33,7 @@ def check_config(
     """
     out, err = sys.stdout if out is None else out, sys.stderr if err is None else err
     try:
-        config = validate_config(asyncio.run(_load(path, env)), types)
+        config = validate_config(asyncio.run(FileConfigLoader(path, env).load()), types)
     except OSError as error:
         print(f"error: cannot read {path}: {error.strerror or error}", file=err)
         return 1
@@ -57,11 +57,6 @@ def check_config(
     return 0
 
 
-async def _load(path: Path, env: Mapping[str, str]) -> dict[str, object]:
-    text = await asyncio.to_thread(path.read_text, encoding="utf-8")
-    return dict(parse_config(text, env))
-
-
 def _check_script(script: Path, out: TextIO, err: TextIO) -> bool:
     try:
         code = script.read_text(encoding="utf-8")
@@ -78,7 +73,7 @@ def _check_script(script: Path, out: TextIO, err: TextIO) -> bool:
 
 
 def _run_tests(directory: Path, out: TextIO, err: TextIO) -> int:
-    tests = sorted({*directory.glob("test_*.py"), *directory.glob("*_test.py")})
+    tests = sorted(directory.glob("test_*.py"))
     if not tests:
         print("skipped: no tests of the routing script (test_*.py next to the config)", file=out)
         return 0
