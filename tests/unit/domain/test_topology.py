@@ -41,6 +41,18 @@ def test_group_of_a_source_or_unknown_endpoint_is_none() -> None:
     assert topology().group_of(EndpointRef("tg", "chat:9")) is None
 
 
+def test_endpoints_by_name() -> None:
+    topo = topology()
+
+    assert topo.endpoint("dm:1") == MESH_DM
+    assert topo.endpoint("channel:LongFast") == LONGFAST
+
+
+def test_unknown_endpoint_name_is_a_key_error() -> None:
+    with pytest.raises(KeyError, match="no endpoint 'x'"):
+        topology().endpoint("x")
+
+
 def test_sources_by_name() -> None:
     assert topology().source("longfast") == LONGFAST
 

@@ -425,3 +425,76 @@ name)` carries that name, and no two endpoints of an installation share one. The
 refers to readable names. Renaming a site or moving it to another group changes its name, so the
 hub's state for it (pending deliveries, de-duplication) no longer applies; changing a site's
 settings under the same name (a new Telegram chat id) keeps its name.
+
+## D35. The extension API: a lifecycle, one capability, recipients, ordered deliveries, versions
+Session S10 settled `chatko.extension_api` (architecture.md §3), the decision that is most
+expensive to change once third parties write extensions. Choices that the sketch left open:
+**Decision:**
+- **Layers.** The two public APIs sit between the domain and the application: they import only the
+  domain, and the application imports them, because it calls extensions and the routing script
+  through them and implements `HubContext` for them. They re-export the domain types their users
+  need instead of redefining them (D32). The test kits are for tests only. This answers the
+  question D31 left open, and the `import-linter` contracts say it as one layers contract.
+- **Shape.** `Extension[C]` (lifecycle: `start`, `stop`; `type_name`, `api_version`,
+  `config_model`) plus capability base classes, of which v1 has one, `EndpointProvider[E]`
+  (`endpoint_config_model`, `set_endpoints`, `recipients`, `deliver`, `delivery_report`). Config
+  models are pydantic models (now a dependency), and the classes are generic in them.
+- **No I/O before `start`.** The constructor and `set_endpoints` only record and validate, so the
+  core checks a new config by running them on a fresh instance (`check-config`, every reload) and
+  a running instance only gets valid input. `set_endpoints` takes the whole ordered set instead of
+  attach/detach calls: the extension sees config order (a node in several `dm` endpoints goes to
+  the first) and applies the difference itself. An instance whose own section changes is replaced.
+- **Recipients.** An endpoint may list recipients that it reaches separately (the nodes of a `dm`
+  endpoint). The core makes one delivery per recipient, so each node has its own ACK, retries and
+  state in the outbox, and the Meshtastic extension keeps no delivery state of its own. Routing
+  targets may narrow the recipients (D36).
+- **Deliveries.** `Delivered(truncated)`, `Retry(reason, after)` or `Failed(reason)`; an exception is
+  a `Retry`. Per endpoint and recipient, one call at a time, oldest first, and a `Retry` holds back
+  the newer messages, so they never overtake each other. `hub.retry_now` ends a wait early (a radio
+  heard again, D26). Delivery is at least once; `OutboundMessage.attempt` lets an extension check
+  whether an earlier attempt got through. When a delivery ends, the source's extension gets a
+  `DeliveryReport` (the ✂️ reaction of design.md §6.3).
+- **`HubContext`** has `submit` (returns once stored, safe to cancel), `heard` (for `last_heard`,
+  any packet counts), `retry_now`, `notify_admin` (rate-limited by key, never raises) and `now`. The
+  key–value store of the sketch is left out: no v1 extension needs it.
+- **Versions.** Each API has `API_VERSION = (1, 0)` and `is_supported(version)`: the same major,
+  a minor no newer than the core's. A minor version only adds (a field with a default at the end,
+  an optional method, a `HubContext` method, a new capability); a major one breaks. An extension
+  declares the version it was written for, and the core refuses one it does not support.
+- **Contract suite.** `extension_api.testing` has `ExtensionContract` (pytest tests inherited by a
+  `TestXxxContract` class), a `ContractDriver` that each extension writes over the fake of its
+  network port, `FakeHub`, and `FakeNetwork` with `FakeExtension`, the reference extension that the
+  suite runs against and the core's tests will use. A run against twelve deliberately broken
+  variants of `FakeExtension` failed each of them.
+**Consequences:** S11 implements `HubContext`, the per-recipient fan-out and the ordered outbox; S15
+checks `is_supported` at discovery and uses `FakeExtension`; every extension session ends with the
+contract suite. The domain gained `Delivery.recipient`, `Target.recipients`, `Topology.endpoint`
+and `plain_text`. Adding a recipient-level concept later (e.g. SMS to several phones) needs no API
+change. A chat-relay extension that cannot tell its own posts apart, or cannot give a post a stable
+id, cannot pass the suite: both are needed against echoes and duplicates.
+
+## D36. The routing API: a read-only view, a message-aware `label` hook, recipients in targets
+Session S10 also settled `chatko.routing_api` (architecture.md §4).
+**Decision:**
+- `RoutedMessage` is a read-only view of the stored domain `Message` plus its group, so it
+  cannot drift from the domain. `RoutingContext` is one concrete class that the core and the test
+  kit both build from a `Topology`, the instances' extension types, the endpoints' recipients and a
+  `RoutingHistory`; only the history differs, so a script behaves the same in its tests as in the
+  hub. The history (`last_heard`, `seen`) is served from memory: the script is synchronous and may
+  not wait for I/O. `seen` counts only messages stored before the one being routed.
+- The `label` hook is `label(msg, target, ctx)`, not `label(author, target, ctx)` as design.md had
+  it: with the whole message a label can depend on where it came from (a feed signed with the node's
+  short name). A target's own label wins over the hook.
+- `to_endpoint(…, recipients=…)` narrows a delivery to some of an endpoint's recipients (none for an
+  empty list), and `ctx.recipients(endpoint)` lists them; together with `last_heard` this makes the
+  "no DM for a radio heard on the channel lately" rule of design.md §6.2 a few lines of script
+  (`routing.example.py`).
+- The context also gives `endpoint(name)` (D34 names), `extension_type(endpoint)` and `now`.
+  `default_label(author, ctx)` and `mirror(msg, ctx)` take the context so that the defaults may
+  depend on the installation later without a new signature.
+- A script may declare `api_version`; the engine runs the defaults for one it does not support
+  and tells the admin. Peers (D17) come later as `ctx.peers`, a minor version.
+**Consequences:** S12 builds the engine on these types, adds the fake installation builder and
+assertions to `routing_api.testing` (it has `FakeHistory` now) and tests `routing.example.py`, which
+already type-checks against the API. S11 keeps the last-heard times and recent fingerprints in
+memory for the history.

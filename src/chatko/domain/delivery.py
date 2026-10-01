@@ -20,6 +20,9 @@ class DeliveryState(StrEnum):
 class Delivery:
     """A message on its way to one endpoint, with the label and text it goes out with.
 
+    `recipient` is set when the endpoint has recipients that are reached separately (the nodes of
+    a Meshtastic `dm` endpoint): such a message gets one delivery per recipient (design.md §9.1).
+
     A pending delivery is attempted once it is due. Each outcome counts as an attempt and gives a
     new `Delivery`: delivered and failed are final, a retry stays pending with a later due time.
     """
@@ -29,6 +32,7 @@ class Delivery:
     author_label: str
     text: str
     due_at: datetime
+    recipient: str | None = None
     state: DeliveryState = DeliveryState.PENDING
     attempts: int = 0
     truncated: bool = False
@@ -37,16 +41,31 @@ class Delivery:
     def __post_init__(self) -> None:
         if not self.author_label.strip():
             raise DomainError(f"a delivery to {self.endpoint} needs an author label")
+        if self.recipient is not None and not self.recipient.strip():
+            raise DomainError(f"a delivery to {self.endpoint} has an empty recipient")
         if self.due_at.utcoffset() is None:
             raise DomainError("a delivery's due time must be timezone-aware")
         if self.attempts < 0:
             raise DomainError("attempts cannot be negative")
 
     @classmethod
-    def of(cls, message: Message, target: Target, author_label: str, now: datetime) -> Self:
+    def of(
+        cls,
+        message: Message,
+        target: Target,
+        author_label: str,
+        now: datetime,
+        recipient: str | None = None,
+    ) -> Self:
         """A new pending delivery, due now. The target's text, if given, replaces the message's."""
         text = message.text if target.text is None else target.text
-        return cls(message.id, target.endpoint, author_label, text, due_at=now)
+        return cls(message.id, target.endpoint, author_label, text, due_at=now, recipient=recipient)
+
+    @property
+    def destination(self) -> str:
+        """Where it goes, for logs: `kyiv/family.radio`, or `kyiv/family.radio:!a1b2c3d4` with a
+        recipient."""
+        return str(self.endpoint) if self.recipient is None else f"{self.endpoint}:{self.recipient}"
 
     def is_due(self, now: datetime) -> bool:
         return self.state is DeliveryState.PENDING and self.due_at <= now
@@ -75,7 +94,7 @@ class Delivery:
     ) -> Self:
         if self.state is not DeliveryState.PENDING:
             raise DomainError(
-                f"the delivery of {self.message_id} to {self.endpoint} is already {self.state}"
+                f"the delivery of {self.message_id} to {self.destination} is already {self.state}"
             )
         return replace(
             self,

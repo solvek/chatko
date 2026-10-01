@@ -1,5 +1,6 @@
 """Messages and routing targets (docs/design.md §9)."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -40,6 +41,11 @@ class Attachment:
         return f"[{self.kind}]"
 
 
+def plain_text(text: str, attachments: Iterable[Attachment]) -> str:
+    """A text as a text-only network shows it, with its attachments as placeholders in front."""
+    return " ".join([a.placeholder for a in attachments] + [text]).strip()
+
+
 @dataclass(frozen=True, slots=True)
 class Message:
     """An incoming message as the hub stores and routes it.
@@ -69,7 +75,7 @@ class Message:
     @property
     def plain_text(self) -> str:
         """The text with a placeholder for each attachment in front: `[photo] caption`."""
-        return " ".join([a.placeholder for a in self.attachments] + [self.text]).strip()
+        return plain_text(self.text, self.attachments)
 
     @property
     def fingerprint(self) -> Fingerprint:
@@ -79,12 +85,22 @@ class Message:
 
 @dataclass(frozen=True, slots=True)
 class Target:
-    """Where a routed message goes, with optional overrides of its text and author label."""
+    """Where a routed message goes, with optional overrides of its text and author label.
+
+    `recipients` narrows the delivery to some of the endpoint's recipients (the nodes of a
+    Meshtastic `dm` endpoint, design.md §9.2); `None` means all of them, and an empty set none. It
+    has no effect on an endpoint without recipients.
+    """
 
     endpoint: EndpointRef
     text: str | None = None
     label: str | None = None
+    recipients: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
         if self.label is not None and not self.label.strip():
             raise DomainError(f"the label for {self.endpoint} is empty")
+
+    def includes(self, recipient: str) -> bool:
+        """Whether the message goes to `recipient`, one of the endpoint's recipients."""
+        return self.recipients is None or recipient in self.recipients

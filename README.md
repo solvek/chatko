@@ -16,7 +16,7 @@ Meshtastic LoRa channels. A hub copies every message to all the other places.
   Without it, every message goes to all the other places of its group.
 - It can forward the mesh's primary Meshtastic chat (e.g. the Kyiv `LongFast`) to selected chats.
 
-> **Status: phase 1 (core).** The project skeleton, tooling and domain model are in place; the hub does not run yet. Start with the [design](docs/design.md).
+> **Status: phase 1 (core).** The project skeleton, tooling, domain model and the extension and routing APIs are in place; the hub does not run yet. Start with the [design](docs/design.md).
 
 ## Known limitations
 

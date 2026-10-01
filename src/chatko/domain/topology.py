@@ -22,6 +22,7 @@ class Topology:
     people: tuple[Person, ...] = ()
     _group_by_name: Mapping[str, Group] = field(init=False, repr=False, compare=False)
     _group_by_site: Mapping[EndpointRef, Group] = field(init=False, repr=False, compare=False)
+    _endpoint_by_name: Mapping[str, EndpointRef] = field(init=False, repr=False, compare=False)
     _person_by_account: Mapping[AccountKey, Person] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -29,7 +30,11 @@ class Topology:
         object.__setattr__(self, "_group_by_name", _index_groups(self.groups))
         object.__setattr__(self, "_group_by_site", _index_sites(self.groups))
         _check_sources(self.sources, self._group_by_site)
-        _check_names(self._group_by_site.keys() | self.sources.values())
+        object.__setattr__(
+            self,
+            "_endpoint_by_name",
+            _index_names(self._group_by_site.keys() | self.sources.values()),
+        )
         object.__setattr__(self, "_person_by_account", _index_people(self.people))
 
     @property
@@ -39,6 +44,13 @@ class Topology:
 
     def has_endpoint(self, endpoint: EndpointRef) -> bool:
         return endpoint in self._group_by_site or endpoint in self.sources.values()
+
+    def endpoint(self, name: str) -> EndpointRef:
+        """The site or source with this name: `family.tg`, `longfast` (D34)."""
+        try:
+            return self._endpoint_by_name[name]
+        except KeyError:
+            raise KeyError(f"no endpoint {name!r}") from None
 
     def group(self, name: str) -> Group:
         try:
@@ -99,12 +111,13 @@ def _check_sources(sources: Mapping[str, EndpointRef], sites: Mapping[EndpointRe
         seen[endpoint] = name
 
 
-def _check_names(endpoints: Iterable[EndpointRef]) -> None:
+def _index_names(endpoints: Iterable[EndpointRef]) -> Mapping[str, EndpointRef]:
     by_name: dict[str, EndpointRef] = {}
     for endpoint in sorted(endpoints):
         if endpoint.name in by_name:
             raise DomainError(f"endpoints {by_name[endpoint.name]} and {endpoint} share a name")
         by_name[endpoint.name] = endpoint
+    return MappingProxyType(by_name)
 
 
 def _index_people(people: Iterable[Person]) -> Mapping[AccountKey, Person]:

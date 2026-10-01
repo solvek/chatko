@@ -6,7 +6,14 @@ from chatko.domain.endpoints import EndpointRef, Group
 from chatko.domain.errors import DomainError
 from chatko.domain.fingerprint import Fingerprint, fingerprint, normalize_label, normalize_text
 from chatko.domain.labels import MAX_LABEL_LENGTH, default_label, generate_label
-from chatko.domain.messages import Attachment, AttachmentKind, Message, MessageId, Target
+from chatko.domain.messages import (
+    Attachment,
+    AttachmentKind,
+    Message,
+    MessageId,
+    Target,
+    plain_text,
+)
 from chatko.domain.topology import Topology
 from chatko.domain.transliteration import transliterate
 
@@ -33,5 +40,6 @@ __all__ = [
     "generate_label",
     "normalize_label",
     "normalize_text",
+    "plain_text",
     "transliterate",
 ]

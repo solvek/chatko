@@ -92,6 +92,22 @@ def test_target_overrides_are_optional() -> None:
 
     assert target.text is None
     assert target.label is None
+    assert target.recipients is None
+
+
+def test_target_without_recipients_includes_every_recipient() -> None:
+    assert Target(TG).includes("!a1b2c3d4")
+
+
+def test_target_with_recipients_includes_only_those() -> None:
+    target = Target(TG, recipients=frozenset({"!a1b2c3d4"}))
+
+    assert target.includes("!a1b2c3d4")
+    assert not target.includes("!0badc0de")
+
+
+def test_target_with_no_recipients_includes_nobody() -> None:
+    assert not Target(TG, recipients=frozenset()).includes("!a1b2c3d4")
 
 
 def test_target_label_cannot_be_empty() -> None:

@@ -26,7 +26,7 @@ jobs:
       - run: uv run coverage run -m pytest
       # The gates of docs/architecture.md §7. A package without code reports 100 %.
       - run: uv run coverage report --fail-under=90
-      - run: uv run coverage report --fail-under=95 --include="src/chatko/domain/*,src/chatko/application/*,src/chatko/routing_api/*"
+      - run: uv run coverage report --fail-under=95 --include="src/chatko/domain/*,src/chatko/application/*,src/chatko/extension_api/*,src/chatko/routing_api/*"
       - run: uv run coverage report --fail-under=85 --include="src/chatko_telegram/*"
       - run: uv run coverage report --fail-under=85 --include="src/chatko_meshtastic/*"
       - run: uv run coverage report --fail-under=85 --include="src/chatko_briar/*"

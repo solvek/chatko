@@ -6,7 +6,9 @@ readme = "README.md"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pydantic>=2.9",
+]
 
 [project.scripts]
 chatko = "chatko.app.cli:main"
@@ -57,6 +59,8 @@ ignore = ["PLR2004"]
 [tool.ruff.lint.per-file-ignores]
 # Cyrillic letters are data here, not look-alikes of Latin ones.
 "tests/**" = ["S101", "ANN", "PLR0913", "RUF001", "RUF002", "RUF003"]
+# The public test kits are test code that ships with the package.
+"src/chatko/*/testing/**" = ["S101", "RUF001"]
 "src/chatko/domain/transliteration.py" = ["RUF001", "RUF002", "RUF003"]
 # The hook signature is fixed by the routing API even where an argument is unused.
 "routing.example.py" = ["ARG001"]
@@ -96,43 +100,31 @@ include_external_packages = false
 # The dependency rule of docs/architecture.md §1. Dependencies point inwards only.
 
 [[tool.importlinter.contracts]]
-name = "Core layers: app > infrastructure > application > domain"
+name = "Layers: app > infrastructure > application > the public APIs > domain"
 type = "layers"
+# The two public APIs are one layer of independent siblings: the application uses both to talk to
+# extensions and to the routing script; they import only the domain and never each other.
 layers = [
     "chatko.app",
     "chatko.infrastructure",
     "chatko.application",
+    "chatko.extension_api | chatko.routing_api",
     "chatko.domain",
 ]
 
 [[tool.importlinter.contracts]]
-name = "The inner core knows neither the public APIs nor the outer layers"
+name = "Only tests use the test kits of the public APIs"
 type = "forbidden"
-source_modules = ["chatko.domain"]
-forbidden_modules = [
+source_modules = [
+    "chatko.domain",
     "chatko.application",
-    "chatko.extension_api",
-    "chatko.routing_api",
     "chatko.infrastructure",
     "chatko.app",
+    "chatko_telegram",
+    "chatko_meshtastic",
+    "chatko_briar",
 ]
-
-[[tool.importlinter.contracts]]
-name = "The public APIs do not depend on the outer layers or on each other"
-type = "forbidden"
-source_modules = ["chatko.extension_api", "chatko.routing_api"]
-forbidden_modules = ["chatko.infrastructure", "chatko.app"]
-
-[[tool.importlinter.contracts]]
-name = "extension_api and routing_api are independent of each other"
-type = "independence"
-modules = ["chatko.extension_api", "chatko.routing_api"]
-
-[[tool.importlinter.contracts]]
-name = "The application layer does not depend on the outer layers"
-type = "forbidden"
-source_modules = ["chatko.application"]
-forbidden_modules = ["chatko.infrastructure", "chatko.app"]
+forbidden_modules = ["chatko.extension_api.testing", "chatko.routing_api.testing"]
 
 [[tool.importlinter.contracts]]
 name = "The core never imports an extension"

@@ -56,7 +56,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S07 | 0 | Phase 0 wrap-up: all (verify) answered, design and roadmap revised | Opus 5.5 | high | done |
 | S08 | 1 | Project skeleton, tooling and CI | Sonnet 5.5 | high | done |
 | S09 | 1 | Domain model and label generator | Opus 5.5 | high | done |
-| S10 | 1 | Extension API, routing API and contract test suite design | Opus 5.5 | xhigh | todo |
+| S10 | 1 | Extension API, routing API and contract test suite design | Opus 5.5 | xhigh | done |
 | S11 | 1 | Inbound pipeline, routing invariants and outbox worker | Opus 5.5 | high | todo |
 | S12 | 1 | Routing engine: script loading, defaults, `label` hook, test kit, example script | Opus 5.5 | high | todo |
 | S13 | 1 | SQLite repositories and migrations | Sonnet 5.5 | high | todo |
@@ -168,17 +168,34 @@ for more protocols later, D22). Settle the routing API (architecture.md §4): `R
 `RoutingContext`, targets, `mirror`, `label`/`default_label`, the fingerprint, and room for peer hubs
 (D17). Write the contract test suite skeleton in `extension_api.testing`. Done when: architecture.md §3
 and §4 describe the real APIs, a decision entry records them, and the contract suite runs against a stub.
+Result: `chatko.extension_api` and `chatko.routing_api` (architecture.md §3, §4), D35 and D36; 262
+tests, 100 % coverage. The public APIs are a layer between the domain and the application (one
+`import-linter` layers contract; only tests import the test kits). Endpoints may have
+**recipients** (the nodes of a `dm` endpoint), each delivered, retried and reported on its own;
+deliveries to one endpoint and recipient keep their order. `set_endpoints` takes the whole ordered
+set, and nothing before `start` does I/O. The contract suite (19 tests) runs against
+`FakeExtension`, the reference extension, and failed each of twelve deliberately broken variants.
+The `label` hook became `label(msg, target, ctx)`. `pydantic` is the first runtime dependency.
+`routing.example.py` uses the real API and passes `mypy --strict` (checked by hand; CI in S12). The
+domain gained `Delivery.recipient`, `Target.recipients`, `Topology.endpoint` and `plain_text`.
 
 **S11. Pipeline.** Ports (repositories, clock, ids), in-memory fakes next to them, `InboundPipeline`
 (own posts, transport-id dedup, person lookup, fingerprint, persistence, labels, one outbox row per
-target), `RoutingInvariants` (design.md §9.3) with property-style tests, `OutboxWorker` (due rows,
-`deliver`, backoff, restart safety). The router is a stub that calls `mirror`. Done when: design.md §9.1
-and §9.3 are tests.
+target and recipient, narrowed by `Target.recipients`), `RoutingInvariants` (design.md §9.3) with
+property-style tests, `OutboxWorker` (per endpoint and recipient: one delivery at a time, oldest
+first, a `Retry` holding back the newer ones; `Retry.after` or backoff, a give-up rule, exceptions
+and a call timeout as `Retry`, delivery reports to the source's extension, restart safety), the
+hub's `HubContext` implementation (`submit`, `heard`, `retry_now`, `notify_admin`) and the in-memory
+`RoutingHistory` (last heard, recent fingerprints) (architecture.md §3, D35). The router is a stub
+that calls `mirror`. Use `FakeExtension` and `FakeNetwork` from `extension_api.testing` as the
+networks. Done when: design.md §9.1 and §9.3 are tests.
 
-**S12. Routing engine.** `RoutingEngine`: load `routing.py` from the config directory, validate it,
+**S12. Routing engine.** `RoutingEngine`: load `routing.py` from the config directory, validate it
+(`route`, an optional `label(msg, target, ctx)`, an optional supported `api_version`, D36),
 hot-reload it keeping the last good version, fall back to the defaults on errors and post an admin
-notice; the optional `label` hook and `default_label` (design.md §8); `routing_api.testing` (fake
-installation, assertions); `routing.example.py` tested in CI. Done when: design.md §9.2, §9.4 and §9.5
+notice; the optional `label` hook and `default_label` (design.md §8); `routing_api.testing` (a fake
+installation builder and assertions next to `FakeHistory`); `routing.example.py` tested and
+type-checked in CI. Done when: design.md §9.2, §9.4 and §9.5
 are tests, and the example script passes its own tests.
 
 **S13. Storage.** `aiosqlite` repositories and schema migrations for runtime state (messages, outbox,
@@ -191,8 +208,10 @@ substitution; reload with `watchfiles`, keeping the last valid config and report
 notices; `AdminNotifier`; `chatko check-config` (also loads and tests the routing script). Done when:
 `config.example.yaml` validates with fake extensions, and invalid configs give clear errors.
 
-**S15. Wiring.** Entry-point discovery (`chatko.extensions`), the composition root, `chatko run`,
-`FakeExtension`. Done when: an end-to-end test runs the hub with two fake extensions and a message crosses
+**S15. Wiring.** Entry-point discovery (`chatko.extensions`, refusing extensions whose `api_version`
+is not supported, D35), the composition root (the lifecycle of architecture.md §3.1, including
+checking a new endpoint set on a fresh instance), `chatko run`; `FakeExtension` (in
+`extension_api.testing` since S10) registered for the test. Done when: an end-to-end test runs the hub with two fake extensions and a message crosses
 from one site to the other through SQLite.
 
 **S16. Phase 1 review.** `/code-review` at high effort, coverage and architecture check, docs in sync
@@ -222,7 +241,7 @@ truncation, placeholders for non-text, per-node send interval, de-duplication ac
 packets, authors from NodeInfo, `LongFast` as a source, last-heard tracking. Done when: design.md §6.3
 and §6.4 are covered by tests.
 
-**S21. DM endpoints.** `dm` endpoints with node lists: out to every listed node, in from listed nodes
+**S21. DM endpoints.** `dm` endpoints with node lists, each node a recipient (D35): out to every listed node, in from listed nodes
 (first endpoint wins), the delivery states of D26 (the node's ACK, not the implicit one; retry when
 the node is heard again or after a key exchange), listed nodes kept as favorites, key-mismatch admin
 notices, at least 2 s between texts. Done when: design.md §6.2 is

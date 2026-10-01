@@ -105,3 +105,27 @@ def test_delivery_due_time_must_be_timezone_aware() -> None:
 def test_attempts_cannot_be_negative() -> None:
     with pytest.raises(DomainError, match="negative"):
         Delivery(MessageId("m1"), MESH, "NatAda", "x", NOW, attempts=-1)
+
+
+def test_delivery_to_a_recipient_of_the_endpoint() -> None:
+    delivery = Delivery.of(MESSAGE, Target(MESH), "NatAda", NOW, recipient="!a1b2c3d4")
+
+    assert delivery.recipient == "!a1b2c3d4"
+    assert delivery.destination == "kyiv/channel:family:!a1b2c3d4"
+
+
+def test_delivery_to_the_whole_endpoint_has_no_recipient() -> None:
+    assert pending().recipient is None
+    assert pending().destination == "kyiv/channel:family"
+
+
+def test_recipient_cannot_be_empty() -> None:
+    with pytest.raises(DomainError, match="empty recipient"):
+        Delivery.of(MESSAGE, Target(MESH), "NatAda", NOW, recipient=" ")
+
+
+def test_a_final_delivery_to_a_recipient_names_it() -> None:
+    delivered = Delivery.of(MESSAGE, Target(MESH), "NatAda", NOW, recipient="!a1").delivered()
+
+    with pytest.raises(DomainError, match="to kyiv/channel:family:!a1 is already delivered"):
+        delivered.failed("x")

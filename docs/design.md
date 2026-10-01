@@ -31,6 +31,7 @@ DMs to several nodes) in sync (D20).
 | **Extension** | A plug-in that connects chatko to one network or service: `telegram`, `meshtastic`, `briar`, later others. The core knows no network by name. An extension can be added or removed without touching the core. |
 | **Extension instance** | A configured copy of an extension, with its own name, e.g. `tg` (telegram), `kyiv` and `lab` (two meshtastic instances on different MQTT brokers), `briar`. |
 | **Endpoint** | One place where an extension instance reads and posts messages: a Telegram chat, a Briar private group, a Meshtastic channel, a set of Meshtastic nodes reached by DM. |
+| **Recipient** | One of several addressees that an endpoint reaches separately: a node of a Meshtastic `dm` endpoint. Each gets its own delivery, confirmation and retries (§9.1). Most endpoints are one place and have none. |
 | **Group** | An independent chat room: a named set of **sites**. |
 | **Site** | An endpoint that belongs to a group: one place where the group lives. |
 | **Source** | An endpoint that belongs to no group but is still read, e.g. the public `LongFast` channel. Its messages go only where the routing script sends them. |
@@ -177,6 +178,9 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
 | `channel` | one broadcast on the private channel | any text on that channel | at least one gateway **that has this channel** (name + PSK) with uplink and downlink. Other people's gateways don't know our channel, so this means our own internet-connected node(s), or a trusted gateway operator who adds our channel | 1 packet per message |
 | `dm` with a list of node ids | a PKI direct message to every listed node | a direct message to the hub's node from a listed node | any gateway on the hub's broker that downlinks on the primary channel: it needs no private channel. In v1 that is our own gateway (below, D30); whether the Kyiv gateways would do it is open (§6.6). The hub's node and the person's node must know each other's public keys (below) | 1 packet per listed node, plus an ACK and its ACK |
 
+- Each node of a `dm` endpoint is a **recipient** (§9.1): the hub delivers to, waits for the ACK of
+  and retries each node on its own, so a radio that is away holds up nobody else, and the messages
+  for it wait, in order, until it is heard again.
 - A node listed in several `dm` endpoints: its direct messages go to the first of them in the config;
   the routing script can send them elsewhere. Direct messages from nodes not listed anywhere are logged
   and dropped.
@@ -225,7 +229,8 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
   radios' packets follows "OK to MQTT" (above), because the broker has a public address. Such a node
   can later be claimed for the Kyiv broker (D27).
 - Both kinds can be used in one group. Then a person with a node on both gets the message twice, unless
-  the routing script skips `dm` for nodes recently heard on the channel (`last_heard`, §9.5).
+  the routing script skips `dm` for nodes recently heard on the channel (`last_heard` and a target's
+  `recipients`, §9.5; `routing.example.py` does it).
 - With a physical hub node (later), both kinds work within its radio range without any gateway.
 - **"Ignore MQTT" must be off** on the person's radio, and on every relay between the gateway and it.
   A packet from the hub's virtual node is marked "via MQTT", and the mark travels in the LoRa header after
@@ -249,8 +254,8 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
 - One text packet carries ≤ 200 UTF-8 bytes. Cyrillic letters take 2 bytes each, so a packet holds
   about 90 Cyrillic characters.
 - Longer text is split on spaces into `NatAda (1/3): …`, at most 3 parts. Anything beyond that is
-  truncated with `…`, and the source endpoint is told about it where the network allows (in Telegram, a
-  ✂️ reaction).
+  truncated with `…`, and the source endpoint is told about it (a delivery report, §9.1) where the
+  network allows (in Telegram, a ✂️ reaction).
 - Non-text content goes out as a placeholder: `NatAda: [photo] caption`.
 - The hub sends no faster than one packet every few seconds per node (configurable), to be a good
   neighbour on a busy mesh. The interval is per hub node (all its endpoints together) and at least 2 s:
@@ -493,9 +498,10 @@ People in the config are optional. They give a person one name in every network 
 Briar and Meshtastic accounts all signed `NatAda`). To find account ids, the admin can turn on an admin
 notice for every account the hub sees for the first time.
 
-The routing script can replace this logic with its own `label(author, target, ctx)` function (§9.5),
-e.g. a different label per network, a `~` mark for accounts not in the config, or the full name in
-Telegram where space is not an issue. The default is available to it as `default_label(author, ctx)`.
+The routing script can replace this logic with its own `label(message, target, ctx)` function (§9.5),
+e.g. a different label per network, a `~` mark for accounts not in the config, the full name in
+Telegram where space is not an issue, or the node's short and long name for a feed. The default is
+available to it as `default_label(author, ctx)`.
 
 Message format with the default labels:
 
@@ -528,15 +534,21 @@ For every incoming message:
    hub (§9.6); computes the message **fingerprint** (§9.5); stores the message.
 3. **Routing script**: `route(message, ctx)` returns a list of **targets**.
 4. **Core, after routing**: applies the invariants (§9.3), computes the author label for each target
-   (§8), and writes one outbox row per remaining target.
-5. **Outbox worker**: delivers each row through its extension. A failed delivery is retried with
-   backoff and survives a restart.
+   (§8), and writes one outbox row per remaining target; for an endpoint with **recipients** (the
+   nodes of a `dm` endpoint), one row per recipient.
+5. **Outbox worker**: delivers each row through its extension. The rows of one endpoint (or one
+   recipient) go one at a time, in the order the messages came in, and a row waiting for a retry
+   holds back the newer ones, so messages never overtake each other. A failed delivery is retried
+   with backoff, or as soon as the extension says the place is reachable again (a radio heard
+   again), and survives a restart. When a delivery ends, the extension of the endpoint the message
+   came from gets a **delivery report**, e.g. to mark a message that was cut short (§6.3).
 
 ### 9.2 Targets
 
 A target is an endpoint (a site or a source) with optional overrides of the text or the author label,
-e.g. to add a `#street` tag. The script has no I/O: it cannot send anything itself, only return targets.
-So the core controls every delivery, and the script is easy to test.
+e.g. to add a `#street` tag, and for an endpoint with recipients the ones to deliver to (default:
+all). The script has no I/O: it cannot send anything itself, only return targets. So the core
+controls every delivery, and the script is easy to test.
 
 ### 9.3 Invariants the core always enforces
 
@@ -545,7 +557,7 @@ does:
 
 - The hub's own posts never reach the router (step 1).
 - A message is never delivered back to the endpoint it came from.
-- A message is delivered to the same endpoint at most once.
+- A message is delivered to the same endpoint (to each of its recipients) at most once.
 - A message that another path already brought in (same fingerprint, §9.5) is routed only once, when
   the admin enables fingerprint de-duplication for that endpoint (default: on for endpoints shared with a
   peer hub).
@@ -558,7 +570,8 @@ does:
   `mirror(message, ctx)`, so a script usually handles a few special cases and ends with
   `return mirror(message, ctx)`.
 - `routing.py` is reloaded on change, like the YAML. A script that fails to load keeps the previous one
-  running and is reported as an admin notice. If `route()` or `label()` raises for a message, that
+  running and is reported as an admin notice; so does a script written for a routing API version
+  this hub does not support (§9.5). If `route()` or `label()` raises for a message, that
   message is handled by the defaults, and the admin is told once per error kind.
 - `chatko check-config` loads the script and runs its tests (§9.5) as well.
 
@@ -567,13 +580,17 @@ does:
 `chatko.routing_api` is the only package a script imports. Besides `mirror` and `default_label`, it
 gives:
 
-- an optional hook: if the script defines `label(author, target, ctx) -> str`, the core uses it for
-  every author label instead of `default_label` (§8). The core still limits a label to what the target
-  network can show (it counts towards the 200-byte Meshtastic packet);
+- an optional hook: if the script defines `label(message, target, ctx) -> str`, the core uses it for
+  every author label instead of `default_label` (§8), except where a target sets its own label. It
+  gets the whole message, so a label can depend on where the message came from. The target's
+  extension still shortens a label its network cannot show (it counts towards the 200-byte
+  Meshtastic packet);
 - the message: source endpoint, group (if the endpoint is a site), author (account, display name, person
   if any, or an author relayed by a peer hub), text, attachments, fingerprint, time;
-- the installation: groups and their sites, sources, people, peers;
-- state the core already tracks, e.g. when a node was last heard on a channel (`last_heard`);
+- the installation: groups and their sites, sources, endpoints by name (`family.radio`), people, the
+  extension type of an endpoint (`meshtastic`), the recipients of an endpoint, later peers;
+- state the core already tracks, e.g. when a node was last heard on a channel (`last_heard`): any
+  packet counts, not only a message;
 - **fingerprint**: a hash of the original author label and the normalized text. Two copies of one
   message that came by different paths (a peer's relay, a late Briar sync, another gateway) have the
   same fingerprint but different transport ids. The label is the default one (§8: a peer's label,
@@ -581,9 +598,15 @@ gives:
   digits, case-folded, so `~NatAda` matches `NatAda`. The text is the message as a text-only network
   shows it (`[photo] caption`), Unicode-normalized (NFKC), case-folded, with runs of whitespace made
   one space. A message cut short on the way (§6.3) does not match its original;
-- `ctx.seen(fingerprint, within=…)` for scripts that want their own duplicate rules;
+- `ctx.seen(fingerprint, within=…)` for scripts that want their own duplicate rules: whether another
+  message with that fingerprint arrived within that time before this one;
 - a test kit: the admin writes plain `pytest`-style checks next to `routing.py` with a fake installation
-  and asserts on the returned targets and labels.
+  and asserts on the returned targets and labels;
+- a version: the script may declare the version of `chatko.routing_api` it was written for
+  (`api_version = (1, 0)`), so that after an upgrade that breaks it the hub runs the defaults and
+  says why, instead of failing on every message.
+
+The API itself is described in [architecture.md §4](architecture.md#4-routing-api).
 
 A script is trusted code with the hub's rights, like the config itself: only the admin writes it.
 
