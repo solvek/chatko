@@ -2,7 +2,9 @@
 
 Status: **draft**, no code yet. This document describes **behaviour**. The code structure is described
 in [architecture.md](architecture.md). Items marked **(verify)** must be confirmed by a spike
-([spikes.md](spikes.md)) or by reading the upstream source before we rely on them.
+([spikes.md](spikes.md)) or by reading the upstream source before we rely on them. Phase 0 answered
+every (verify) that v1 relies on (session S07); the questions still open concern only the Kyiv
+community's broker and gateways, which v1 does not use, and are listed in §6.6.
 
 ## 1. Goal
 
@@ -68,7 +70,8 @@ state are backed up daily, so the hub can be moved to another server within an h
  Telegram ◄────────────►│  ├─ core: endpoints · routing · outbox · labels · config          │
                         │  └─ extensions                                                    │
                         │      ├─ telegram   ─ Bot API                                      │
-                        │      ├─ meshtastic ─ TCP :4403 ─► meshtasticd "kyiv" (no radio) ──┼─► MQTT broker
+                        │      ├─ meshtastic ─ TCP :4403 ─► meshtasticd "kyiv" (no radio)   │
+                        │      │                            └─ MQTT ─► mosquitto ◄──────────┼── :8883 ── our gateway ─► LoRa
                         │      │             ─ TCP/USB/BLE ─► a physical node (later) ──────┼─► LoRa
                         │      └─ briar      ─ REST + WS ─► briar-headless ─────────────────┼─► Tor
                         │ config/chatko.yaml, config/routing.py  ◄── edited by the admin    │
@@ -80,6 +83,7 @@ state are backed up daily, so the hub can be moved to another server within an h
 |---|---|---|
 | chatko hub | Core plus extensions, one Python process | [architecture.md](architecture.md) |
 | `meshtasticd` | The official Meshtastic Linux firmware in Docker, simulated radio (no LoRa hardware), MQTT client on (§6.1) | A complete node: NodeInfo, PKI, channel crypto, retries. We don't write our own virtual node. One container per virtual node (one MQTT broker each). |
+| Mosquitto | Our MQTT broker, in the same compose file; the hub's nodes and our gateways connect to it (§6.2) | The Kyiv broker gives logins only to claimed physical nodes (D27, D30). With a broker of our own, the gateways that know our private channels are ours too |
 | `briar-headless` | The official Briar peer with a REST API, plus our private-group API (§7.4) | The only supported way to talk to Briar from a program |
 | `briarctl` | A command-line tool for the admin to manage the hub's Briar account: contacts, groups, invitations (§7.5) | Kept out of the relay, so chatko itself never manages people |
 
@@ -171,7 +175,7 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
 | Endpoint | Out | In | Needs (virtual node) | Airtime |
 |---|---|---|---|---|
 | `channel` | one broadcast on the private channel | any text on that channel | at least one gateway **that has this channel** (name + PSK) with uplink and downlink. Other people's gateways don't know our channel, so this means our own internet-connected node(s), or a trusted gateway operator who adds our channel | 1 packet per message |
-| `dm` with a list of node ids | a PKI direct message to every listed node | a direct message to the hub's node from a listed node | any gateway that forwards PKI direct messages over MQTT **(verify for the Kyiv mesh: broker policy and gateway firmware)**. The hub's node and the person's node must know each other's public keys (below) | 1 packet per listed node, plus an ACK and its ACK |
+| `dm` with a list of node ids | a PKI direct message to every listed node | a direct message to the hub's node from a listed node | any gateway on the hub's broker that downlinks on the primary channel: it needs no private channel. In v1 that is our own gateway (below, D30); whether the Kyiv gateways would do it is open (§6.6). The hub's node and the person's node must know each other's public keys (below) | 1 packet per listed node, plus an ACK and its ACK |
 
 - A node listed in several `dm` endpoints: its direct messages go to the first of them in the config;
   the routing script can send them elsewhere. Direct messages from nodes not listed anywhere are logged
@@ -210,9 +214,16 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
   on `EU_433` with its own PSK (from the QR code at <https://meshtastic.kyiv.ua/join>, the same for all
   members), so the hub's primary channel must use that PSK. The broker `mqtt.meshtastic.kyiv.ua`
   gives a login and the root topic `node/<node id>` per **claimed physical node** that the registry has
-  seen; a virtual node cannot get them (D27). Until a physical node is confirmed, the hub uses our own
-  broker. Still unknown **(verify: what the broker's "routing" does with packets under `node/<id>`,
-  PKI and downlink policy, gateway firmware)**.
+  seen; a virtual node cannot get them (D27). What that broker does with the packets is open (§6.6).
+- **The v1 path: our own broker and our own gateway (D30).** The hub's node uses our own Mosquitto,
+  which runs next to the hub. At least one **gateway of our own** connects to the same broker over the
+  internet: a physical `EU_433` radio with internet (an ESP32 node on Wi-Fi; a node whose phone app
+  relays MQTT for it may do as well, untested), with the same root topic, the mesh's primary channel and the group's private
+  channels, uplink and downlink on, "Ignore MQTT" off. It is the only way between the hub and the air
+  until the Kyiv broker is open to the hub, so it carries both `channel` and `dm` endpoints, and it
+  should stand where the group's radios, or relays that reach them, can hear it. Its uplink of other
+  radios' packets follows "OK to MQTT" (above), because the broker has a public address. Such a node
+  can later be claimed for the Kyiv broker (D27).
 - Both kinds can be used in one group. Then a person with a node on both gets the message twice, unless
   the routing script skips `dm` for nodes recently heard on the channel (`last_heard`, §9.5).
 - With a physical hub node (later), both kinds work within its radio range without any gateway.
@@ -220,10 +231,10 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
   A packet from the hub's virtual node is marked "via MQTT", and the mark travels in the LoRa header after
   a gateway downlinks it. A node with `ignore_mqtt` on drops such a packet before it would show or relay
   it (spike S2, firmware 2.7.26). The firmware turns `ignore_mqtt` on when a region with a duty-cycle
-  limit, such as `EU_868`, or `EU_433` on the Kyiv mesh (probably, unchecked), is set for the first
-  time, so many radios have it on. Setup
-  instructions for members say to turn it off. How common it is on the Kyiv relays is **(verify: ask the
-  Kyiv community, questions sent in S04)**.
+  limit is set for the first time: `EU_868`, `EU_433` (the Kyiv mesh), `UA_433` and `UA_868` among
+  them (`AdminModule.cpp`, `RadioInterface.cpp`, read in S07), so many radios have it on. Setup
+  instructions for members say to turn it off. How common it is on the Kyiv relays is open (§6.6);
+  the closer our gateway stands to the group's radios, the fewer relays matter.
 - Relays forward packets of channels they do not know without decrypting them, so a private-channel
   packet still travels over foreign relays. This holds for the default rebroadcast mode `ALL` and for
   `CORE_PORTNUMS_ONLY` (the default of the `ROUTER` role). Nodes set to `LOCAL_ONLY` or `KNOWN_ONLY`
@@ -261,6 +272,23 @@ placeholder name `Meshtastic b002`, which is not the node's name and is not used
   `[BC1] Base Camp: text`.
 - A feed is one-way: messages in the target endpoint are routed by their own rules, not back to the
   source, unless the script says so.
+- With our own broker (§6.2), the hub hears the mesh's `LongFast` only through our gateways, so the
+  feed carries what they hear.
+
+### 6.6 Open questions about the Kyiv mesh (not needed for v1)
+
+v1 reaches the Kyiv mesh only through our own broker and gateway (§6.2, D30), so none of these block
+it. They decide whether the hub can later use the Kyiv broker and the community's gateways directly
+(D27). The questions were drafted for the community in session S04; the answers go into spikes.md
+(S2, part 3) and here, once a physical node is claimed (roadmap S04) or during the field test (S23).
+
+| Question | What it decides |
+|---|---|
+| What the broker's "enable routing" does with packets published under `node/<id>`: are they bridged to other nodes' topics, and may a client read them? | whether a hub on the Kyiv broker hears the mesh and is heard by it at all |
+| The broker's policy for PKI direct messages (`…/2/e/PKI/…`) and for downlink | whether `dm` works through the community's gateways |
+| The firmware versions and settings of the gateways: downlink on the primary channel, "Ignore MQTT", rebroadcast mode | whether a gateway learns the hub's node and downlinks its packets (§6.2) |
+| How many relays run with "Ignore MQTT" on, and how many radios have "OK to MQTT" on | how far the hub's packets travel over the air, and whether replies come back |
+| Whether the community accepts a bot node on the mesh | the hub's node is visible on `LongFast` through our gateway in v1 too (NodeInfo, ACKs), so the owner asks before the field test (S23) |
 
 ## 7. Briar extension
 
@@ -576,12 +604,18 @@ and fingerprints for de-duplication, when nodes were last heard, accounts alread
 - **Development (now):** everything on the owner's computer. `docker compose` with a local Mosquitto,
   the hub's `meshtasticd`, and a second `meshtasticd` that plays a person's radio, so both `channel` and
   `dm` endpoints can be tested without hardware. When a hardware node is available, it is tested as a
-  person's radio (and later as a physical hub node). `briar-headless` is built locally. A read-only
-  connection to the Kyiv broker is used to receive `LongFast`. The Meshtastic lab is in
-  [`lab/`](../lab/README.md) (image `meshtastic/meshtasticd`, pinned tag, amd64 and arm64).
-- **Production:** a Linux server (cloud VM, x86-64 or ARM64), the same compose file. Inbound ports:
-  SSH only. Telegram long polling, MQTT and Tor are all outbound. The `meshtasticd` TCP API (4403) has
-  no authentication, so it stays inside the Docker network. `meshtasticd` containers need a restart
+  person's radio, then as our gateway (§6.2), and later as a physical hub node. `briar-headless` is
+  built locally. A read-only connection to the Kyiv broker (`lab/spike_kyiv.py`) waits for a claimed
+  physical node (D27). The Meshtastic lab is in [`lab/`](../lab/README.md) (image
+  `meshtastic/meshtasticd`, pinned tag, amd64 and arm64).
+- **Production:** a Linux server (cloud VM, x86-64 or ARM64), the same compose file, which also runs
+  our Mosquitto (§6.2, D30). Inbound ports: SSH, and MQTT over TLS (8883) for our gateways. Mosquitto
+  allows no anonymous clients: each gateway and each hub node has its own user, limited by an ACL to
+  the root topic. Gateway firmware does not check the broker's certificate (`setInsecure`), so TLS
+  hides the passwords from eavesdroppers but not from an active attacker; the packets themselves are
+  encrypted with channel PSKs or PKI anyway. The hub's nodes reach Mosquitto inside the Docker
+  network. Telegram long polling and Tor are outbound. The `meshtasticd` TCP API (4403) has no
+  authentication, so it stays inside the Docker network. `meshtasticd` containers need a restart
   policy, because a node reboot ends the process.
 - Volumes: `config/` (chatko.yaml, routing.py, meshtasticd configs) and `data/` (SQLite, Briar and
   meshtasticd state: settings, the node database with members' keys, and the node's own key unless
@@ -605,7 +639,7 @@ The phases are split into working sessions in [roadmap.md](roadmap.md).
 | 0. Spikes | S1 Briar relay with 3 phones. S2 local Meshtastic lab. S3 briar-headless build and API. See [spikes.md](spikes.md) | Every (verify) that affects v1 has an answer |
 | 1. Core | endpoints, groups, people, labels, routing engine and routing API, outbox, admin notices, config and routing script, SQLite; extension API and the contract test suite; a fake extension | the core is fully tested with fake extensions and a sample routing script |
 | 2. Telegram | group and private-chat endpoints, allowed chats | two Telegram groups work independently; foreign groups are left |
-| 3. Meshtastic | `channel` and `dm` endpoints, provisioning from the config, splitting, `LongFast` source | radio ⇄ Telegram in the local lab, then on the Kyiv mesh |
+| 3. Meshtastic | `channel` and `dm` endpoints, provisioning from the config, splitting, `LongFast` source | radio ⇄ Telegram in the local lab, then on the Kyiv mesh through our own gateway |
 | 4. Briar | private-group API patch, `briarctl`, Briar endpoints | Briar group ⇄ Telegram group ⇄ Meshtastic in the cloud setup |
 | 5. Later | a physical node, several hubs (§9.6), direct messages, web UI, Signal, SMS, MeshCore, monitoring | — |
 

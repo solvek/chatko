@@ -51,7 +51,7 @@ Escalate instead of looping: if a session fails at the same problem twice, resta
 | S04 | 0 | Spike S2c: Kyiv broker, read-only; questions for the Kyiv community | Sonnet 5.5 | medium | partly done: waits for a claimed physical node (D27), not blocking |
 | S05 | 0 | Spike S3a: build and run briar-headless, contacts API with a phone | Opus 5.5 | high | done |
 | S06 | 0 | Spike S3b: private-group internals of Briar, read/post/join patch plan | Opus 5.5 | xhigh | done |
-| S07 | 0 | Phase 0 wrap-up: all (verify) answered, design and roadmap revised | Opus 5.5 | high | todo |
+| S07 | 0 | Phase 0 wrap-up: all (verify) answered, design and roadmap revised | Opus 5.5 | high | done |
 | S08 | 1 | Project skeleton, tooling and CI | Sonnet 5.5 | high | todo |
 | S09 | 1 | Domain model and label generator | Opus 5.5 | high | todo |
 | S10 | 1 | Extension API, routing API and contract test suite design | Fable 5.1 | xhigh | todo |
@@ -67,7 +67,7 @@ Escalate instead of looping: if a session fails at the same problem twice, resta
 | S20 | 3 | Meshtastic: `channel` endpoints, splitting, rate limit, de-duplication, `LongFast` source | Opus 5.5 | high | todo |
 | S21 | 3 | Meshtastic: `dm` endpoints, ACKs and retries | Opus 5.5 | xhigh | todo |
 | S22 | 3 | Meshtastic lab integration tests, radio ⇄ Telegram | Opus 5.5 | high | todo |
-| S23 | 3 | Field test on the Kyiv mesh (*with owner*, needs a gateway or hardware) | Sonnet 5.5 | medium | todo |
+| S23 | 3 | Field test on the Kyiv mesh through our own gateway (*with owner*, needs an `EU_433` node) | Sonnet 5.5 | medium | todo |
 | S24 | 4 | briar-headless fork: private-group API (Kotlin; a phone at the end, *with owner*) | Opus 5.5 | xhigh | todo |
 | S25 | 4 | briar-headless Docker image; upstream merge request | Sonnet 5.5 | high | todo |
 | S26 | 4 | Briar extension: port, endpoints, posts in and out, own-post filter | Opus 5.5 | high | todo |
@@ -132,6 +132,12 @@ upstream issue #1664 and the open headless merge requests make an upstream merge
 **S07. Phase 0 wrap-up.** Walk through every (verify) in design.md. Record decisions that the spikes
 changed. Re-plan the sessions below if needed. Done when: design.md has no (verify) that affects v1,
 and phase 1 can start.
+Result: spikes.md "Phase 0 wrap-up", D30, design.md §6.2, §6.6 and §11. The remaining (verify) marks
+were all about the Kyiv broker and gateways, which v1 does not use: they became the open list of
+design.md §6.6. v1 reaches the mesh through our own Mosquitto (in the hub's compose file, port 8883
+with TLS for gateways) and our own `EU_433` gateway node. The firmware source confirmed that
+`EU_433` turns "Ignore MQTT" on. Re-planned: S19 gives the lab's Mosquitto users and an ACL,
+S23 needs our own gateway, S25 and S29 run the ARM64 images, S29 sets up Mosquitto.
 
 ### Phase 1: core
 
@@ -194,9 +200,10 @@ locally. Done when: two groups work independently, foreign groups are left, labe
 
 **S19. Adapter.** A `MeshApi` port and its fake; an adapter that bridges the thread-based
 `TCPInterface` to asyncio (serial and BLE later, D20, without changing the port); provisioning of the
-hub's node from the config (names, region, `ignore_mqtt`, private key, channels, PSKs, MQTT,
-contacts; waiting for each admin response; D25, D26), reconnection after node reboots, ACKs and NAKs
-matched by request id. Done when: the adapter is tested against the lab from S02 and S03.
+hub's node from the config (names, region, `ignore_mqtt`, private key, channels, PSKs, the MQTT
+client with user and password, contacts; waiting for each admin response; D25, D26), reconnection
+after node reboots, ACKs and NAKs matched by request id. The lab's Mosquitto gets users and an ACL
+like production (D30). Done when: the adapter is tested against the lab from S02 and S03.
 
 **S20. Channel endpoints.** `channel` endpoints, splitting into ≤ 200-byte parts with at most 3 parts and
 truncation, placeholders for non-text, per-node send interval, de-duplication across gateways, drop own
@@ -212,9 +219,14 @@ covered by tests.
 **S22. Lab integration.** Opt-in integration tests with the docker lab (Mosquitto, two `meshtasticd`),
 run nightly in CI. Done when: radio ⇄ Telegram works in the lab with both kinds of endpoint.
 
-**S23. Kyiv field test.** *With owner*, once a gateway or a hardware node is available. Done when:
-a message reaches a real radio through a `dm` endpoint (and a `channel` endpoint, if a gateway knows the
-channel), and the results are in spikes.md.
+**S23. Kyiv field test.** *With owner*, once a physical `EU_433` node with internet is available to
+act as our gateway (design.md §6.2, D30), and after the owner has asked the Kyiv community whether a
+bot node is welcome (design.md §6.6): set it up (region, "Ignore MQTT" off, "OK to MQTT" on, the
+mesh's primary channel and the group's private channel with uplink and downlink, MQTT to our broker
+with TLS), then a member's radio, and the hub on the owner's computer or the server. Note what the
+gateway's log shows for the via-MQTT packets, and answer what can be answered of design.md §6.6.
+Done when: a message reaches a real radio through a `dm` endpoint and a `channel` endpoint, a reply
+comes back, and the results are in spikes.md.
 
 ### Phase 4: Briar
 
@@ -229,7 +241,8 @@ every endpoint and event of design.md §7.4 works against a phone, and the upstr
 **S25. Packaging.** Docker image for the patched briar-headless (amd64, arm64), non-interactive account
 setup, the compose service; prepare the upstream merge request (rebased on `master`, referring to
 issue #1664, following the pre-review checklist of spikes.md S3 part 2). Done when: the image runs in
-the lab and the merge request is ready for the owner to submit.
+the lab, the arm64 image runs once (on an ARM64 host or under QEMU emulation), and the merge request is
+ready for the owner to submit.
 
 **S26. Briar endpoints.** `BriarApi` port over `httpx` and `websockets` and its fake; the Briar groups
 in `chatko.yaml` as endpoints; posts in and out with author accounts; drop its own posts; catch-up by
@@ -248,9 +261,11 @@ with Meshtastic both as a channel and as DMs to several nodes.
 
 ### Phase 5: release
 
-**S29. Deployment.** Production compose file, daily backup of `config/` and `data/`, a guide for a Linux
-VM (Oracle Cloud Always Free as the example), operations section in the README. Done when: the hub runs
-on a server and a restore from backup is tested.
+**S29. Deployment.** Production compose file with Mosquitto (TLS on 8883, a password file and an ACL
+per gateway and hub node, no anonymous clients; design.md §11, D30), daily backup of `config/` and
+`data/`, a guide for a Linux VM (Oracle Cloud Always Free as the example, ARM64: the first run of the
+arm64 `meshtasticd` and `briar-headless` images), operations section in the README. Done when: the
+hub runs on a server, a gateway connects to its broker over TLS, and a restore from backup is tested.
 
 **S30. Release review.** `/security-review`, full code review, docs versus code, the known limitations in
 the README. Done when: findings are fixed or accepted, and v1 is tagged by the owner.

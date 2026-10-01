@@ -28,11 +28,11 @@
   spike scripts; see `lab/README.md`.
 
 ## Current state
-- Design phase; no code yet. Phase 0 (spikes S1–S3) is in progress (spike S1, Briar relay, and the lab
-  parts of spike S2, the local Meshtastic lab in `lab/` with channel and direct messages, keys, ACKs
-  and provisioning, and spike S3, briar-headless built and run in Docker in `lab/briar/` with contacts
-  and private messages to a phone, and the plan for its private-group patch (D29), are done), then
-  phase 1 (core). The next session is the first one marked `todo` in `docs/roadmap.md`.
+- No code yet. Phase 0 (spikes S1–S3) is closed (D30): the Briar relay on phones, the local
+  Meshtastic lab in `lab/` (channel and direct messages, keys, ACKs, provisioning), briar-headless in
+  Docker in `lab/briar/` and the plan for its private-group patch (D29). Only the Kyiv broker questions
+  are open (design.md §6.6); they do not block v1. Phase 1 (core) is next: the first session marked
+  `todo` in `docs/roadmap.md`.
 - The upstream Briar clone for reading and patching is `~/Projects/briar` (tag `release-1.5.21`).
 - Development runs locally on the owner's Linux machine. There is no hardware Meshtastic node yet, so
   a second virtual node (`meshtasticd`) plays the member's radio. The production host will be some Linux
@@ -52,5 +52,6 @@
   hub's Briar account creates the Briar groups; the admin manages contacts, groups and invitations with
   `briarctl`, a separate command-line tool outside chatko's architecture (D24). A
   physical node and several hubs (e.g. a home Raspberry Pi) are later (D17).
-- The default MQTT broker is the Kyiv community broker, but each Meshtastic extension instance can use
-  any broker. The owner will have hardware gateway nodes later.
+- v1 uses its own Mosquitto, and our own physical gateway node connects it to the Kyiv mesh (D30): the
+  Kyiv community broker gives logins only to claimed physical nodes (D27). Each Meshtastic extension
+  instance can use any broker. The owner will have hardware gateway nodes later.

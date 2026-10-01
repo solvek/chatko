@@ -16,13 +16,16 @@ extensions:
     short_name: CHKO               # up to 4 characters
     region: EU_433                 # Kyiv mesh: 433.125 MHz, LongFast; the hub sets it and keeps ignore_mqtt off (design.md §6.1)
     private_key: ${MESH_KYIV_PRIVATE_KEY}  # optional, base64, 32 bytes: keeps the node's identity if its volume is lost
-    mqtt:                          # required for a virtual node
-      host: mqtt.example.org       # the Kyiv community broker, our own Mosquitto, or any other
-      port: 1883                   # the Kyiv broker: 1883 without TLS
+    mqtt:                          # required for a virtual node; any broker works
+      host: mosquitto              # v1: our own Mosquitto in the same compose file (design.md §6.2, D30)
+      port: 1883                   # inside the Docker network; our gateways connect on 8883 with TLS
       tls: false
-      username: ${KYIV_MQTT_USER}  # the Kyiv broker: the node id in hex, issued per claimed node
-      password: ${KYIV_MQTT_PASSWORD}
-      root_topic: node/2a55b544    # Kyiv broker: node/<node id of the claimed node>; own broker: msh/EU_433
+      username: ${MESH_MQTT_USER}  # one Mosquitto user per hub node and per gateway
+      password: ${MESH_MQTT_PASSWORD}
+      root_topic: msh/EU_433       # our gateways use the same root topic
+      # Later, the Kyiv community broker (logins only for a claimed physical node, D27):
+      # host: mqtt.meshtastic.kyiv.ua, port: 1883, tls: false, username: <node id in hex>,
+      # root_topic: node/<node id>
     channels:                      # the hub provisions its node with these
       - name: LongFast             # index 0: the primary channel of the Kyiv mesh; its PSK is not the
         psk: ${KYIV_PRIMARY_PSK}   # default one: take it from the QR code at https://meshtastic.kyiv.ua/join

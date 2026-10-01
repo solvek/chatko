@@ -12,31 +12,35 @@ Meshtastic LoRa channels. A hub copies every message to all the other places.
 
 - One installation serves several independent groups.
 - Every network is an **extension**: Telegram, Meshtastic and Briar today, and more can be added later.
-  Telegram also provides sign-in and account management for now, and that part can be replaced too.
-- It can forward the public Meshtastic chat (e.g. the Kyiv `LongFast`) to selected members.
+- Where each message goes, and how its author is signed, is a small Python script the admin writes.
+  Without it, every message goes to all the other places of its group.
+- It can forward the mesh's primary Meshtastic chat (e.g. the Kyiv `LongFast`) to selected chats.
 
 > **Status: design.** No code yet. Start with the [design](docs/design.md).
 
 ## Known limitations
 
 - **A cloud hub reaches radios only through an internet-connected gateway node.** A radio node without
-  internet only relays. chatko sends to radios as direct messages to each member's node (works through
-  any gateway that forwards them, one packet per node), or as one broadcast on a private group channel
-  (needs a gateway that knows the channel, in practice your own). A hub within radio range can use a
-  physical node instead and needs no gateway.
+  internet only relays. chatko runs its own MQTT broker, and at least one gateway of your own (a radio
+  with internet near the group) connects to it; community brokers give access only to registered
+  physical nodes. chatko sends to radios as direct messages to each member's node (one packet per
+  node, with delivery confirmation), or as one broadcast on a private group channel. A hub within
+  radio range will be able to use a physical node instead and need no gateway (not in v1).
 - **Radios must not ignore MQTT, and must allow it.** Messages from a cloud hub reach the air through
   MQTT, and a radio with "Ignore MQTT" on drops them (and does not relay them). Meshtastic turns this
-  setting on by default when the region is set to `EU_868`, so members turn it off on their radios.
+  setting on when a region with a duty-cycle limit (`EU_433`, `EU_868`, `UA_433`, `UA_868`) is first
+  set, so members turn it off on their radios.
   Members also turn "OK to MQTT" on (it is off by default): without it, gateways on a public broker do
   not pass their messages and acknowledgements on to the hub.
 - **Direct messages to radios need keys on both sides.** Meshtastic encrypts a direct message with the
   receiver's key, and a node keeps the first key it learns for another node. When a member resets
   their radio, the admin puts its new key into the config. Keep the hub's own key in the config
   (`private_key`), so that it never changes, even if the hub's data is lost.
-- **Removing a person from the mirrors is not instant.** Membership follows the Telegram group. To remove
-  someone from a Meshtastic channel, set a new channel key on all radios. Briar cannot remove a member
-  from a private group, and deleting the contact does not cut them off (they still sync through other
-  members). The only remedy is to re-create the Briar group.
+- **Removing a person is done in each network, and is not instant everywhere.** chatko manages no
+  members: who is in a Telegram group is up to its admins, and the Meshtastic nodes and channels are
+  in the config. To remove someone from a Meshtastic channel, set a new channel key on all radios.
+  Briar cannot remove a member from a private group, and deleting the contact does not cut them off
+  (they still sync through other members). The only remedy is to re-create the Briar group.
 - **Briar reaches offline members only through other members.** A member who is never online gets Briar
   messages only if another group member (a Briar contact of theirs) syncs with the hub and later meets
   them, and one of the two has used "Reveal contacts" in the group. Direct Briar messages are never

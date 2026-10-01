@@ -112,7 +112,7 @@ Steps and answers needed:
 - [x] The node identity (node id, keys) persists across container restarts (volume).
 - [x] Setting channels, PSKs, names and MQTT settings from code or config files, so the hub can
   provision its node.
-- [ ] (part 3: blocked on credentials, see the result) Read-only connection to the Kyiv broker: `LongFast` text messages are received. Broker policy
+- [ ] (part 3: blocked on credentials, see the result; not needed for v1, D30) Read-only connection to the Kyiv broker: `LongFast` text messages are received. Broker policy
   for PKI direct messages (topic `…/2/e/PKI/…`) and for downlink (ask the Kyiv community). Do the Kyiv
   gateways downlink PKI direct messages to nodes they hear? This decides whether `dm` mode works
   without our own gateway.
@@ -407,7 +407,8 @@ checked on the Kyiv mesh in S04 and S23):
 - *Consequences.* (1) The "public default-key `LongFast`" of the design does not exist on this mesh:
   reading `LongFast` needs its PSK, and the hub's primary channel must be that one, or its NodeInfo,
   ACKs and `dm` cannot work (design.md §6.2). (2) `EU_433` is a region with a duty-cycle limit too,
-  so the firmware probably turns `ignore_mqtt` on there as well (unchecked). (3) The example config
+  so the firmware turns `ignore_mqtt` on there as well (confirmed in the source in S07, see the
+  wrap-up below). (3) The example config
   uses `EU_433`, the `KYIV_PRIMARY_PSK` secret and the root topic `node/<hub node id>`, TLS off.
   (4) Without a claimed physical node the hub gets no access to the Kyiv broker, so development goes
   on with our own Mosquitto (lab, D27).
@@ -611,3 +612,30 @@ Steps and answers needed:
   prints debug output, mixes hex and base64 ids, puts standard base64 ids in URL paths and has no
   tests. !1831 finds forums by name, answers errors with 200, sends no events despite its
   description, and only fixes the existing test's constructor.
+
+## Phase 0 wrap-up (2026-10-01, session S07)
+
+Every (verify) of design.md was walked through. What v1 relies on is answered by S1–S3; what is left
+concerns only the Kyiv broker and gateways, which v1 does not use (D27, D30), and is listed in
+design.md §6.6.
+
+Read in the firmware source of the lab's version (`meshtastic/firmware` at `54e0d8d`, 2.7.26):
+- `AdminModule.cpp`: when the region is first set, `ignore_mqtt` is turned on if the region's duty
+  cycle is below 100 %. `RadioInterface.cpp` gives `EU_433` and `EU_868` 10 %, `UA_433` 10 % and
+  `UA_868` 1 %. So radios set up for the Kyiv mesh (`EU_433`) start with "Ignore MQTT" on, like
+  `EU_868`. The same code appends the region to the MQTT root only while it is still `msh`.
+- `MQTT.cpp`, `MQTT.h`: nodes with `WiFiClientSecure` (ESP32 on Wi-Fi) support `tls_enabled` (port
+  8883 by default) and call `setInsecure()`, so they do not check the broker's certificate; nodes
+  without it refuse a TLS config. A gateway uploads other nodes' decodable packets only with their "OK
+  to MQTT" bit, unless the broker's address is private (10/8, 172.16/12, 192.168/16, 100.64/10,
+  169.254/16, 127.0.0.1); PKI packets it cannot decode are uploaded regardless.
+
+Still open, and where it is answered:
+
+| Item | Where |
+|---|---|
+| The Kyiv questions of design.md §6.6 (broker routing, PKI and downlink policy, gateways, "Ignore MQTT" on relays, "OK to MQTT", a bot node) | roadmap S04 (a claimed physical node, `lab/spike_kyiv.py`) and S23 |
+| A physical node as the hub's node (serial, BLE, TCP) | later, after v1 (D20) |
+| ARM64: `meshtasticd` was checked only in the manifest, our `briar-headless` jar was built but not run | S25 (the image) and S29 (the server) |
+| Private groups switched on for an existing Briar account need no migration (read in the source) | S24, with the lab account |
+| `RATE_LIMIT_EXCEEDED` addressed to node 0 (S2, part 2): a firmware bug worth reporting upstream | anyone, not blocking |

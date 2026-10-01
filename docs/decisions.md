@@ -324,3 +324,28 @@ endpoints have been open since 2024, and headless gets only dependency upgrades.
 rebase of the patch, which stays cheap because it mostly adds files and touches four existing ones
 (`HeadlessModule.kt`, `Router.kt`, the test module and the README). Once the patched peer runs, it
 tells all its contacts that it supports private groups. This refines D6 and D24.
+
+## D30. v1 reaches the mesh through our own broker and our own gateway; phase 0 is closed
+Session S07 walked through every (verify) of the design. All that v1 relies on was answered by the
+spikes S1–S3 or the upstream source. What stays open concerns only the Kyiv broker and the
+community's gateways: what the broker does with packets under `node/<id>`, its PKI and downlink
+policy, the gateways' firmware and settings, and how common "Ignore MQTT" is on relays. The broker
+gives logins only to claimed physical nodes (D27), so the hub cannot use it in v1 anyway. The
+firmware source confirmed that `EU_433` (and `UA_433`, `UA_868`) turns `ignore_mqtt` on like
+`EU_868`, and that ESP32 gateways support MQTT over TLS without checking the server's certificate.
+**Decision:**
+- v1 runs its own Mosquitto in the hub's compose file. The hub's `meshtasticd` nodes connect to it
+  inside the Docker network; our gateways (physical `EU_433` radios with internet, with the mesh's
+  primary channel and the groups' private channels, uplink and downlink on) connect over the
+  internet on port 8883 with TLS, each with its own user and an ACL limited to the root topic. No
+  anonymous clients.
+- Our gateway is the only path between the hub and the air in v1, for both `channel` and `dm`
+  endpoints. Both stay first-class (D14): `channel` costs one packet, `dm` gives a per-node ACK.
+- The open Kyiv questions move from (verify) marks to a list in design.md §6.6. They are answered
+  when a physical node is claimed (roadmap S04) or in the field test (S23), and do not block v1.
+- Phase 1 starts. The ARM64 images (`meshtasticd`, our `briar-headless`) are run for the first time
+  in S25 and S29, because the hosting candidate is ARM64.
+**Consequences:** the server opens one more inbound port (8883) and keeps a Mosquitto password file
+and ACL; the deployment session (S29) covers them. The field test (S23) needs a physical `EU_433`
+gateway node of our own. This refines D27, which already chose our own Mosquitto until a node is
+claimed, and changes design.md §11 (inbound ports were SSH only).
