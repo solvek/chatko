@@ -68,7 +68,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S19 | 3 | Meshtastic: asyncio adapter over the `meshtastic` library (TCP to `meshtasticd`), provisioning from the config | Opus 5.5 | xhigh | done |
 | S20 | 3 | Meshtastic: `channel` endpoints, splitting, rate limit, de-duplication, `LongFast` source | Opus 5.5 | high | done |
 | S21 | 3 | Meshtastic: `dm` endpoints, ACKs and retries | Opus 5.5 | xhigh | done |
-| S22 | 3 | Meshtastic lab integration tests, radio ⇄ Telegram | Opus 5.5 | high | todo |
+| S22 | 3 | Meshtastic lab integration tests, radio ⇄ Telegram | Opus 5.5 | high | done |
 | S23 | 3 | Field test on the Kyiv mesh through our own gateway (*with owner*, needs an `EU_433` node) | Sonnet 5.5 | medium | todo |
 | S24 | 4 | briar-headless fork: private-group API (Kotlin; a phone at the end, *with owner*) | Opus 5.5 | xhigh | todo |
 | S25 | 4 | briar-headless Docker image; upstream merge request | Sonnet 5.5 | high | todo |
@@ -372,6 +372,21 @@ wake-up when it is heard again) and look at how long a real ACK takes.
 
 **S22. Lab integration.** Opt-in integration tests with the docker lab (Mosquitto, two `meshtasticd`),
 run nightly in CI. Done when: radio ⇄ Telegram works in the lab with both kinds of endpoint.
+*Done (D50):* `tests/integration/test_meshtastic_lab_relay.py` runs the whole hub (`run_hub`,
+SQLite, the Meshtastic extension on the lab's hub node, Telegram over `FakeTelegramApi`) with the
+lab's radio as a member's radio: Telegram ⇄ the private channel and Telegram ⇄ direct messages,
+a long message in three parts each with the radio's ACK and ✍ in Telegram, a radio that is away
+(`MAX_RETRANSMIT`, then delivered once it is heard), and a reset radio (`NO_CHANNEL`, one admin
+notice, delivered once the config has its new key). Retries wait an hour there, so every
+redelivery is the extension's `retry_now`. The shared helpers moved to `tests/integration/lab.py`;
+the tests provision both nodes (the radio gets the hub's key, a constant of the lab), so they pass
+on wiped volumes, and `.github/workflows/lab.yml` runs them nightly that way (15 tests, about
+2.5 min). A direct message from Telegram had the radio's ACK in 0.1 s. The lab showed that
+the node drops texts sent exactly 2 s apart now and then (it counts from when it handles them), so
+`min_send_interval_s` is now at least 2.5.
+For S23: a radio restarted within 10 minutes of its last NodeInfo sends none at boot, so it is
+heard only when it sends something; see how long a real radio stays quiet, and whether a message
+reaches it twice when an ACK comes after `MAX_RETRANSMIT` (D49).
 
 **S23. Kyiv field test.** *With owner*, once a physical `EU_433` node with internet is available to
 act as our gateway (design.md §6.2, D30), and after the owner has asked the Kyiv community whether a

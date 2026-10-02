@@ -290,9 +290,11 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
   | any other NAK | | after the outbox's backoff |
 
   The outbox's backoff (10 s, doubling up to an hour, §9.1) stays the fallback for a radio whose
-  packets the hub does not hear, and when the hub's node is ready again (after a reconnect, or as a
-  new instance after the config changed) the hub tries every waiting delivery of the instance at
-  once.
+  packets the hub does not hear, and for a radio that comes back quietly: one restarted less than
+  10 minutes after its last NodeInfo sends none at boot, so the hub hears it only when it sends
+  something (a text, telemetry, a position; D50). When the hub's node is ready again (after a
+  reconnect, or as a new instance after the config changed) the hub tries every waiting delivery
+  of the instance at once.
 - ACKs and NodeInfo are channel packets on the **primary** channel, while direct messages go under the
   MQTT topic `<root>/2/e/PKI/…`. So `dm` needs uplink and downlink on the primary channel of the hub's
   node, and one direct message is three packets on MQTT: the message, the ACK, and a short ACK of the
@@ -347,8 +349,9 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
 - A label longer than 39 bytes (a node's longest long name) is cut with `…`.
 - Non-text content goes out as a placeholder: `NatAda: [photo] caption`.
 - The hub sends no faster than one packet every few seconds per node (configurable), to be a good
-  neighbour on a busy mesh. The interval is per hub node (all its endpoints together) and at least 2 s:
-  the node silently drops a text from the hub that comes sooner (spike S2).
+  neighbour on a busy mesh. The interval is per hub node (all its endpoints together) and at least
+  2.5 s: the node silently drops a text from the hub that it handles less than 2 s after the
+  previous one (spike S2), and it may handle a text some time after the hub sent it (D50).
 - A direct message carries 12 bytes more than a channel packet (PKI), so it holds at most about
   220 bytes of text (a channel packet about 230); the 200-byte limit fits both.
 
@@ -795,6 +798,8 @@ old fingerprints are pruned after the retention (7 days by default).
   physical node (D27). The Meshtastic lab is in [`lab/`](../lab/README.md) (image
   `meshtastic/meshtasticd`, pinned tag, amd64 and arm64). Its Mosquitto is set up like production's:
   no anonymous clients, a user per node, an ACL that keeps each to the lab's root topic (D46).
+  Tests run the hub against it, with Telegram faked and the lab's second node as a member's radio,
+  on demand and nightly in CI (D50).
 - **Production:** a Linux server (cloud VM, x86-64 or ARM64), the same compose file, which also runs
   our Mosquitto (§6.2, D30). Inbound ports: SSH, and MQTT over TLS (8883) for our gateways. Mosquitto
   allows no anonymous clients: each gateway and each hub node has its own user, limited by an ACL to

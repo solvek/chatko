@@ -54,7 +54,7 @@ def test_the_example_section_is_valid() -> None:
 
 def test_reads_the_node_and_its_settings() -> None:
     config = MeshtasticConfig.model_validate(
-        section(private_key=KEY, contacts={"!A1B2C3D4": KEY}, min_send_interval_s=2)
+        section(private_key=KEY, contacts={"!A1B2C3D4": KEY}, min_send_interval_s=2.5)
     )
 
     assert config.private_key_bytes == bytes(range(32))
@@ -125,7 +125,7 @@ def test_hides_the_secrets_when_shown() -> None:
         ({"contacts": {"a1b2c3d4": KEY}}, "not a node id"),
         ({"contacts": {"!a1b2c3d4": PSK16}}, "the public key of !a1b2c3d4 is 16 bytes"),
         ({"contacts": {"!a1b2c3d4": KEY, "!A1B2C3D4": KEY}}, "!A1B2C3D4 is listed twice"),
-        ({"min_send_interval_s": 1.5}, "greater than or equal to 2"),
+        ({"min_send_interval_s": 2}, "greater than or equal to 2.5"),
         ({"mqtt": {"host": "m", "root_topic": "msh/#"}}, "should match pattern"),
         ({"mqtt": {"host": "m:1883", "root_topic": "msh"}}, "should match pattern"),
         ({"mqtt": {"host": "m", "root_topic": "msh", "port": 0}}, "greater than or equal to 1"),

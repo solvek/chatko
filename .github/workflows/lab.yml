@@ -1,0 +1,28 @@
+name: Lab
+
+# The integration tests with the docker lab (lab/README.md): Mosquitto and two meshtasticd nodes,
+# and the hub relaying between them and a fake Telegram. Nightly and on demand, not on every pull
+# request (docs/architecture.md §7). The meshtasticd image is pinned in lab/docker-compose.yml.
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      # setup-uv publishes no major or minor tags since v8: pin a release.
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      # Fresh volumes: the tests provision both nodes themselves.
+      - run: docker compose -f lab/docker-compose.yml up -d --wait
+      - run: uv run pytest -m lab tests/integration -o log_cli=true --log-cli-level=INFO
+      - if: failure()
+        run: docker compose -f lab/docker-compose.yml logs --timestamps
+      - if: always()
+        run: docker compose -f lab/docker-compose.yml down -v

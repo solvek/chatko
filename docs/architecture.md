@@ -78,6 +78,7 @@ tests/
   unit/              # domain, the public APIs and application, with fakes
   contract/          # each extension against extension_api.testing
   integration/       # real SQLite; the docker lab (Mosquitto + meshtasticd), opt-in: pytest -m lab
+                     # (lab.py: what the lab tests share)
 routing.example.py   # sample routing script, tested in CI like any other code
 lab/                 # docker compose lab: Mosquitto + two meshtasticd nodes, plus spike scripts
 ```
@@ -288,13 +289,13 @@ errors is part of the test.
 
 ### 3.8 The Meshtastic extension
 
-`chatko_meshtastic` (design.md §6, D25, D26, D46, D47, D49), registered as `meshtastic`. One
+`chatko_meshtastic` (design.md §6, D25, D26, D46, D47, D49, D50), registered as `meshtastic`. One
 instance drives one node, the hub's node, through the official `meshtastic` library, and serves
 both kinds of endpoint: `channel` (S20) and `dm` (S21).
 
 | Module | Contents |
 |---|---|
-| `config` | `MeshtasticConfig`: `connection` (`TcpConnection`, `host:port`), names, `region`, `private_key`, `mqtt` (`MqttConfig`: host, port, TLS, login, root topic), `channels` (`ChannelConfig`: name and PSK, in slot order), `contacts` (node id → public key), `min_send_interval_s` (at least 2). Secrets are `SecretStr`s. `MeshtasticEndpoint`, the endpoint: either `channel` (a name) or `dm` (node ids, kept lower case) |
+| `config` | `MeshtasticConfig`: `connection` (`TcpConnection`, `host:port`), names, `region`, `private_key`, `mqtt` (`MqttConfig`: host, port, TLS, login, root topic), `channels` (`ChannelConfig`: name and PSK, in slot order), `contacts` (node id → public key), `min_send_interval_s` (at least 2.5). Secrets are `SecretStr`s. `MeshtasticEndpoint`, the endpoint: either `channel` (a name) or `dm` (node ids, kept lower case) |
 | `api` | the `MeshApi` port: `connect()` returns a `MeshConnection` with `state` (`NodeState`: the node's number, `NodeSettings`, its database of `NodeEntry`s), `events()` (the `Packet`s it hands over until the connection ends: `Text`, with `reaction` for a tapback, `Routing` for an ACK or NAK with its `request_id`, `NodeInfo`, `Other`), `send_text`, `send_admin` (`BeginEdit`, `SetOwner`, `SetLora`, `SetPrivateKey`, `SetMqtt`, `SetChannel`, `AddContact`, `CommitEdit`) and `close`. Errors: `UnreachableError` (connect again), `RejectedError` (cannot work) |
 | `library_api` | `LibraryMeshApi`, the port over `TCPInterface`, the only module that imports the library. A subclass overrides seven of its hooks so that it never reconnects by itself and the adapter sees every message from the node (D46); each connection has a thread of its own for the blocking calls, and the reader thread hands packets over with `call_soon_threadsafe`. `open_socket` replaces the TCP connection in tests |
 | `provisioning` | `WantedNode` (the node as the config wants it), `settings_commands` (what differs, in a settings transaction, in the order the firmware needs), `contact_commands` (the config's contacts), `favorite_commands` (nodes to keep whose learned key is not a favorite yet), `describe` (for logs and notices, without secrets) |
@@ -310,7 +311,10 @@ real library over a socket pair, whose other end (`device.FakeDevice`) speaks th
 protocol. `tests/integration/test_meshtastic_lab.py` runs `MeshNode` over `LibraryMeshApi`
 against the lab's two nodes: provisioning with the reboot, channel texts and direct messages both
 ways with their ACKs, the NAKs of a node without a key and of a radio that is away, and a node
-restart.
+restart. `tests/integration/test_meshtastic_lab_relay.py` runs the whole hub (`run_hub`) with the
+extension on the lab's hub node and Telegram over `FakeTelegramApi`, and the lab's radio under a
+`MeshNode` as a member's radio (D50): both kinds of endpoint each way, a long message in parts,
+a radio that is away until it is heard, and a reset radio until the config has its new key.
 
 ## 4. Routing API
 
@@ -582,7 +586,9 @@ The `import-linter` contracts (`[tool.importlinter]`) are:
 
 Integration tests with the docker lab run on demand and nightly; they are not required for every PR.
 They are marked `lab` and deselected by default; `uv run pytest -m lab` runs them against a
-running lab (`lab/README.md`).
+running lab (`lab/README.md`). They provision the lab's nodes themselves, so
+`.github/workflows/lab.yml` runs them nightly (and on demand) on a lab with fresh volumes, and
+prints the containers' logs when they fail (D50).
 
 Testing style:
 - Test behaviour through public APIs, not private helpers. One behaviour per test, with a descriptive

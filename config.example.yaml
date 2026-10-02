@@ -41,7 +41,7 @@ extensions:
     contacts:                      # optional: public keys of members' nodes (base64, 32 bytes, from the
                                    # Meshtastic app); the node keeps them as favorites. An example key:
       "!a1b2c3d4": "B7yTEhZ73TRS3Jg9oECbzdbk+40JH8z+Gyvs7iM6heM="
-    min_send_interval_s: 4         # per hub node; at least 2 (the node drops texts that come sooner)
+    min_send_interval_s: 4         # per hub node; at least 2.5 (the node drops texts that come too soon)
 
   # One instance serves any number of chats: every site and source names its own chat. Another
   # instance of a type is only for another login or another connection: a second bot with its own

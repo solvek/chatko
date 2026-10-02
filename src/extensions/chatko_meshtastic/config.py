@@ -19,8 +19,10 @@ DEFAULT_TCP_PORT = 4403
 """The port of a node's TCP API (`meshtasticd`)."""
 
 MAX_CHANNELS = 8
-MIN_SEND_INTERVAL_S = 2.0
-"""The node drops a text from the hub that comes sooner than this after the previous one."""
+MIN_SEND_INTERVAL_S = 2.5
+"""The node drops a text from the hub that it handles less than 2 s after the previous one, and
+it may handle a text a few hundred milliseconds after the hub sent it: in the lab, texts sent
+2.0 to 2.1 s apart were dropped up to every other one, and none at 2.25 s or more (D50)."""
 
 REGIONS = (
     "US", "EU_433", "EU_868", "CN", "JP", "ANZ", "KR", "TW", "RU", "IN", "NZ_865", "TH",

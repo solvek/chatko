@@ -1001,3 +1001,48 @@ the throttles of spike S2 make it work only now and then, and `contacts` covers 
 that comes after the node gave up (`MAX_RETRANSMIT`) is not counted, so on a slow real mesh a
 radio may get a message twice; S23 shows whether that happens. S22 tries the extension in the
 lab, radio ⇄ Telegram, with both kinds of endpoint.
+
+## D50. Lab integration tests run the whole hub, with Telegram faked, nightly from fresh volumes
+**Status:** accepted (S22).
+Session S22 tried the Meshtastic extension in the lab (Mosquitto and two `meshtasticd` nodes,
+`lab/`) as part of the running hub (`tests/integration/test_meshtastic_lab_relay.py`):
+- **The whole hub, with Telegram in memory.** The tests run `run_hub`, the composition root of
+  `chatko run`, with real SQLite and config files, the Meshtastic extension on the lab's hub node
+  and the Telegram extension over `FakeTelegramApi`. A real bot would need a token and a network
+  in CI, and the Telegram side was tried with a real bot in S18 (D45); here the radio side is
+  real. The lab's radio node plays a member's radio under a `MeshNode` in the test. Two groups,
+  a Telegram chat with the lab's private channel and one with a `dm` endpoint of the radio, cover
+  both kinds of endpoint, each way, with the parts of a long message and Telegram's ✍.
+- **Retries wait an hour in these tests**, so a message that reaches the radio after a `Retry`
+  proves that the extension asked for it (`retry_now`), not the outbox's backoff.
+- **The tests provision the nodes themselves.** The lab's private keys are fixed, so their public
+  keys are constants of the tests, and the radio gets the hub's key as a contact like
+  `provision.py` gives it; the tests pass on wiped volumes. Tests that change the lab (the radio's
+  container stopped, the radio given another key and the hub's config the matching contact) put
+  it back.
+- **Nightly in CI** (`.github/workflows/lab.yml`, and on demand): the lab from fresh volumes, all
+  `lab` tests (15, about 2.5 min), the containers' logs on failure. Not on every pull request
+  (architecture.md §7): the lab needs Docker and minutes, and a pinned `meshtasticd` beta.
+- **What the lab showed:** relaying works both ways with both kinds of endpoint. A direct message
+  from Telegram had the radio's ACK 0.1 s after it was posted; with the radio's container
+  stopped the hub's node gave up with `MAX_RETRANSMIT` about 24 s after the post, and the
+  message reached the radio within a second of the radio being heard again. A radio given a new
+  key answered `NO_CHANNEL` at once; the admin got one notice in Telegram, and once the config
+  had the new key the hub reloaded, added the contact and delivered the waiting message within a
+  second. A radio restarted less than 10 minutes after its last NodeInfo sends none at boot (the
+  throttle of spike S2 survives restarts), so the hub hears it only when it sends something; the
+  test's radio sends a text on the primary channel, which is no endpoint, and that wakes the
+  delivery.
+- **At least 2.5 s between texts, not 2.** The long message's third part was lost now and then:
+  the node had dropped it for its 2 s limit, though the hub sent it 2 s after the second. The
+  firmware measures the 2 s when it handles a text from its API client (`PhoneAPI`, firmware
+  2.7.26), which can be a few hundred milliseconds after the hub sent it, and a dropped text does
+  not restart its count. Thirty texts to the lab's node at each spacing: 5 dropped at 2.0 s,
+  every other one at 2.05 and 2.1 s, none at 2.25 s (60 texts) and 2.5 s (90 texts). So
+  `min_send_interval_s` must be at least 2.5 (it was 2, the limit itself; the example keeps 4).
+  The node's NAK for it (`RATE_LIMIT_EXCEEDED`) goes to node 0 and never reaches the hub (spike
+  S2), so a dropped part is retried after the outbox's backoff.
+**Consequences:** a radio that comes back quietly gets its messages at the outbox's backoff (up
+to an hour) or when it next sends anything (a text, telemetry, a position, its NodeInfo after
+10 minutes), as design.md §6.2 says. S23 checks the same paths on the Kyiv mesh, with real
+airtime and a gateway in between.

@@ -74,7 +74,7 @@ CONFIG = MeshtasticConfig.model_validate(
             {"name": "Family", "psk": base64.b64encode(bytes(16)).decode()},
             {"name": "Spare", "psk": "AQ=="},
         ],
-        "min_send_interval_s": 2,
+        "min_send_interval_s": 2.5,
     }
 )
 TIMINGS = MeshtasticTimings(
@@ -221,7 +221,7 @@ def test_a_dm_endpoints_nodes_are_its_recipients(extension: MeshtasticExtension)
 
 
 def test_the_timings_take_the_send_interval_from_the_config() -> None:
-    assert MeshtasticTimings.from_config(CONFIG).node.min_send_interval == 2
+    assert MeshtasticTimings.from_config(CONFIG).node.min_send_interval == 2.5
 
 
 # Reading.

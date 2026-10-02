@@ -251,9 +251,9 @@ class MeshNode:
         self, text: str, *, to: int = BROADCAST, channel: int = 0, want_ack: bool = True
     ) -> Outgoing:
         """Hand the node a text for a channel (`to` is `BROADCAST`) or a node, at least
-        `min_send_interval` after the previous one: the node drops a text that comes sooner
-        than 2 s (spike S2). Raises `NotReadyError` while the node is not ready, and the port's
-        `MeshError`s."""
+        `min_send_interval` after the previous one: the node drops a text that it handles
+        less than 2 s after the previous one (spike S2, D50). Raises `NotReadyError` while the
+        node is not ready, and the port's `MeshError`s."""
         loop = asyncio.get_running_loop()
         async with self._send_lock:
             if self._last_text is not None:

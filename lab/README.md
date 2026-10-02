@@ -81,20 +81,31 @@ Stop the lab with `docker compose -f lab/docker-compose.yml down`; add `-v` to w
 
 The findings are in [docs/spikes.md](../docs/spikes.md) (S2).
 
-### The adapter's lab tests
+### chatko's lab tests
 
-`tests/integration/test_meshtastic_lab.py` runs chatko's Meshtastic adapter (`MeshNode` over
-`LibraryMeshApi`) against both nodes: provisioning with the reboot it causes, channel texts and
-direct messages both ways with their ACKs, the NAKs of a node without a key and of a radio that is
-away, and a node restart. They are deselected by default; with the lab up:
+Two modules under `tests/integration/` use the lab; `lab.py` has what they share.
+
+- `test_meshtastic_lab.py` runs chatko's Meshtastic adapter (`MeshNode` over `LibraryMeshApi`)
+  against both nodes: provisioning with the reboot it causes, channel texts and direct messages
+  both ways with their ACKs, the NAKs of a node without a key and of a radio that is away, and a
+  node restart.
+- `test_meshtastic_lab_relay.py` runs the whole hub, as `chatko run` does, with the Meshtastic
+  extension on the `hub` node and Telegram in memory (`FakeTelegramApi`), and relays between
+  Telegram chats and the `radio` node: on the private channel and by direct message, a long
+  message in parts, a radio that is away until it is heard again, and a radio with a new key
+  until the hub's config has it.
+
+They are deselected by default; with the lab up:
 
 ```bash
-uv run pytest -m lab tests/integration/test_meshtastic_lab.py
+uv run pytest -m lab tests/integration
 ```
 
-They take about 80 s, reboot the hub node twice and stop and restart containers. They use the
-settings of `provision.py` (with the primary channel named `LongFast`, which changes nothing on
-the air), so the two do not undo each other.
+They take about 2.5 min, reboot the nodes, and stop and restart containers; whatever they
+change they put back. They provision both nodes with the settings of `provision.py` (with the
+primary channel named `LongFast`, which changes nothing on the air), so the two do not undo each
+other, and they need no `provision.py` before them: they also pass on wiped volumes, which is how
+CI runs them every night (`.github/workflows/lab.yml`).
 
 ### Pitfalls found in the spike
 
@@ -114,7 +125,9 @@ the air), so the two do not undo each other.
 - Keys learned from NodeInfo in a node's first minute are not saved, and `docker stop` kills
   `meshtasticd` after 10 s without saving. The contacts that `provision.py` adds are saved at once.
 - A node sends at most one text per 2 s from its API client and drops the rest without telling the
-  client. Scripts pause before each text.
+  client. It counts from when it handles a text, which can be a few hundred milliseconds after the
+  client sent it, so texts sent exactly 2 s apart are lost now and then; keep 2.5 s (S22, D50).
+  Scripts pause before each text.
 - While a node's container restarts, Docker's port proxy still accepts a connection on 4403 or
   4404 and closes it at once: a client sees a broken pipe and has to try again (S19).
 
