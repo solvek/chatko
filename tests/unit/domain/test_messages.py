@@ -17,7 +17,7 @@ from chatko.domain import (
     fingerprint,
 )
 
-TG = EndpointRef("tg", "chat:-100")
+TG = EndpointRef("telegram", "chat:-100")
 NOW = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 NATA = Account(AccountKey("telegram", "111"), "Наталія Адамчук")
 

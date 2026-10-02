@@ -12,12 +12,12 @@ TYPES = {"fake": FakeExtension}
 
 CONFIG = """
     extensions:
-      tg: {type: fake}
+      telegram: {type: fake}
     groups:
       family:
         sites:
-          a: {ext: tg, place: a}
-          b: {ext: tg, place: b}
+          a: {ext: telegram, place: a}
+          b: {ext: telegram, place: b}
     routing: routing.py
 """
 SCRIPT = """
@@ -32,7 +32,7 @@ TEST = """
 
     def test_it_mirrors():
         installation = FakeInstallation(
-            extensions={"tg": "fake"}, groups={"family": {"a": "tg", "b": "tg"}}
+            extensions={"telegram": "fake"}, groups={"family": {"a": "telegram", "b": "telegram"}}
         )
         msg = installation.message("family.a", "hi")
         assert_routed_to(installation.route(routing, msg), "family.b")
@@ -85,7 +85,7 @@ def test_a_config_without_a_routing_script_uses_the_defaults(run: Run) -> None:
 
 
 def test_every_problem_of_an_invalid_config_is_printed(run: Run) -> None:
-    run.write("chatko.yaml", "extensions: {tg: {type: nope}}\nbogus: 1\n")
+    run.write("chatko.yaml", "extensions: {telegram: {type: nope}}\nbogus: 1\n")
 
     assert run.check() == 1
 
@@ -95,7 +95,7 @@ def test_every_problem_of_an_invalid_config_is_printed(run: Run) -> None:
 
 
 def test_an_unset_variable_is_reported(run: Run) -> None:
-    run.write("chatko.yaml", "extensions: {tg: {type: fake, account: '${WHO}'}}\n")
+    run.write("chatko.yaml", "extensions: {telegram: {type: fake, account: '${WHO}'}}\n")
 
     assert run.check() == 1
     assert "variable WHO is not set" in run.err.getvalue()
@@ -162,7 +162,7 @@ def test_tests_are_skipped_when_pytest_is_not_installed(
 def test_the_command_reads_the_env_file_and_the_environment(
     run: Run, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run.write("chatko.yaml", "extensions: {tg: {type: fake, account: '${A}-${B}'}}\n")
+    run.write("chatko.yaml", "extensions: {telegram: {type: fake, account: '${A}-${B}'}}\n")
     run.write("my.env", "A=from-file\nB=from-file\n")
     monkeypatch.setenv("B", "from-environment")
     args = ["check-config", "--config", str(run.directory / "chatko.yaml"), "--no-tests"]

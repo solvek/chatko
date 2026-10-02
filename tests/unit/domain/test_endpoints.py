@@ -2,21 +2,23 @@ import pytest
 
 from chatko.domain import DomainError, EndpointRef, Group
 
-TG = EndpointRef("tg", "chat:-100")
+TG = EndpointRef("telegram", "chat:-100")
 BRIAR = EndpointRef("briar", "group:abc")
 MESH = EndpointRef("kyiv", "channel:family")
 
 
 def test_endpoint_is_written_as_instance_and_name() -> None:
-    assert str(TG) == "tg/chat:-100"
+    assert str(TG) == "telegram/chat:-100"
 
 
 def test_endpoints_with_the_same_instance_and_name_are_equal() -> None:
-    assert EndpointRef("tg", "chat:-100") == TG
-    assert len({EndpointRef("tg", "chat:-100"), TG}) == 1
+    assert EndpointRef("telegram", "chat:-100") == TG
+    assert len({EndpointRef("telegram", "chat:-100"), TG}) == 1
 
 
-@pytest.mark.parametrize(("instance", "name"), [("", "x"), (" ", "x"), ("tg", ""), ("tg", "  ")])
+@pytest.mark.parametrize(
+    ("instance", "name"), [("", "x"), (" ", "x"), ("telegram", ""), ("telegram", "  ")]
+)
 def test_endpoint_needs_an_instance_and_a_name(instance: str, name: str) -> None:
     with pytest.raises(DomainError):
         EndpointRef(instance, name)

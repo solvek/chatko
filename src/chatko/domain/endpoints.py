@@ -9,11 +9,11 @@ from chatko.domain.errors import DomainError
 class EndpointRef:
     """One place where an extension instance reads and posts messages: a site or a source.
 
-    `instance` is the extension instance's name from the config (`tg`, `kyiv`). `name` is the name
-    the admin gives the endpoint in the config, unique in the installation: `<group>.<site>` for a
-    site (`family.tg`), the source's own name for a source (`longfast`) (D34). The core never reads
-    the endpoint's own settings (a chat id, a channel): only its extension does. The extension does
-    not know whether the endpoint is a site or a source: groups are a core concept.
+    `instance` is the extension instance's name from the config (`telegram`, `kyiv`). `name` is the
+    name the admin gives the endpoint in the config, unique in the installation: `<group>.<site>`
+    for a site (`family.telegram`), the source's own name for a source (`longfast`) (D34). The core
+    never reads the endpoint's own settings (a chat id, a channel): only its extension does. The
+    extension does not know whether the endpoint is a site or a source: groups are a core concept.
     """
 
     instance: str

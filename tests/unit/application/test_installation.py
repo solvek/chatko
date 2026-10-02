@@ -33,10 +33,10 @@ def test_the_providers_are_the_running_instances_with_endpoints() -> None:
         TOPOLOGY, {**rig.extensions, "bare": LifecycleOnly("bare", FakeConfig(), FakeHub())}
     )
 
-    assert installation.provider("tg") is rig.extensions["tg"]
+    assert installation.provider("telegram") is rig.extensions["telegram"]
     assert installation.provider("bare") is None
     assert installation.provider("gone") is None
-    assert installation.extension_types == {"tg": "fake", "mesh": "fake", "bare": "bare"}
+    assert installation.extension_types == {"telegram": "fake", "mesh": "fake", "bare": "bare"}
 
 
 def test_recipients_come_from_the_extensions() -> None:
@@ -49,21 +49,21 @@ def test_recipients_come_from_the_extensions() -> None:
 
 
 def test_a_deduplication_window_must_be_positive() -> None:
-    with pytest.raises(ValueError, match=r"family\.tg must be positive"):
+    with pytest.raises(ValueError, match=r"family\.telegram must be positive"):
         Installation(TOPOLOGY, fingerprint_dedup={FAMILY_TG: timedelta(0)})
 
 
 def test_the_admin_endpoint_must_be_in_the_topology() -> None:
-    with pytest.raises(ValueError, match=r"admin endpoint tg/nowhere is not in the topology"):
-        Installation(TOPOLOGY, admin_endpoint=EndpointRef("tg", "nowhere"))
+    with pytest.raises(ValueError, match=r"admin endpoint telegram/nowhere is not in the topology"):
+        Installation(TOPOLOGY, admin_endpoint=EndpointRef("telegram", "nowhere"))
 
 
 def test_an_instance_that_is_not_running_gets_no_calls_but_its_recipients_are_known() -> None:
     rig = Rig()
-    installation = Installation(TOPOLOGY, rig.extensions, running={"tg"})
+    installation = Installation(TOPOLOGY, rig.extensions, running={"telegram"})
 
-    assert installation.provider("tg") is rig.extensions["tg"]
+    assert installation.provider("telegram") is rig.extensions["telegram"]
     assert installation.provider("mesh") is None
     assert not installation.is_running("mesh")
     assert installation.recipients(FAMILY_RADIO) == ("!a1", "!b2")
-    assert installation.extension_types == {"tg": "fake", "mesh": "fake"}
+    assert installation.extension_types == {"telegram": "fake", "mesh": "fake"}

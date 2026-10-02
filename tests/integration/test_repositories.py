@@ -31,10 +31,10 @@ from chatko.domain import (
 from chatko.infrastructure.sqlite import Database, SqliteAccounts, SqliteHistory, SqliteStore
 
 T0 = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
-TG = EndpointRef("tg", "family.tg")
+TG = EndpointRef("telegram", "family.telegram")
 RADIO = EndpointRef("mesh", "family.radio")
 CHANNEL = EndpointRef("mesh", "family.channel")
-ADA = Account(AccountKey("tg", "1"), "Ада", "A")
+ADA = Account(AccountKey("telegram", "1"), "Ада", "A")
 NODE = AccountKey("meshtastic", "!a1b2c3d4")
 FP1 = fingerprint("Ada", "one")
 FP2 = fingerprint("Ada", "two")
@@ -300,7 +300,7 @@ class TestAccounts:
     async def test_another_account_is_new(self, repos: Repos) -> None:
         await repos.accounts.note(ADA, T0)
 
-        assert await repos.accounts.note(Account(AccountKey("tg", "2")), T0)
+        assert await repos.accounts.note(Account(AccountKey("telegram", "2")), T0)
 
     async def test_an_account_noted_with_new_names_is_not_new_again(self, repos: Repos) -> None:
         await repos.accounts.note(ADA, T0)

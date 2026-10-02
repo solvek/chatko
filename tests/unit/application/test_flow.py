@@ -24,7 +24,7 @@ async def test_a_post_reaches_every_other_site_and_each_recipient() -> None:
     rig = Rig()
     await rig.start()
 
-    rig.networks["tg"].post(place(FAMILY_TG), NAT, "Привіт усім")
+    rig.networks["telegram"].post(place(FAMILY_TG), NAT, "Привіт усім")
     await settle()
 
     assert rig.posted(FAMILY_CHANNEL) == ["NatAda: Привіт усім"]
@@ -78,10 +78,10 @@ async def test_the_source_extension_learns_how_each_delivery_ended() -> None:
     rig = Rig()
     await rig.start()
 
-    rig.networks["tg"].post(place(FAMILY_TG), NAT, "Привіт")
+    rig.networks["telegram"].post(place(FAMILY_TG), NAT, "Привіт")
     await settle()
 
-    reports = rig.extensions["tg"].reports
+    reports = rig.extensions["telegram"].reports
     assert {(r.target, r.recipient) for r in reports} == {
         (FAMILY_CHANNEL, None),
         (FAMILY_RADIO, "!a1"),
@@ -97,7 +97,7 @@ async def test_messages_wait_while_a_network_is_down_and_keep_their_order() -> N
     rig.networks["mesh"].online = False
 
     for text in ["1", "2", "3"]:
-        rig.networks["tg"].post(place(STREET_TG), NAT, text)
+        rig.networks["telegram"].post(place(STREET_TG), NAT, text)
         await settle()
     rig.networks["mesh"].online = True
     await rig.advance_past_retries()
@@ -110,7 +110,7 @@ async def test_pending_deliveries_survive_a_restart() -> None:
     rig = Rig()
     await rig.start()
     rig.networks["mesh"].online = False
-    rig.networks["tg"].post(place(STREET_TG), NAT, "1")
+    rig.networks["telegram"].post(place(STREET_TG), NAT, "1")
     await settle()
     await rig.stop()
 

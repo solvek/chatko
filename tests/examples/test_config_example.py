@@ -64,7 +64,7 @@ def test_the_example_config_is_valid() -> None:
 
     config = validate_config(parse_config(text, example_env()), TYPES)
 
-    assert list(config.extensions) == ["tg", "kyiv", "briar"]
+    assert list(config.extensions) == ["telegram", "kyiv", "briar"]
     assert [group.name for group in config.topology.groups] == ["family", "street"]
     assert config.topology.endpoint("family.radio").instance == "kyiv"
     assert set(config.topology.sources) == {"longfast", "owner"}

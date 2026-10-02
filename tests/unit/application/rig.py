@@ -1,10 +1,11 @@
 """A hub's application layer wired with fakes: two `FakeExtension` instances on fake networks.
 
 Topology:
-- group `family`: `family.tg` (instance `tg`, place `family`), `family.radio` (instance `mesh`,
-  place `family-dm`, recipients `!a1` and `!b2`), `family.channel` (`mesh`, `family-ch`);
-- group `street`: `street.tg` (`tg`, `street`), `street.channel` (`mesh`, `street-ch`);
-- sources `longfast` (`mesh`, `longfast`) and `owner` (`tg`, `owner`);
+- group `family`: `family.telegram` (instance `telegram`, place `family`), `family.radio`
+  (instance `mesh`, place `family-dm`, recipients `!a1` and `!b2`), `family.channel` (`mesh`,
+  `family-ch`);
+- group `street`: `street.telegram` (`telegram`, `street`), `street.channel` (`mesh`, `street-ch`);
+- sources `longfast` (`mesh`, `longfast`) and `owner` (`telegram`, `owner`);
 - person `NatAda` with the account `fake:nat`.
 """
 
@@ -23,13 +24,13 @@ from chatko.application.testing import FakeClock, InMemoryStore, RecordingNotice
 from chatko.domain import Account, AccountKey, EndpointRef, Group, Person, Topology
 from chatko.extension_api.testing import FakeConfig, FakeEndpointConfig, FakeExtension, FakeNetwork
 
-FAMILY_TG = EndpointRef("tg", "family.tg")
+FAMILY_TG = EndpointRef("telegram", "family.telegram")
 FAMILY_RADIO = EndpointRef("mesh", "family.radio")
 FAMILY_CHANNEL = EndpointRef("mesh", "family.channel")
-STREET_TG = EndpointRef("tg", "street.tg")
+STREET_TG = EndpointRef("telegram", "street.telegram")
 STREET_CHANNEL = EndpointRef("mesh", "street.channel")
 LONGFAST = EndpointRef("mesh", "longfast")
-OWNER = EndpointRef("tg", "owner")
+OWNER = EndpointRef("telegram", "owner")
 RECIPIENTS = ("!a1", "!b2")
 
 NAT = Account(AccountKey("fake", "nat"), "Наталія Адамчук")
@@ -80,7 +81,9 @@ class Rig:
         self.history = HubHistory()
         self.notices = RecordingNotices()
         self.networks = (
-            {"tg": FakeNetwork(), "mesh": FakeNetwork()} if networks is None else dict(networks)
+            {"telegram": FakeNetwork(), "mesh": FakeNetwork()}
+            if networks is None
+            else dict(networks)
         )
         self.worker = OutboxWorker(
             installation=self.current,

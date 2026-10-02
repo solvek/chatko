@@ -6,10 +6,10 @@ from chatko.application.testing import InMemoryConfigLoader, RecordingNotices
 from chatko.extension_api.testing import FakeExtension
 
 GOOD: dict[str, Any] = {
-    "extensions": {"tg": {"type": "fake"}},
-    "sources": {"owner": {"ext": "tg", "place": "owner"}},
+    "extensions": {"telegram": {"type": "fake"}},
+    "sources": {"owner": {"ext": "telegram", "place": "owner"}},
 }
-BAD: dict[str, Any] = {"extensions": {"tg": {"type": "nope"}}}
+BAD: dict[str, Any] = {"extensions": {"telegram": {"type": "nope"}}}
 
 
 def rig(config: dict[str, Any]) -> tuple[ConfigService, InMemoryConfigLoader, RecordingNotices]:
@@ -27,7 +27,7 @@ async def test_a_valid_config_becomes_current() -> None:
     assert before is None
 
     assert service.current is not None
-    assert list(service.current.extensions) == ["tg"]
+    assert list(service.current.extensions) == ["telegram"]
     assert service.errors == ()
     assert notices.notices == []
 
@@ -50,7 +50,9 @@ async def test_an_invalid_new_config_keeps_the_previous_one_and_tells_the_admin(
     assert await service.reload() is ConfigOutcome.REFUSED
 
     assert service.current is first
-    assert service.errors == ("extensions.tg: unknown extension type 'nope'; installed: fake",)
+    assert service.errors == (
+        "extensions.telegram: unknown extension type 'nope'; installed: fake",
+    )
     [notice] = notices.notices
     assert notice.key == "config:load"
     assert "unknown extension type 'nope'" in notice.text
@@ -66,7 +68,7 @@ async def test_a_problem_is_reported_once_until_it_changes() -> None:
     assert service.current is None
     assert "There is no valid config to run." in notices.notices[0].text
 
-    loader.config = {"extensions": {"tg": {"type": "nope2"}}}
+    loader.config = {"extensions": {"telegram": {"type": "nope2"}}}
     await service.reload()
     assert len(notices.notices) == 2
 
@@ -92,7 +94,9 @@ async def test_a_file_that_cannot_be_read_or_parsed_is_refused() -> None:
     assert service.current is not None
     assert "No such file or directory" in notices.notices[-1].text
 
-    loader.error = ConfigError(["extensions.tg.token: the environment variable TOKEN is not set"])
+    loader.error = ConfigError(
+        ["extensions.telegram.token: the environment variable TOKEN is not set"]
+    )
     await service.reload()
     assert "environment variable TOKEN" in notices.notices[-1].text
 

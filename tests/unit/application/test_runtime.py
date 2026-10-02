@@ -39,21 +39,21 @@ from chatko.extension_api import Extension, HubContext, InboundMessage
 from chatko.extension_api.testing import FakeConfig, FakeEndpointConfig, FakeExtension, FakeNetwork
 from tests.unit.application.rig import ADA, NAT, settle
 
-FAMILY_TG = EndpointRef("tg", "family.tg")
+FAMILY_TG = EndpointRef("telegram", "family.telegram")
 FAMILY_RADIO = EndpointRef("mesh", "family.radio")
-OWNER = EndpointRef("tg", "owner")
+OWNER = EndpointRef("telegram", "owner")
 
 CONFIG: dict[str, Any] = {
-    "extensions": {"tg": {"type": "fake"}, "mesh": {"type": "fake"}},
+    "extensions": {"telegram": {"type": "fake"}, "mesh": {"type": "fake"}},
     "groups": {
         "family": {
             "sites": {
-                "tg": {"ext": "tg", "place": "family"},
+                "telegram": {"ext": "telegram", "place": "family"},
                 "radio": {"ext": "mesh", "place": "family-dm", "recipients": ["!a1", "!b2"]},
             }
         }
     },
-    "sources": {"owner": {"ext": "tg", "place": "owner"}},
+    "sources": {"owner": {"ext": "telegram", "place": "owner"}},
     "admin_notices": {"to": "owner"},
     "people": {"NatAda": ["fake:nat"]},
 }
@@ -197,7 +197,7 @@ class Rig:
 
     def notices(self) -> list[str]:
         """The admin notices the hub posted in the owner's chat."""
-        return self.posted("tg", "owner")
+        return self.posted("telegram", "owner")
 
     async def reload(self, raw: Mapping[str, Any]) -> ConfigOutcome:
         self.loader.config = copy.deepcopy(dict(raw))
@@ -217,12 +217,12 @@ def config_of(rig: Rig) -> Config:
 
 class TestStart:
     async def test_without_a_valid_config_the_hub_does_not_start(self) -> None:
-        rig = Rig({"extensions": {"tg": {"type": "nope"}}})
+        rig = Rig({"extensions": {"telegram": {"type": "nope"}}})
 
         with pytest.raises(StartError, match="unknown extension type 'nope'") as raised:
             await rig.runtime.start()
 
-        assert raised.value.errors[0].startswith("extensions.tg:")
+        assert raised.value.errors[0].startswith("extensions.telegram:")
         assert rig.runtime.config is None
         assert not rig.created
         await rig.runtime.stop()  # nothing to stop
@@ -231,10 +231,10 @@ class TestStart:
         rig = Rig()
         await rig.runtime.start()
 
-        assert list(rig.runtime.extensions) == ["tg", "mesh"]
+        assert list(rig.runtime.extensions) == ["telegram", "mesh"]
         assert all(extension.started for extension in rig.created)
         installation = rig.runtime.installation()
-        assert installation.running == {"tg", "mesh"}
+        assert installation.running == {"telegram", "mesh"}
         assert installation.recipients(FAMILY_RADIO) == ("!a1", "!b2")
         assert installation.topology is config_of(rig).topology
         await rig.runtime.stop()
@@ -248,7 +248,7 @@ class TestStart:
 
         assert rig.posted("mesh", "family-dm", recipient="!a1") == ["NatAda: Привіт"]
         assert rig.posted("mesh", "family-dm", recipient="!b2") == ["NatAda: Привіт"]
-        assert len(rig.instance("tg").reports) == 2
+        assert len(rig.instance("telegram").reports) == 2
         await rig.runtime.stop()
 
     async def test_it_cannot_start_twice(self) -> None:
@@ -267,7 +267,7 @@ class TestStart:
         await settle()
 
         assert rig.runtime.routing.script is not None
-        assert rig.posted("tg", "owner") == ["NatAda: Привіт"]
+        assert rig.posted("telegram", "owner") == ["NatAda: Привіт"]
         assert not rig.posted("mesh", "family-dm", recipient="!a1")
         await rig.runtime.stop()
 
@@ -318,7 +318,7 @@ class TestStart:
         rig.post(FAMILY_TG, NAT, "Привіт")
         await settle()
 
-        assert rig.posted("tg", "owner") == [f"NatAda: Привіт ({earlier:%H:%M})"]
+        assert rig.posted("telegram", "owner") == [f"NatAda: Привіт ({earlier:%H:%M})"]
         await rig.runtime.stop()
 
     async def test_a_failure_while_starting_stops_what_had_started(
@@ -354,7 +354,7 @@ class TestInstancesThatFail:
         rig.post(FAMILY_TG, NAT, "1")
         await settle()
 
-        assert rig.runtime.installation().running == {"tg"}
+        assert rig.runtime.installation().running == {"telegram"}
         assert any("mesh did not start: RuntimeError: no network" in n for n in rig.notices())
         assert {d.state for d in rig.store.deliveries if d.endpoint == FAMILY_RADIO} == {
             DeliveryState.PENDING
@@ -371,7 +371,7 @@ class TestInstancesThatFail:
         rig.failing_start.clear()
         await rig.reload(edited(people={}))
 
-        assert rig.runtime.installation().running == {"tg", "mesh"}
+        assert rig.runtime.installation().running == {"telegram", "mesh"}
         # Labelled when it came, by the person of the config then.
         assert rig.posted("mesh", "family-dm", recipient="!a1") == ["NatAda: 1"]
         await rig.runtime.stop()
@@ -402,14 +402,14 @@ class TestInstancesThatFail:
         await rig.runtime.stop()
 
         assert "mesh raised while stopping" in caplog.text
-        assert rig.instance("tg").stopped is True
+        assert rig.instance("telegram").stopped is True
 
 
 class TestReload:
     async def test_a_new_site_is_given_to_the_running_instance(self) -> None:
         rig = Rig()
         await rig.runtime.start()
-        tg = rig.instance("tg")
+        telegram = rig.instance("telegram")
         groups = copy.deepcopy(CONFIG["groups"])
         groups["family"]["sites"]["chat"] = {"ext": "mesh", "place": "family-ch"}
 
@@ -417,7 +417,7 @@ class TestReload:
         rig.post(FAMILY_TG, NAT, "Привіт")
         await settle()
 
-        assert rig.instance("tg") is tg
+        assert rig.instance("telegram") is telegram
         assert rig.posted("mesh", "family-ch") == ["NatAda: Привіт"]
         await rig.runtime.stop()
 
@@ -434,7 +434,7 @@ class TestReload:
         assert new is not old
         assert old.stopped is True
         assert new.started is True
-        assert rig.instance("tg").stopped is False
+        assert rig.instance("telegram").stopped is False
         await rig.runtime.stop()
 
     async def test_a_removed_instance_stops_and_deliveries_to_its_endpoints_fail(self) -> None:
@@ -447,8 +447,8 @@ class TestReload:
 
         await rig.reload(
             edited(
-                extensions={"tg": {"type": "fake"}},
-                groups={"family": {"sites": {"tg": {"ext": "tg", "place": "family"}}}},
+                extensions={"telegram": {"type": "fake"}},
+                groups={"family": {"sites": {"telegram": {"ext": "telegram", "place": "family"}}}},
             )
         )
         await rig.advance(timedelta(minutes=1))
@@ -468,7 +468,7 @@ class TestReload:
         rig.notice_on_stop["mesh"] = "mesh is going"
         extensions = copy.deepcopy(CONFIG["extensions"])
         extensions["mesh"]["account"] = "hub2"
-        sources = {**CONFIG["sources"], "admin": {"ext": "tg", "place": "admin"}}
+        sources = {**CONFIG["sources"], "admin": {"ext": "telegram", "place": "admin"}}
 
         await rig.reload(
             edited(extensions=extensions, sources=sources, admin_notices={"to": "admin"})
@@ -508,7 +508,7 @@ class TestReload:
         await settle()
 
         assert refresh.routing is ReloadOutcome.LOADED
-        assert rig.posted("tg", "owner") == ["NatAda: Привіт"]
+        assert rig.posted("telegram", "owner") == ["NatAda: Привіт"]
         await rig.runtime.stop()
 
     async def test_a_refresh_before_start_or_after_stop_does_nothing(self) -> None:
@@ -525,19 +525,19 @@ class TestReload:
     ) -> None:
         rig = Rig()
         await rig.runtime.start()
-        tg = rig.instance("tg")
+        telegram = rig.instance("telegram")
 
         def refuse(endpoints: Mapping[EndpointRef, Any]) -> None:
             raise ValueError("no such chat")
 
-        tg.set_endpoints = refuse  # type: ignore[method-assign]
+        telegram.set_endpoints = refuse  # type: ignore[method-assign]
         groups = copy.deepcopy(CONFIG["groups"])
-        groups["family"]["sites"]["tg"]["place"] = "family2"
+        groups["family"]["sites"]["telegram"]["place"] = "family2"
         await rig.reload(edited(groups=groups))
 
-        assert rig.instance("tg") is tg
-        assert rig.runtime.installation().is_running("tg")
-        assert any("tg did not take its new endpoints" in text for text in rig.notices())
+        assert rig.instance("telegram") is telegram
+        assert rig.runtime.installation().is_running("telegram")
+        assert any("telegram did not take its new endpoints" in text for text in rig.notices())
         await rig.runtime.stop()
 
 
@@ -560,7 +560,7 @@ class TestStop:
     ) -> None:
         rig = Rig()
         await rig.runtime.start()
-        rig.submit_on_stop["tg"] = InboundMessage(FAMILY_TG, "t-late", ADA, "late")
+        rig.submit_on_stop["telegram"] = InboundMessage(FAMILY_TG, "t-late", ADA, "late")
         await rig.runtime.stop()
         # The worker stopped before the instances: the late message is stored, not delivered.
         assert not rig.posted("mesh", "family-dm", recipient="!a1")
@@ -643,7 +643,9 @@ class TestNewAccounts:
         await settle()
 
         [notice] = rig.notices()
-        assert notice.startswith("chatko: A new account at family.tg: fake:ada (Ada Lovelace).")
+        assert notice.startswith(
+            "chatko: A new account at family.telegram: fake:ada (Ada Lovelace)."
+        )
         assert set(rig.accounts.accounts) == {ADA.key, NAT.key}
         await rig.runtime.stop()
 

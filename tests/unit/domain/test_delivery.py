@@ -15,7 +15,7 @@ from chatko.domain import (
     Target,
 )
 
-TG = EndpointRef("tg", "chat:-100")
+TG = EndpointRef("telegram", "chat:-100")
 MESH = EndpointRef("kyiv", "channel:family")
 NOW = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 LATER = NOW + timedelta(minutes=1)

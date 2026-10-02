@@ -41,9 +41,9 @@ BOT = 123456
 ADA = 111111111
 CONFIG = TelegramConfig.model_validate({"bot_token": f"{BOT}:secret"})
 
-FAMILY = EndpointRef("tg", "family.tg")
-STREET = EndpointRef("tg", "street.tg")
-OWNER = EndpointRef("tg", "owner")
+FAMILY = EndpointRef("telegram", "family.telegram")
+STREET = EndpointRef("telegram", "street.telegram")
+OWNER = EndpointRef("telegram", "owner")
 FAMILY_CHAT = Chat(-1001000000001, ChatKind.SUPERGROUP, "Family")
 STREET_CHAT = Chat(-1001000000002, ChatKind.SUPERGROUP, "Street")
 OWNER_CHAT = Chat(ADA, ChatKind.PRIVATE, "Ada")
@@ -73,7 +73,7 @@ def hub() -> FakeHub:
 @pytest.fixture
 def extension(api: FakeTelegramApi, hub: FakeHub) -> TelegramExtension:
     extension = TelegramExtension(
-        "tg", CONFIG, hub, api=api, poll_timeout=1, poll_backoff=(0.001, 0.01)
+        "telegram", CONFIG, hub, api=api, poll_timeout=1, poll_backoff=(0.001, 0.01)
     )
     extension.set_endpoints(DEFAULT_ENDPOINTS)
     return extension
@@ -386,7 +386,7 @@ async def test_does_not_post_into_a_supergroup_of_another_endpoint(
 
     assert isinstance(result, Retry)
     assert api.sent == []
-    assert [notice.key for notice in hub.notices] == ["cannot-post:family.tg"]
+    assert [notice.key for notice in hub.notices] == ["cannot-post:family.telegram"]
 
 
 # Delivering.
@@ -483,7 +483,7 @@ async def test_retries_and_tells_the_admin_when_it_cannot_post_in_a_chat(
 
     assert result == Retry("Forbidden: bot was kicked")
     [notice] = hub.notices
-    assert "family.tg" in notice.text
+    assert "family.telegram" in notice.text
     assert "Forbidden: bot was kicked" in notice.text
 
 
@@ -606,7 +606,7 @@ async def test_hands_a_message_over_again_when_the_hub_could_not_take_it(
 ) -> None:
     hub = FlakyHub()
     extension = TelegramExtension(
-        "tg", CONFIG, hub, api=api, poll_timeout=1, poll_backoff=(0.001, 0.01)
+        "telegram", CONFIG, hub, api=api, poll_timeout=1, poll_backoff=(0.001, 0.01)
     )
     extension.set_endpoints(DEFAULT_ENDPOINTS)
     await extension.start()
@@ -641,7 +641,7 @@ async def test_connects_through_aiogram_without_a_given_api(
         return api
 
     monkeypatch.setattr(extension_module, "AiogramTelegramApi", connect)
-    extension = TelegramExtension("tg", CONFIG, hub)
+    extension = TelegramExtension("telegram", CONFIG, hub)
     await extension.start()
     await extension.stop()
 

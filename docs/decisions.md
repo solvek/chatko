@@ -895,3 +895,21 @@ favorites for listed nodes and the key-mismatch notices, from `MeshNode.node` an
 handed over while the node is rebooting is lost to the node; the outbox retries what got no ACK.
 A half-open TCP connection (the node gone without closing it) is noticed only when a write fails;
 inside the Docker network this does not happen.
+
+## D47. The extensions live in `src/extensions/`, the admin's tool in `src/tools/`; the example names the instance `telegram`
+**Context:** the extension packages sat beside the core in `src/`, so the tree did not show which
+packages are the core and which are plug-ins. The example config also named the Telegram instance
+`tg`, an abbreviation where every other name is a word.
+**Decision:**
+- `chatko_telegram`, `chatko_meshtastic` and `chatko_briar` moved to `src/extensions/`, and `briarctl`
+  to `src/tools/`. They stay top-level Python packages (there is no `__init__.py` in either
+  directory), so no import changes and the import-linter contracts hold as they are. This refines
+  D31 (five packages under `src/`) and D35.
+- `hatchling` builds the core from `packages` and takes the others with `force-include`, so the wheel
+  has the same five top-level packages as before; `dev-mode-dirs` makes an editable install see
+  them. `mypy_path` and `ruff`'s `src` list the new directories, coverage's `source` lists each package
+  directory (a directory without `__init__.py` is not a source of its own), and CI's gates use the new paths.
+- The example config names the instance `telegram` and shows, commented out, that an extension type
+  can have several instances (a second bot, a second Meshtastic node). Nothing in the code limits the
+  instances of a type (design.md §2).
+**Consequences:** a branch that edits files under the old paths merges through git's rename detection.

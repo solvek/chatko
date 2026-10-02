@@ -23,7 +23,9 @@ def test_account_key_parses_the_config_form(text: str, key: AccountKey) -> None:
     assert AccountKey.parse(text) == key
 
 
-@pytest.mark.parametrize("text", ["telegram", "", ":123", "telegram:", "Telegram:1", "tg x:1"])
+@pytest.mark.parametrize(
+    "text", ["telegram", "", ":123", "telegram:", "Telegram:1", "telegram x:1"]
+)
 def test_account_key_rejects_malformed_text(text: str) -> None:
     with pytest.raises(DomainError):
         AccountKey.parse(text)

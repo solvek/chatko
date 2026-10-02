@@ -39,7 +39,7 @@ class RoutingContext:
     """The installation as the routing script sees it, read-only. The core makes one for each
     message it routes.
 
-    `extension_types` maps each extension instance to its type (`tg` → `telegram`), and
+    `extension_types` maps each extension instance to its type (`telegram` → `telegram`), and
     `recipients` each endpoint that has recipients to them (`EndpointProvider.recipients`).
     """
 
@@ -92,7 +92,7 @@ class RoutingContext:
         return self._topology.source(name)
 
     def endpoint(self, name: str) -> EndpointRef:
-        """The site or source with this name (`family.tg`, `longfast`); `KeyError` if none."""
+        """The site or source with this name (`family.telegram`, `longfast`); `KeyError` if none."""
         return self._topology.endpoint(name)
 
     def person_of(self, account: AccountKey) -> Person | None:

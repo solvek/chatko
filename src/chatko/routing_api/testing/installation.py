@@ -59,7 +59,7 @@ class RouteResult:
 
     @property
     def endpoints(self) -> list[str]:
-        """The names of the endpoints, in the script's order: `["family.briar", "family.tg"]`."""
+        """The endpoint names, in the script's order: `["family.briar", "family.telegram"]`."""
         return [out.endpoint for out in self._outgoing]
 
     def to(self, endpoint: str) -> Outgoing:
@@ -98,13 +98,13 @@ class FakeInstallation:
 
     ```python
     hub = FakeInstallation(
-        extensions={"tg": "telegram", "kyiv": "meshtastic"},
-        groups={"family": {"tg": "tg", "radio": "kyiv"}},     # site name: extension instance
+        extensions={"telegram": "telegram", "kyiv": "meshtastic"},
+        groups={"family": {"telegram": "telegram", "radio": "kyiv"}},  # site: instance
         sources={"longfast": "kyiv"},
         recipients={"family.radio": ["!a1b2c3d4", "!0badc0de"]},
         people={"NatAda": ["telegram:111", "meshtastic:!a1b2c3d4"]},
     )
-    msg = hub.message("family.tg", "Привіт", author="telegram:111", name="Наталія Адамчук")
+    msg = hub.message("family.telegram", "Привіт", author="telegram:111", name="Наталія Адамчук")
     result = hub.route(routing, msg)                           # routing: the script's module
     assert result.endpoints == ["family.radio"]
     assert result.to("family.radio").label == "NatAda"

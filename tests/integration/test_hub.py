@@ -24,15 +24,15 @@ HUB = AccountKey("fake", "hub")
 
 CONFIG = """
 extensions:
-  tg: { type: fake }
+  telegram: { type: fake }
   mesh: { type: fake, account: "${MESH_ACCOUNT}" }
 groups:
   family:
     sites:
-      tg: { ext: tg, place: family }
+      telegram: { ext: telegram, place: family }
       channel: { ext: mesh, place: family-ch }
 sources:
-  owner: { ext: tg, place: owner }
+  owner: { ext: telegram, place: owner }
 admin_notices: { to: owner }
 """
 
@@ -144,9 +144,9 @@ async def test_a_message_crosses_from_one_site_to_the_other_through_sqlite(
 ) -> None:
     world, data = World(), tmp_path / "data"
     async with running(world, config, data):
-        await world.until_started("tg", "mesh")
+        await world.until_started("telegram", "mesh")
 
-        world.post("tg", "family", "Привіт")
+        world.post("telegram", "family", "Привіт")
         await world.until(lambda: world.posted("mesh", "family-ch") == ["NatAda: Привіт"])
 
     assert stored_texts(data) == ["Привіт"]
@@ -156,9 +156,9 @@ async def test_a_message_crosses_from_one_site_to_the_other_through_sqlite(
 async def test_messages_wait_in_sqlite_across_a_restart(config: Path, tmp_path: Path) -> None:
     world, data = World(), tmp_path / "data"
     async with running(world, config, data):
-        await world.until_started("tg", "mesh")
+        await world.until_started("telegram", "mesh")
         world.networks["mesh"].online = False
-        world.post("tg", "family", "1")
+        world.post("telegram", "family", "1")
         await world.until(lambda: stored_texts(data) == ["1"])
 
     world.networks["mesh"].online = True
@@ -173,7 +173,7 @@ async def test_a_changed_config_and_a_new_routing_script_apply_while_it_runs(
 ) -> None:
     world, data = World(), tmp_path / "data"
     async with running(world, config, data):
-        await world.until_started("tg", "mesh")
+        await world.until_started("telegram", "mesh")
 
         with_radio = CONFIG.replace(
             "      channel: { ext: mesh, place: family-ch }\n",
@@ -181,19 +181,19 @@ async def test_a_changed_config_and_a_new_routing_script_apply_while_it_runs(
             "      radio: { ext: mesh, place: family-radio }\n",
         )
         await world.write_until(config, with_radio, lambda: len(world.endpoints["mesh"]) == 2)
-        world.post("tg", "family", "1")
+        world.post("telegram", "family", "1")
         await world.until(lambda: world.posted("mesh", "family-radio") == ["NatAda: 1"])
 
         (config.parent / "routing.py").write_text(TO_OWNER, encoding="utf-8")
         await world.write_until(
             config, CONFIG + "routing: routing.py\n", lambda: len(world.endpoints["mesh"]) == 1
         )
-        world.post("tg", "family", "2")
-        await world.until(lambda: world.posted("tg", "owner") == ["NatAda: via script: 2"])
+        world.post("telegram", "family", "2")
+        await world.until(lambda: world.posted("telegram", "owner") == ["NatAda: via script: 2"])
 
 
 async def test_without_a_valid_config_it_does_not_start(config: Path, tmp_path: Path) -> None:
-    config.write_text("extensions: { tg: { type: nope } }\n", encoding="utf-8")
+    config.write_text("extensions: { telegram: { type: nope } }\n", encoding="utf-8")
 
     code = await run_hub(config, ENV, World().types(), data=tmp_path, stop=asyncio.Event())
 
@@ -201,7 +201,7 @@ async def test_without_a_valid_config_it_does_not_start(config: Path, tmp_path: 
 
 
 def test_chatko_run_exits_with_1_without_a_valid_config(config: Path, tmp_path: Path) -> None:
-    config.write_text("extensions: { tg: { type: nope } }\n", encoding="utf-8")
+    config.write_text("extensions: { telegram: { type: nope } }\n", encoding="utf-8")
 
     code = main(
         ["run", "--config", str(config), "--data", str(tmp_path / "data"), "--env-file", "-"],
@@ -215,7 +215,7 @@ def test_chatko_run_exits_with_1_without_a_valid_config(config: Path, tmp_path: 
 async def test_sigterm_stops_the_hub_in_order(config: Path, tmp_path: Path) -> None:
     world = World()
     hub = asyncio.create_task(serve(config, ENV, world.types(), data=tmp_path / "data"))
-    await world.until_started("tg", "mesh")
+    await world.until_started("telegram", "mesh")
 
     os.kill(os.getpid(), signal.SIGTERM)
 
@@ -231,10 +231,10 @@ async def test_without_signal_handlers_a_cancelled_run_still_stops_in_order(
     monkeypatch.setattr(asyncio.get_running_loop(), "add_signal_handler", unsupported)
     world = World()
     hub = asyncio.create_task(serve(config, ENV, world.types(), data=tmp_path / "data"))
-    await world.until_started("tg", "mesh")
+    await world.until_started("telegram", "mesh")
 
     hub.cancel()  # what `asyncio.run` does on Ctrl+C there
 
     await asyncio.wait({hub}, timeout=15)
     assert hub.cancelled()
-    assert world.stopped == {"tg", "mesh"}
+    assert world.stopped == {"telegram", "mesh"}

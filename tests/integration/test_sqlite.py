@@ -23,9 +23,9 @@ from chatko.infrastructure.sqlite import Database, SchemaError, SqliteHistory, S
 from chatko.infrastructure.sqlite.migrations import MIGRATIONS
 
 T0 = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
-TG = EndpointRef("tg", "family.tg")
+TG = EndpointRef("telegram", "family.telegram")
 CHANNEL = EndpointRef("mesh", "family.channel")
-ADA = Account(AccountKey("tg", "1"), "Ада")
+ADA = Account(AccountKey("telegram", "1"), "Ада")
 NODE = AccountKey("meshtastic", "!a1b2c3d4")
 
 
@@ -71,7 +71,7 @@ async def test_a_failed_transaction_is_rolled_back() -> None:
 
     async def fail_after_writing() -> None:
         async with database.transaction() as db:
-            await db.execute("INSERT INTO accounts VALUES ('tg', '9', 'x', NULL, 'a', 'a')")
+            await db.execute("INSERT INTO accounts VALUES ('telegram', '9', 'x', NULL, 'a', 'a')")
             raise RuntimeError("boom")
 
     with pytest.raises(RuntimeError, match="boom"):

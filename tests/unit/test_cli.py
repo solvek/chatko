@@ -31,7 +31,7 @@ def test_check_config_warns_of_the_extensions_it_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     config = tmp_path / "chatko.yaml"
-    config.write_text("extensions: {tg: {type: fake}}\n", encoding="utf-8")
+    config.write_text("extensions: {telegram: {type: fake}}\n", encoding="utf-8")
     found = Discovery({"fake": FakeExtension}, ["extension 'old': was written for (0, 9)"])
     monkeypatch.setattr("chatko.app.cli.discover_extensions", lambda: found)
 

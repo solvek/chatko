@@ -88,7 +88,7 @@ async def test_a_direct_message_from_a_node_reaches_the_sites_other_nodes() -> N
     )
 
     assert destinations(rig.store.deliveries) == [
-        "tg/family.tg",
+        "telegram/family.telegram",
         "mesh/family.radio:!b2",
         "mesh/family.channel",
     ]
@@ -157,12 +157,12 @@ async def test_a_message_from_an_unknown_endpoint_is_dropped_and_logged(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     rig = Rig()
-    unknown = EndpointRef("tg", "gone.tg")
+    unknown = EndpointRef("telegram", "gone.telegram")
 
     assert await rig.pipeline.submit(inbound(unknown)) is Outcome.UNKNOWN_ENDPOINT
 
     assert not rig.store.messages
-    assert "tg/gone.tg" in caplog.text
+    assert "telegram/gone.telegram" in caplog.text
 
 
 async def test_a_source_goes_nowhere_by_default_but_is_stored() -> None:
@@ -236,7 +236,7 @@ async def test_the_invariants_apply_to_whatever_the_router_returns() -> None:
                 to_endpoint(FAMILY_TG),  # back to the source
                 to_endpoint(STREET_TG, text="first"),
                 to_endpoint(STREET_TG, text="second"),  # the same endpoint again
-                to_endpoint(EndpointRef("tg", "gone.tg")),  # not in the config
+                to_endpoint(EndpointRef("telegram", "gone.telegram")),  # not in the config
             ]
         )
     )

@@ -26,8 +26,8 @@ MAX_RETENTION_DAYS = 3650
 
 class ConfigError(Exception):
     """The config is not valid. `errors` has one line per problem, each starting with the place in
-    the config it is about (`groups.family.sites.tg`). They never contain the config's values: a
-    value may be a secret."""
+    the config it is about (`groups.family.sites.telegram`). They never contain the config's
+    values: a value may be a secret."""
 
     def __init__(self, errors: Sequence[str]) -> None:
         self.errors = tuple(errors)

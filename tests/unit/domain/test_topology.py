@@ -2,12 +2,12 @@ import pytest
 
 from chatko.domain import Account, AccountKey, DomainError, EndpointRef, Group, Person, Topology
 
-TG_FAMILY = EndpointRef("tg", "chat:-1001")
+TG_FAMILY = EndpointRef("telegram", "chat:-1001")
 BRIAR_FAMILY = EndpointRef("briar", "group:fam")
-TG_STREET = EndpointRef("tg", "chat:-1002")
+TG_STREET = EndpointRef("telegram", "chat:-1002")
 MESH_DM = EndpointRef("kyiv", "dm:1")
 LONGFAST = EndpointRef("kyiv", "channel:LongFast")
-OWNER = EndpointRef("tg", "chat:123")
+OWNER = EndpointRef("telegram", "chat:123")
 FAMILY = Group("family", (TG_FAMILY, BRIAR_FAMILY, MESH_DM))
 STREET = Group("street", (TG_STREET,))
 NAT_TG = AccountKey("telegram", "111")
@@ -38,7 +38,7 @@ def test_group_of_a_site() -> None:
 
 def test_group_of_a_source_or_unknown_endpoint_is_none() -> None:
     assert topology().group_of(LONGFAST) is None
-    assert topology().group_of(EndpointRef("tg", "chat:9")) is None
+    assert topology().group_of(EndpointRef("telegram", "chat:9")) is None
 
 
 def test_endpoints_by_name() -> None:
@@ -78,7 +78,7 @@ def test_endpoints_are_all_sites_and_sources() -> None:
     assert topo.endpoints == {TG_FAMILY, BRIAR_FAMILY, MESH_DM, TG_STREET, LONGFAST, OWNER}
     assert topo.has_endpoint(OWNER)
     assert topo.has_endpoint(TG_STREET)
-    assert not topo.has_endpoint(EndpointRef("tg", "chat:9"))
+    assert not topo.has_endpoint(EndpointRef("telegram", "chat:9"))
 
 
 def test_person_of_an_account() -> None:
@@ -144,4 +144,4 @@ def test_account_belongs_to_one_person_only() -> None:
 
 def test_endpoint_names_are_unique_across_instances() -> None:
     with pytest.raises(DomainError, match="share a name"):
-        Topology(sources={"a": EndpointRef("tg", "x"), "b": EndpointRef("kyiv", "x")})
+        Topology(sources={"a": EndpointRef("telegram", "x"), "b": EndpointRef("kyiv", "x")})

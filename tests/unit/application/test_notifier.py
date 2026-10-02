@@ -10,7 +10,7 @@ from chatko.application.testing import FakeClock, InMemoryStore, SequentialIds
 from chatko.domain import Delivery, EndpointRef, Message, Topology
 from chatko.extension_api.testing import FakeConfig, FakeEndpointConfig, FakeExtension, FakeHub
 
-OWNER = EndpointRef("tg", "owner")
+OWNER = EndpointRef("telegram", "owner")
 RADIO = EndpointRef("mesh", "radio")
 
 

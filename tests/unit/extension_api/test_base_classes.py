@@ -67,6 +67,8 @@ def test_an_endpoint_is_one_place_by_default() -> None:
 
 
 async def test_delivery_reports_are_ignored_by_default() -> None:
-    report = DeliveryReport(ENDPOINT, "42", EndpointRef("tg", "family.tg"), None, Delivered())
+    report = DeliveryReport(
+        ENDPOINT, "42", EndpointRef("telegram", "family.telegram"), None, Delivered()
+    )
 
     await extension().delivery_report(report)

@@ -21,8 +21,8 @@ from chatko.routing_api.testing import DEFAULT_NOW, FakeInstallation, assert_rou
 
 def installation() -> FakeInstallation:
     return FakeInstallation(
-        extensions={"tg": "telegram", "kyiv": "meshtastic"},
-        groups={"family": {"tg": "tg", "channel": "kyiv", "radio": "kyiv"}},
+        extensions={"telegram": "telegram", "kyiv": "meshtastic"},
+        groups={"family": {"telegram": "telegram", "channel": "kyiv", "radio": "kyiv"}},
         sources={"longfast": "kyiv"},
         recipients={"family.radio": ["!a1", "!b2"]},
         people={"NatAda": ["telegram:111", "meshtastic:!a1"]},
@@ -45,19 +45,19 @@ def test_the_installation_is_described_as_in_the_config() -> None:
 
     assert hub.endpoint("family.radio") == EndpointRef("kyiv", "family.radio")
     assert [site.name for site in ctx.group("family").sites] == [
-        "family.tg",
+        "family.telegram",
         "family.channel",
         "family.radio",
     ]
     assert ctx.source("longfast") == EndpointRef("kyiv", "longfast")
-    assert ctx.extension_type(hub.endpoint("family.tg")) == "telegram"
+    assert ctx.extension_type(hub.endpoint("family.telegram")) == "telegram"
     assert ctx.recipients(hub.endpoint("family.radio")) == ("!a1", "!b2")
     assert ctx.person_of(AccountKey("meshtastic", "!a1")) is not None
     assert ctx.now == DEFAULT_NOW
 
 
 def test_an_empty_installation_has_only_extensions() -> None:
-    ctx = FakeInstallation(extensions={"tg": "telegram"}).context()
+    ctx = FakeInstallation(extensions={"telegram": "telegram"}).context()
 
     assert ctx.groups == ()
     assert ctx.sources == {}
@@ -65,8 +65,8 @@ def test_an_empty_installation_has_only_extensions() -> None:
 
 
 def test_an_endpoint_needs_a_listed_extension_instance() -> None:
-    with pytest.raises(KeyError, match=r"family\.tg uses extension instance 'tg'"):
-        FakeInstallation(extensions={}, groups={"family": {"tg": "tg"}})
+    with pytest.raises(KeyError, match=r"family\.telegram uses extension instance 'telegram'"):
+        FakeInstallation(extensions={}, groups={"family": {"telegram": "telegram"}})
 
 
 def test_an_unknown_endpoint_is_a_key_error() -> None:
@@ -79,7 +79,7 @@ def test_the_clock_can_be_moved() -> None:
     hub.now += timedelta(hours=1)
 
     assert hub.context().now == DEFAULT_NOW + timedelta(hours=1)
-    assert hub.message("family.tg", "x").received_at == DEFAULT_NOW + timedelta(hours=1)
+    assert hub.message("family.telegram", "x").received_at == DEFAULT_NOW + timedelta(hours=1)
 
 
 # Messages
@@ -87,10 +87,10 @@ def test_the_clock_can_be_moved() -> None:
 
 def test_a_message_by_a_person() -> None:
     msg = installation().message(
-        "family.tg", "Привіт", author="telegram:111", name="Наталія Адамчук"
+        "family.telegram", "Привіт", author="telegram:111", name="Наталія Адамчук"
     )
 
-    assert msg.endpoint == EndpointRef("tg", "family.tg")
+    assert msg.endpoint == EndpointRef("telegram", "family.telegram")
     assert msg.group is not None
     assert msg.group.name == "family"
     assert msg.text == "Привіт"
@@ -128,7 +128,7 @@ def test_a_message_with_attachments_names_and_a_recipient() -> None:
 
 
 def test_a_message_relayed_by_a_peer_has_the_peers_label_and_no_person() -> None:
-    msg = installation().message("family.tg", "x", author="telegram:111", relayed_label="Ola")
+    msg = installation().message("family.telegram", "x", author="telegram:111", relayed_label="Ola")
 
     assert msg.author.relayed_label == "Ola"
     assert msg.author.person is None
@@ -159,7 +159,7 @@ def test_hearing_anywhere_is_now_by_default() -> None:
 
 def test_seen_messages_are_in_the_context() -> None:
     hub = installation()
-    earlier = hub.message("family.tg", "same", author="telegram:111")
+    earlier = hub.message("family.telegram", "same", author="telegram:111")
     hub.see(earlier, ago=timedelta(hours=2))
     hub.see(hub.message("longfast", "other").fingerprint)
     msg = hub.message("family.radio", "same", author="meshtastic:!a1")
@@ -174,7 +174,7 @@ def test_seen_messages_are_in_the_context() -> None:
 
 def test_route_labels_each_target_with_the_default_label() -> None:
     hub = installation()
-    result = hub.route(MIRROR, hub.message("family.tg", "Привіт", author="telegram:111"))
+    result = hub.route(MIRROR, hub.message("family.telegram", "Привіт", author="telegram:111"))
 
     assert result.endpoints == ["family.channel", "family.radio"]
     assert len(result) == 2
@@ -193,7 +193,7 @@ def test_route_uses_the_scripts_label_hook() -> None:
         return f"{msg.author.account.display_name}@{target.endpoint.name}"
 
     hub = installation()
-    msg = hub.message("family.tg", "x", name="Ada")
+    msg = hub.message("family.telegram", "x", name="Ada")
     result = hub.route(SimpleNamespace(route=mirrored, label=label), msg)
 
     assert result.to("family.channel").label == "Ada@family.channel"
@@ -208,7 +208,7 @@ def test_a_targets_own_text_label_and_recipients_win() -> None:
         raise AssertionError("not called for a target with its own label")
 
     hub = installation()
-    msg = hub.message("family.tg", "long text", attachments=[AttachmentKind.PHOTO])
+    msg = hub.message("family.telegram", "long text", attachments=[AttachmentKind.PHOTO])
     out = hub.route(SimpleNamespace(route=route, label=label), msg).to("family.radio")
 
     assert (out.label, out.text, out.recipients) == ("Nat", "short", ("!b2",))
@@ -220,10 +220,10 @@ def test_route_shows_what_the_script_asked_for_before_the_invariants() -> None:
         return [to_endpoint(msg.endpoint), to_endpoint(msg.endpoint, label="Again")]
 
     hub = installation()
-    result = hub.route(SimpleNamespace(route=route), hub.message("family.tg", "x"))
+    result = hub.route(SimpleNamespace(route=route), hub.message("family.telegram", "x"))
 
-    assert result.endpoints == ["family.tg", "family.tg"]
-    assert result.to("family.tg").label != "Again"
+    assert result.endpoints == ["family.telegram", "family.telegram"]
+    assert result.to("family.telegram").label != "Again"
 
 
 def test_route_checks_the_script_as_the_hub_does() -> None:
@@ -232,7 +232,7 @@ def test_route_checks_the_script_as_the_hub_does() -> None:
     script = SimpleNamespace(route=mirrored, api_version=(2, 0))
 
     with pytest.raises(ScriptError, match=r"routing API 2\.0"):
-        hub.route(script, hub.message("family.tg", "x"))
+        hub.route(script, hub.message("family.telegram", "x"))
 
 
 def test_route_raises_the_scripts_errors() -> None:
@@ -242,15 +242,15 @@ def test_route_raises_the_scripts_errors() -> None:
     hub = installation()
 
     with pytest.raises(KeyError, match=r"family\.briar"):
-        hub.route(SimpleNamespace(route=route), hub.message("family.tg", "x"))
+        hub.route(SimpleNamespace(route=route), hub.message("family.telegram", "x"))
 
 
 def test_to_an_endpoint_without_a_target_is_a_key_error() -> None:
     hub = installation()
     result = hub.route(MIRROR, hub.message("longfast", "x"))
 
-    with pytest.raises(KeyError, match=r"no target at 'family.tg'; the targets are \[\]"):
-        result.to("family.tg")
+    with pytest.raises(KeyError, match=r"no target at 'family.telegram'; the targets are \[\]"):
+        result.to("family.telegram")
 
 
 # Assertions
@@ -258,7 +258,7 @@ def test_to_an_endpoint_without_a_target_is_a_key_error() -> None:
 
 def test_assert_routed_to_ignores_the_order() -> None:
     hub = installation()
-    result = hub.route(MIRROR, hub.message("family.tg", "x"))
+    result = hub.route(MIRROR, hub.message("family.telegram", "x"))
 
     assert_routed_to(result, "family.radio", "family.channel")
 
@@ -271,7 +271,7 @@ def test_assert_routed_to_nowhere() -> None:
 
 def test_assert_routed_to_names_the_missing_and_the_unexpected_endpoints() -> None:
     hub = installation()
-    result = hub.route(MIRROR, hub.message("family.tg", "x"))
+    result = hub.route(MIRROR, hub.message("family.telegram", "x"))
 
     with pytest.raises(AssertionError, match=r"^routed not to longfast; also to family.radio: "):
         assert_routed_to(result, "family.channel", "longfast")

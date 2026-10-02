@@ -3,7 +3,7 @@
 
 # Extension instances. The key is the instance name; `type` selects the extension.
 extensions:
-  tg:                              # one instance = one bot
+  telegram:                        # one instance = one bot
     type: telegram
     bot_token: ${TELEGRAM_BOT_TOKEN} # from BotFather; there, /setprivacy → Disable before adding the bot
                                      # to groups, so it sees all messages (it needs no admin rights)
@@ -42,6 +42,18 @@ extensions:
       "!a1b2c3d4": "<public key of !a1b2c3d4>"   # Meshtastic app); the node keeps them as favorites
     min_send_interval_s: 4         # per hub node; at least 2 (the node drops texts that come sooner)
 
+  # One instance serves any number of chats: every site and source names its own chat. Another
+  # instance of a type is only for another login or another connection: a second bot with its own
+  # token, a second hub node on another broker, a second Briar account. Sites and sources choose
+  # an instance by its name (`ext:`).
+  # telegram_street:                 # e.g. a second bot
+  #   type: telegram
+  #   bot_token: ${TELEGRAM_STREET_BOT_TOKEN}
+  # lab:                             # e.g. a second Meshtastic node on another broker
+  #   type: meshtastic
+  #   connection: { tcp: "meshtasticd-lab:4403" }
+  #   ...
+
   briar:                           # groups are made with `briarctl` (the hub is their creator)
     type: briar
     api: http://briar:7000
@@ -53,21 +65,21 @@ extensions:
 groups:
   family:
     sites:
-      tg: { ext: tg, chat: -1001234567890 }
+      telegram: { ext: telegram, chat: -1001234567890 }
       briar: { ext: briar, group: "<Briar group id>" }          # printed by `briarctl group create`
       channel: { ext: kyiv, channel: family }                    # broadcast on the private channel
       radio: { ext: kyiv, dm: ["!a1b2c3d4", "!0badc0de"] }       # PKI direct messages to these nodes
 
   street:
     sites:
-      tg: { ext: tg, chat: -1009876543210 }
+      telegram: { ext: telegram, chat: -1009876543210 }
       briar: { ext: briar, group: "<another Briar group id>" }  # any number of Briar groups
       radio: { ext: kyiv, dm: ["!a1b2c3d4"] }
 
 # Endpoints outside any group, named like sites. Their messages go only where routing.py sends them.
 sources:
   longfast: { ext: kyiv, channel: LongFast }
-  owner: { ext: tg, chat: 123456789 }                        # the owner's private chat with the bot
+  owner: { ext: telegram, chat: 123456789 }                        # the owner's private chat with the bot
 
 # Endpoints that drop a message another path brought lately: the same author label and text within
 # this many seconds (docs/design.md §9.3), no longer than retention_days. Needed where two paths reach

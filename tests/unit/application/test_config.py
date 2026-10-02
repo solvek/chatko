@@ -13,17 +13,17 @@ from chatko.extension_api.testing import FakeConfig, FakeEndpointConfig, FakeExt
 TYPES = {"fake": FakeExtension}
 
 RAW: dict[str, Any] = {
-    "extensions": {"tg": {"type": "fake"}, "mesh": {"type": "fake", "account": "mesh"}},
+    "extensions": {"telegram": {"type": "fake"}, "mesh": {"type": "fake", "account": "mesh"}},
     "groups": {
         "family": {
             "sites": {
-                "tg": {"ext": "tg", "place": "family"},
+                "telegram": {"ext": "telegram", "place": "family"},
                 "radio": {"ext": "mesh", "place": "dm", "recipients": ["!a1", "!b2"]},
             }
         },
-        "street": {"sites": {"tg": {"ext": "tg", "place": "street"}}},
+        "street": {"sites": {"telegram": {"ext": "telegram", "place": "street"}}},
     },
-    "sources": {"owner": {"ext": "tg", "place": "owner"}},
+    "sources": {"owner": {"ext": "telegram", "place": "owner"}},
     "admin_notices": {"to": "owner", "new_accounts": True},
     "people": {"NatAda": ["fake:nat", "fake:nat2"]},
     "fingerprint_dedup_s": {"family.radio": 3600},
@@ -52,15 +52,15 @@ def changed(**sections: Any) -> dict[str, Any]:
 def test_a_valid_config_becomes_the_topology_and_the_settings() -> None:
     config = validate_config(RAW, TYPES)
 
-    assert list(config.extensions) == ["tg", "mesh"]
+    assert list(config.extensions) == ["telegram", "mesh"]
     assert config.topology.endpoint("family.radio") == EndpointRef("mesh", "family.radio")
     assert [site.name for site in config.topology.group("family").sites] == [
-        "family.tg",
+        "family.telegram",
         "family.radio",
     ]
-    assert config.topology.source("owner") == EndpointRef("tg", "owner")
+    assert config.topology.source("owner") == EndpointRef("telegram", "owner")
     assert config.topology.people[0].label == "NatAda"
-    assert config.admin_endpoint == EndpointRef("tg", "owner")
+    assert config.admin_endpoint == EndpointRef("telegram", "owner")
     assert config.new_accounts
     assert config.fingerprint_dedup == {EndpointRef("mesh", "family.radio"): timedelta(hours=1)}
     assert config.routing == "routing.py"
@@ -71,7 +71,11 @@ def test_a_valid_config_becomes_the_topology_and_the_settings() -> None:
 def test_endpoints_are_validated_by_their_extension_and_kept_per_instance_in_order() -> None:
     config = validate_config(RAW, TYPES)
 
-    assert [e.name for e in config.endpoints["tg"]] == ["family.tg", "street.tg", "owner"]
+    assert [e.name for e in config.endpoints["telegram"]] == [
+        "family.telegram",
+        "street.telegram",
+        "owner",
+    ]
     radio = config.endpoints["mesh"][EndpointRef("mesh", "family.radio")]
     assert isinstance(radio, FakeEndpointConfig)
     assert radio.recipients == ("!a1", "!b2")
@@ -91,9 +95,9 @@ def test_an_empty_config_is_valid_and_has_the_defaults() -> None:
 
 
 def test_an_instance_without_endpoints_is_listed() -> None:
-    config = validate_config({"extensions": {"tg": {"type": "fake"}}}, TYPES)
+    config = validate_config({"extensions": {"telegram": {"type": "fake"}}}, TYPES)
 
-    assert config.endpoints == {"tg": {}}
+    assert config.endpoints == {"telegram": {}}
 
 
 @pytest.mark.parametrize(
@@ -107,21 +111,25 @@ def test_an_instance_without_endpoints_is_listed() -> None:
         ),
         (changed(routing=""), "routing: String should have at least 1 character"),
         (
-            changed(extensions={"tg": {"type": "nope"}}, groups={}, sources={}, admin_notices=None),
-            "extensions.tg: unknown extension type 'nope'; installed: fake",
-        ),
-        (
-            changed(extensions={"tg": {"account": "x"}}, groups={}, sources={}, admin_notices=None),
-            "extensions.tg: `type` is required and names the extension",
+            changed(
+                extensions={"telegram": {"type": "nope"}}, groups={}, sources={}, admin_notices=None
+            ),
+            "extensions.telegram: unknown extension type 'nope'; installed: fake",
         ),
         (
             changed(
-                extensions={"tg": {"type": "fake", "color": "red"}},
+                extensions={"telegram": {"account": "x"}}, groups={}, sources={}, admin_notices=None
+            ),
+            "extensions.telegram: `type` is required and names the extension",
+        ),
+        (
+            changed(
+                extensions={"telegram": {"type": "fake", "color": "red"}},
                 groups={},
                 sources={},
                 admin_notices=None,
             ),
-            "extensions.tg.color: Extra inputs are not permitted",
+            "extensions.telegram.color: Extra inputs are not permitted",
         ),
         (
             changed(groups={"g": {"sites": {"a": {"place": "x"}}}}),
@@ -132,11 +140,11 @@ def test_an_instance_without_endpoints_is_listed() -> None:
             "groups.g.sites.a: `ext` 'nope' is not an extension instance of the config",
         ),
         (
-            changed(groups={"g": {"sites": {"a": {"ext": "tg"}}}}),
+            changed(groups={"g": {"sites": {"a": {"ext": "telegram"}}}}),
             "groups.g.sites.a.place: Field required",
         ),
         (
-            changed(groups={"g": {"sites": {"a": {"ext": "tg", "place": "x", "chat": 1}}}}),
+            changed(groups={"g": {"sites": {"a": {"ext": "telegram", "place": "x", "chat": 1}}}}),
             "groups.g.sites.a.chat: Extra inputs are not permitted",
         ),
         (
@@ -144,12 +152,12 @@ def test_an_instance_without_endpoints_is_listed() -> None:
             "groups.g.sites: Dictionary should have at least 1 item after validation, not 0",
         ),
         (
-            changed(groups={" ": {"sites": {"a": {"ext": "tg", "place": "x"}}}}),
+            changed(groups={" ": {"sites": {"a": {"ext": "telegram", "place": "x"}}}}),
             "groups. : a group needs a name",
         ),
         (
-            changed(sources={" ": {"ext": "tg", "place": "x"}}),
-            "sources. : an endpoint of 'tg' needs a name",
+            changed(sources={" ": {"ext": "telegram", "place": "x"}}),
+            "sources. : an endpoint of 'telegram' needs a name",
         ),
     ],
 )
@@ -162,16 +170,16 @@ def test_invalid_config_lists_the_problem_with_its_place(
 def test_two_endpoints_that_the_extension_takes_for_one_place_are_refused_by_the_extension() -> (
     None
 ):
-    raw = changed(sources={"owner": {"ext": "tg", "place": "family"}})
+    raw = changed(sources={"owner": {"ext": "telegram", "place": "family"}})
 
     [error] = problems(raw)
 
-    assert error.startswith("extensions.tg: ValueError: ")
+    assert error.startswith("extensions.telegram: ValueError: ")
     assert "same place 'family'" in error
 
 
 def test_a_site_and_a_source_cannot_share_a_name() -> None:
-    raw = changed(sources={"family.tg": {"ext": "tg", "place": "elsewhere"}})
+    raw = changed(sources={"family.telegram": {"ext": "telegram", "place": "elsewhere"}})
 
     [error] = problems(raw)
 
@@ -194,7 +202,7 @@ def test_problems_of_the_sections_are_reported_together() -> None:
 
 def test_what_names_an_endpoint_is_checked_against_the_endpoints() -> None:
     raw = changed(
-        admin_notices={"to": "nowhere"}, fingerprint_dedup_s={"nowhere": 5, "family.tg": -1}
+        admin_notices={"to": "nowhere"}, fingerprint_dedup_s={"nowhere": 5, "family.telegram": -1}
     )
 
     errors = problems(raw)
@@ -202,23 +210,25 @@ def test_what_names_an_endpoint_is_checked_against_the_endpoints() -> None:
     assert len(errors) == 3
     assert any(e.startswith("admin_notices.to: no site or source 'nowhere'") for e in errors)
     assert any(e.startswith("fingerprint_dedup_s.nowhere: no site or source") for e in errors)
-    assert any(e.startswith("fingerprint_dedup_s.family.tg: the window must be") for e in errors)
+    assert any(
+        e.startswith("fingerprint_dedup_s.family.telegram: the window must be") for e in errors
+    )
 
 
 @pytest.mark.parametrize("seconds", [math.nan, math.inf, 3 * 86400 + 1])
 def test_a_deduplication_window_is_no_longer_than_the_retention(seconds: float) -> None:
-    raw = changed(fingerprint_dedup_s={"family.tg": seconds})  # retention_days: 3
+    raw = changed(fingerprint_dedup_s={"family.telegram": seconds})  # retention_days: 3
 
     assert problems(raw) == (
-        "fingerprint_dedup_s.family.tg: the window must be positive and no longer than the "
+        "fingerprint_dedup_s.family.telegram: the window must be positive and no longer than the "
         "retention (retention_days: 3), for which fingerprints are kept",
     )
 
 
 def test_the_admin_endpoint_may_be_a_site() -> None:
-    config = validate_config(changed(admin_notices={"to": "family.tg"}), TYPES)
+    config = validate_config(changed(admin_notices={"to": "family.telegram"}), TYPES)
 
-    assert config.admin_endpoint == EndpointRef("tg", "family.tg")
+    assert config.admin_endpoint == EndpointRef("telegram", "family.telegram")
 
 
 def test_an_account_of_two_people_is_refused() -> None:
@@ -255,12 +265,12 @@ def test_an_extension_without_endpoints_cannot_have_any() -> None:
 
 
 def test_the_errors_never_contain_the_values_of_the_config() -> None:
-    raw = changed(extensions={"tg": {"type": "fake", "account": 12345, "max_text": "s3cr3t"}})
+    raw = changed(extensions={"telegram": {"type": "fake", "account": 12345, "max_text": "s3cr3t"}})
 
     text = str(ConfigError(problems(raw)))
 
     assert "s3cr3t" not in text
-    assert "extensions.tg.max_text" in text
+    assert "extensions.telegram.max_text" in text
 
 
 def test_the_extension_is_constructed_on_a_fresh_instance_and_may_refuse() -> None:
@@ -274,7 +284,7 @@ def test_the_extension_is_constructed_on_a_fresh_instance_and_may_refuse() -> No
     with pytest.raises(ConfigError) as error:
         validate_config(RAW, {"fake": Picky})
 
-    assert "extensions.tg: ValueError: no way" in error.value.errors
+    assert "extensions.telegram: ValueError: no way" in error.value.errors
 
 
 async def test_an_extension_that_uses_the_hub_before_start_is_refused() -> None:

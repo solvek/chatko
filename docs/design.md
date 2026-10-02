@@ -29,7 +29,7 @@ DMs to several nodes) in sync (D20).
 |---|---|
 | **Installation** | One running hub with its configuration and its enabled extensions. |
 | **Extension** | A plug-in that connects chatko to one network or service: `telegram`, `meshtastic`, `briar`, later others. The core knows no network by name. An extension can be added or removed without touching the core. |
-| **Extension instance** | A configured copy of an extension, with its own name, e.g. `tg` (telegram), `kyiv` and `lab` (two meshtastic instances on different MQTT brokers), `briar`. |
+| **Extension instance** | A configured copy of an extension, with its own name, e.g. `telegram`, `kyiv` and `lab` (two meshtastic instances on different MQTT brokers), `briar`. |
 | **Endpoint** | One place where an extension instance reads and posts messages: a Telegram chat, a Briar private group, a Meshtastic channel, a set of Meshtastic nodes reached by DM. |
 | **Recipient** | One of several addressees that an endpoint reaches separately: a node of a Meshtastic `dm` endpoint. Each gets its own delivery, confirmation and retries (§9.1). Most endpoints are one place and have none. |
 | **Group** | An independent chat room: a named set of **sites**. |
@@ -559,7 +559,7 @@ Replies, edits and deletions are not mirrored in v1. A reply is sent as plain te
 Configuration is split in two (D16):
 - **What exists** is declarative, in `chatko.yaml`: extension instances (with channels and PSKs),
   groups and their sites, sources, people, where admin notices go, later peer hubs. The admin names
-  every site and source (`family.tg`, `longfast`); the script and the hub's state refer to them by
+  every site and source (`family.telegram`, `longfast`); the script and the hub's state refer to them by
   that name (D34). What a site is in its network (a chat id, a channel, a list of nodes) is up to
   its extension, and the core never reads it.
 - **Where each message goes** is code, in `config/routing.py`: a Python function the admin writes. It
@@ -670,7 +670,7 @@ gives:
   as the hub would: it checks the script like the hub, then labels each target with its own
   label, the `label` hook or `default_label`. The result lists the targets by endpoint name with
   their label, text, recipients and the text as a network shows it (`NatAda: [photo] caption`);
-  `assert_routed_to(result, "family.tg", …)` checks where it went. It shows what the script asked
+  `assert_routed_to(result, "family.telegram", …)` checks where it went. It shows what the script asked
   for, before the invariants of §9.3, and raises the script's errors so that a test shows them.
   [`tests/examples/test_routing_example.py`](../tests/examples/test_routing_example.py) tests
   `routing.example.py` this way and is the template for the admin's tests;

@@ -100,7 +100,7 @@ class Scripted(Extension[FakeConfig], EndpointProvider[FakeEndpointConfig]):
 
 
 class OutboxRig:
-    """The worker with two scripted instances: `mesh` delivers, `tg` is where messages come from."""
+    """The worker with two scripted instances: `mesh` delivers, `telegram` is the source."""
 
     def __init__(
         self,
@@ -112,8 +112,8 @@ class OutboxRig:
         self.clock = FakeClock() if clock is None else clock
         self.store = InMemoryStore() if store is None else store
         self.mesh = Scripted("mesh")
-        self.tg = Scripted("tg")
-        self.installation = Installation(TOPOLOGY, {"mesh": self.mesh, "tg": self.tg})
+        self.telegram = Scripted("telegram")
+        self.installation = Installation(TOPOLOGY, {"mesh": self.mesh, "telegram": self.telegram})
         self.settings = settings
         self.worker = self.new_worker()
         self._numbers = iter(range(1, 1000))
@@ -176,7 +176,9 @@ async def test_the_source_extension_gets_a_report_when_a_delivery_ends(rig: Outb
     await rig.add("Привіт")
     await settle()
 
-    assert rig.tg.reports == [DeliveryReport(FAMILY_TG, "t1", FAMILY_CHANNEL, None, Delivered())]
+    assert rig.telegram.reports == [
+        DeliveryReport(FAMILY_TG, "t1", FAMILY_CHANNEL, None, Delivered())
+    ]
     assert not rig.mesh.reports
 
 
@@ -186,7 +188,7 @@ async def test_a_truncated_delivery_is_reported_as_such(rig: OutboxRig) -> None:
     await settle()
 
     assert rig.state().truncated
-    assert rig.tg.reports[0].result == Delivered(truncated=True)
+    assert rig.telegram.reports[0].result == Delivered(truncated=True)
 
 
 async def test_each_recipient_gets_its_own_delivery(rig: OutboxRig) -> None:
@@ -197,7 +199,7 @@ async def test_each_recipient_gets_its_own_delivery(rig: OutboxRig) -> None:
         (FAMILY_RADIO, "!a1"),
         (FAMILY_RADIO, "!b2"),
     ]
-    assert [r.recipient for r in rig.tg.reports] == ["!a1", "!b2"]
+    assert [r.recipient for r in rig.telegram.reports] == ["!a1", "!b2"]
 
 
 async def test_one_endpoint_gets_one_delivery_at_a_time_oldest_first(rig: OutboxRig) -> None:
@@ -330,7 +332,7 @@ async def test_failed_is_final_and_the_next_message_follows(rig: OutboxRig) -> N
     assert rig.mesh.texts() == ["1", "2"]
     assert rig.state().state is DeliveryState.FAILED
     assert rig.state().last_error == "chat is gone"
-    assert rig.tg.reports[0].result == Failed("chat is gone")
+    assert rig.telegram.reports[0].result == Failed("chat is gone")
 
 
 async def test_an_exception_counts_as_a_retry_and_is_logged(
@@ -373,17 +375,17 @@ async def test_it_gives_up_on_a_message_that_is_too_old() -> None:
     assert rig.state().state is DeliveryState.FAILED
     assert rig.state().attempts == 3
     assert rig.state().last_error == "gave up: down"
-    assert rig.tg.reports[0].result == Failed("gave up: down")
+    assert rig.telegram.reports[0].result == Failed("gave up: down")
     assert rig.state(1).attempts == 1
 
 
 async def test_an_instance_that_is_not_running_counts_as_a_retry(rig: OutboxRig) -> None:
-    rig.installation = Installation(TOPOLOGY, {"tg": rig.tg})
+    rig.installation = Installation(TOPOLOGY, {"telegram": rig.telegram})
     await rig.add("1")
     await settle()
     assert rig.state().last_error == "the extension instance 'mesh' is not running"
 
-    rig.installation = Installation(TOPOLOGY, {"tg": rig.tg, "mesh": rig.mesh})
+    rig.installation = Installation(TOPOLOGY, {"telegram": rig.telegram, "mesh": rig.mesh})
     await rig.advance(timedelta(minutes=1))
 
     assert rig.state().state is DeliveryState.DELIVERED
@@ -413,12 +415,14 @@ async def test_the_report_goes_to_the_source_only_if_it_runs_when_the_delivery_e
     rig.mesh.gate.clear()
     await rig.add("1")
     await settle()
-    rig.installation = Installation(TOPOLOGY, {"mesh": rig.mesh, "tg": rig.tg}, running={"mesh"})
+    rig.installation = Installation(
+        TOPOLOGY, {"mesh": rig.mesh, "telegram": rig.telegram}, running={"mesh"}
+    )
     rig.mesh.gate.set()
     await settle()
 
     assert rig.state().state is DeliveryState.DELIVERED
-    assert not rig.tg.reports
+    assert not rig.telegram.reports
 
 
 async def test_finish_attempts_waits_for_the_instances_deliveries_in_progress(
@@ -432,7 +436,7 @@ async def test_finish_attempts_waits_for_the_instances_deliveries_in_progress(
     finishing = asyncio.create_task(rig.worker.finish_attempts("mesh"))
     await settle()
     assert not finishing.done()
-    await rig.worker.finish_attempts("tg")  # nothing in progress there
+    await rig.worker.finish_attempts("telegram")  # nothing in progress there
 
     rig.mesh.gate.set()
     await asyncio.wait_for(finishing, 1)
@@ -442,30 +446,30 @@ async def test_finish_attempts_waits_for_the_instances_deliveries_in_progress(
 async def test_finish_attempts_waits_for_the_reports_in_progress_to_the_instance(
     rig: OutboxRig,
 ) -> None:
-    rig.tg.report_gate.clear()
-    await rig.add("1")  # from tg to mesh
+    rig.telegram.report_gate.clear()
+    await rig.add("1")  # from telegram to mesh
     await settle()
     assert rig.mesh.texts() == ["1"]
 
-    finishing = asyncio.create_task(rig.worker.finish_attempts("tg"))
+    finishing = asyncio.create_task(rig.worker.finish_attempts("telegram"))
     await settle()
     assert not finishing.done()
 
-    rig.tg.report_gate.set()
+    rig.telegram.report_gate.set()
     await asyncio.wait_for(finishing, 1)
-    assert len(rig.tg.reports) == 1
+    assert len(rig.telegram.reports) == 1
 
 
 async def test_a_failing_report_is_logged_and_ignored(
     rig: OutboxRig, caplog: pytest.LogCaptureFixture
 ) -> None:
-    rig.tg.report_error = RuntimeError("boom")
+    rig.telegram.report_error = RuntimeError("boom")
     await rig.add("1")
     await rig.add("2")
     await settle()
 
     assert rig.mesh.texts() == ["1", "2"]
-    assert "tg raised on a delivery report" in caplog.text
+    assert "telegram raised on a delivery report" in caplog.text
 
 
 class TestRestarts:

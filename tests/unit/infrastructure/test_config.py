@@ -33,14 +33,14 @@ def test_a_double_dollar_before_a_brace_is_a_literal_dollar_brace() -> None:
 
 
 def test_an_unset_or_empty_variable_is_an_error_naming_its_place_but_no_values() -> None:
-    text = "extensions:\n  tg:\n    token: ${TOKEN}\n    names: ['${EMPTY}', '${OTHER}']\n"
+    text = "extensions:\n  telegram:\n    token: ${TOKEN}\n    names: ['${EMPTY}', '${OTHER}']\n"
 
     with pytest.raises(ConfigError) as error:
         parse_config(text, {"EMPTY": "", "OTHER": "s3cr3t"})
 
     assert error.value.errors == (
-        "extensions.tg.token: the environment variable TOKEN is not set or is empty",
-        "extensions.tg.names[0]: the environment variable EMPTY is not set or is empty",
+        "extensions.telegram.token: the environment variable TOKEN is not set or is empty",
+        "extensions.telegram.names[0]: the environment variable EMPTY is not set or is empty",
     )
 
 

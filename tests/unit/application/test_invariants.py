@@ -27,7 +27,7 @@ from tests.unit.application.rig import (
     Rig,
 )
 
-UNKNOWN = EndpointRef("tg", "gone.tg")
+UNKNOWN = EndpointRef("telegram", "gone.telegram")
 KNOWN = sorted(PLACES)
 RECIPIENTS_OF = {FAMILY_RADIO: RECIPIENTS}
 
@@ -70,7 +70,7 @@ def test_a_recipient_that_is_no_recipient_of_the_source_changes_nothing_elsewher
 
 def test_an_unknown_endpoint_is_dropped_and_logged(caplog: pytest.LogCaptureFixture) -> None:
     assert apply(FAMILY_TG, [to_endpoint(UNKNOWN)]) == []
-    assert "tg/gone.tg" in caplog.text
+    assert "telegram/gone.telegram" in caplog.text
 
 
 def test_the_first_target_for_an_endpoint_wins() -> None:

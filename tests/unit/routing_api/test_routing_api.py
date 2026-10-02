@@ -23,10 +23,10 @@ from chatko.routing_api import (
 from chatko.routing_api.testing import FakeHistory
 
 NOW = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
-FAMILY_TG = EndpointRef("tg", "family.tg")
+FAMILY_TG = EndpointRef("telegram", "family.telegram")
 FAMILY_BRIAR = EndpointRef("briar", "family.briar")
 FAMILY_RADIO = EndpointRef("kyiv", "family.radio")
-STREET_TG = EndpointRef("tg", "street.tg")
+STREET_TG = EndpointRef("telegram", "street.telegram")
 LONGFAST = EndpointRef("kyiv", "longfast")
 FAMILY = Group("family", (FAMILY_TG, FAMILY_BRIAR, FAMILY_RADIO))
 STREET = Group("street", (STREET_TG,))
@@ -40,7 +40,7 @@ def context(history: FakeHistory | None = None) -> RoutingContext:
     return RoutingContext(
         TOPOLOGY,
         now=NOW,
-        extension_types={"tg": "telegram", "briar": "briar", "kyiv": "meshtastic"},
+        extension_types={"telegram": "telegram", "briar": "briar", "kyiv": "meshtastic"},
         recipients={FAMILY_RADIO: ("!a1b2c3d4", "!0badc0de")},
         history=history,
     )
@@ -72,7 +72,7 @@ def test_routed_message_shows_the_stored_message() -> None:
     assert msg.plain_text == "[photo] Привіт"
     assert msg.fingerprint == stored.fingerprint
     assert msg.received_at == NOW
-    assert repr(msg) == "RoutedMessage('m1' from tg/family.tg)"
+    assert repr(msg) == "RoutedMessage('m1' from telegram/family.telegram)"
 
 
 def test_routed_message_from_a_source_has_no_group() -> None:

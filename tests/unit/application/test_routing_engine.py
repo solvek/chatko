@@ -325,7 +325,7 @@ async def test_when_route_raises_the_message_goes_by_the_defaults() -> None:
 
     assert hub.texts == [
         "The routing script's route() at line 5 failed: KeyError: \"no source 'nowhere'\". A "
-        "message from family.tg got the default routing, and so will others with this error "
+        "message from family.telegram got the default routing, and so will others with this error "
         "until the script changes; they are not reported again."
     ]
     assert hub.notices.notices[0].key == "routing:route:KeyError:5"
@@ -444,7 +444,7 @@ def route(msg, ctx):
     if msg.text == "boom":
         raise RuntimeError("a bug")
     if msg.text.startswith("#street "):
-        street = ctx.endpoint("street.tg")
+        street = ctx.endpoint("street.telegram")
         return mirror(msg, ctx) + [
             to_endpoint(street, text=msg.text.removeprefix("#street "), label="Family")
         ]
@@ -467,7 +467,7 @@ async def hub_with_script() -> tuple[Rig, Engine]:
 async def test_targets_with_their_own_text_and_label_reach_the_networks() -> None:
     rig, _ = await hub_with_script()
 
-    rig.networks["tg"].post(PLACES[FAMILY_TG].place, ADA, "#street Збори о 18:00")
+    rig.networks["telegram"].post(PLACES[FAMILY_TG].place, ADA, "#street Збори о 18:00")
     await settle()
 
     assert rig.posted(STREET_TG) == ["Family: Збори о 18:00"]
@@ -480,7 +480,7 @@ async def test_a_target_narrowed_to_some_recipients_reaches_only_them() -> None:
     # comes second and adds nothing for !b2, but reaches !a1.
     rig, _ = await hub_with_script()
 
-    rig.networks["tg"].post(PLACES[FAMILY_TG].place, ADA, "Привіт")
+    rig.networks["telegram"].post(PLACES[FAMILY_TG].place, ADA, "Привіт")
     await settle()
 
     assert rig.posted(FAMILY_RADIO, recipient="!b2") == ["~Ada: Привіт"]
@@ -491,7 +491,7 @@ async def test_a_target_narrowed_to_some_recipients_reaches_only_them() -> None:
 async def test_a_message_the_script_fails_on_goes_by_the_defaults() -> None:
     rig, engine = await hub_with_script()
 
-    rig.networks["tg"].post(PLACES[FAMILY_TG].place, ADA, "boom")
+    rig.networks["telegram"].post(PLACES[FAMILY_TG].place, ADA, "boom")
     await settle()
 
     assert rig.posted(FAMILY_CHANNEL) == ["~Ada: boom"]

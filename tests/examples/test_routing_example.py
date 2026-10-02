@@ -28,12 +28,17 @@ OTHER_RADIO = "meshtastic:!0badc0de"
 def installation() -> FakeInstallation:
     """The installation of `config.example.yaml`."""
     return FakeInstallation(
-        extensions={"tg": "telegram", "kyiv": "meshtastic", "briar": "briar"},
+        extensions={"telegram": "telegram", "kyiv": "meshtastic", "briar": "briar"},
         groups={
-            "family": {"tg": "tg", "briar": "briar", "channel": "kyiv", "radio": "kyiv"},
-            "street": {"tg": "tg", "briar": "briar", "radio": "kyiv"},
+            "family": {
+                "telegram": "telegram",
+                "briar": "briar",
+                "channel": "kyiv",
+                "radio": "kyiv",
+            },
+            "street": {"telegram": "telegram", "briar": "briar", "radio": "kyiv"},
         },
-        sources={"longfast": "kyiv", "owner": "tg"},
+        sources={"longfast": "kyiv", "owner": "telegram"},
         recipients={
             "family.radio": ["!a1b2c3d4", "!0badc0de"],
             "street.radio": ["!a1b2c3d4"],
@@ -54,7 +59,7 @@ def test_the_hub_loads_the_script() -> None:
 
 def test_a_message_goes_to_the_other_sites_of_its_group() -> None:
     hub = installation()
-    msg = hub.message("family.tg", "Привіт", author=NAT_TG, name="Наталія Адамчук")
+    msg = hub.message("family.telegram", "Привіт", author=NAT_TG, name="Наталія Адамчук")
 
     result = hub.route(routing, msg)
 
@@ -67,7 +72,7 @@ def test_people_not_in_the_config_are_marked() -> None:
     hub = installation()
     msg = hub.message("family.briar", "Привіт", author="briar:x", name="Сергій Петренко")
 
-    assert hub.route(routing, msg).to("family.tg").formatted == "~SerPet: Привіт"
+    assert hub.route(routing, msg).to("family.telegram").formatted == "~SerPet: Привіт"
 
 
 def test_longfast_goes_to_the_owner_signed_with_the_nodes_names() -> None:
@@ -91,7 +96,7 @@ def test_a_node_without_a_short_name_on_longfast_gets_a_marked_default_label() -
 
 def test_a_tagged_family_message_also_goes_to_the_street_without_the_tag() -> None:
     hub = installation()
-    msg = hub.message("family.tg", "#street Збори о 18:00", author=NAT_TG)
+    msg = hub.message("family.telegram", "#street Збори о 18:00", author=NAT_TG)
 
     result = hub.route(routing, msg)
 
@@ -100,12 +105,12 @@ def test_a_tagged_family_message_also_goes_to_the_street_without_the_tag() -> No
         "family.briar",
         "family.channel",
         "family.radio",
-        "street.tg",
+        "street.telegram",
         "street.briar",
         "street.radio",
     )
     assert result.to("family.briar").text == "#street Збори о 18:00"
-    assert result.to("street.tg").formatted == "NatAda: Збори о 18:00"
+    assert result.to("street.telegram").formatted == "NatAda: Збори о 18:00"
 
 
 def test_a_radio_heard_on_the_channel_lately_gets_no_direct_message() -> None:
@@ -113,7 +118,7 @@ def test_a_radio_heard_on_the_channel_lately_gets_no_direct_message() -> None:
     hub.hear(NAT_RADIO, endpoint="family.channel", ago=timedelta(minutes=20))
     hub.hear(OTHER_RADIO, endpoint="family.channel", ago=timedelta(hours=2))
 
-    result = hub.route(routing, hub.message("family.tg", "Привіт"))
+    result = hub.route(routing, hub.message("family.telegram", "Привіт"))
 
     assert result.to("family.radio").recipients == ("!0badc0de",)
 
@@ -122,7 +127,7 @@ def test_a_radio_heard_elsewhere_still_gets_a_direct_message() -> None:
     hub = installation()
     hub.hear(NAT_RADIO, endpoint="longfast", ago=timedelta(minutes=1))
 
-    result = hub.route(routing, hub.message("family.tg", "Привіт"))
+    result = hub.route(routing, hub.message("family.telegram", "Привіт"))
 
     assert result.to("family.radio").recipients == ("!a1b2c3d4", "!0badc0de")
 
@@ -133,7 +138,7 @@ def test_a_direct_message_from_one_radio_reaches_the_other() -> None:
 
     result = hub.route(routing, msg)
 
-    assert_routed_to(result, "family.tg", "family.briar", "family.channel", "family.radio")
+    assert_routed_to(result, "family.telegram", "family.briar", "family.channel", "family.radio")
     assert result.to("family.radio").recipients == ("!0badc0de",)
 
 

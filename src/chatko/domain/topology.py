@@ -46,7 +46,7 @@ class Topology:
         return endpoint in self._group_by_site or endpoint in self.sources.values()
 
     def endpoint(self, name: str) -> EndpointRef:
-        """The site or source with this name: `family.tg`, `longfast` (D34)."""
+        """The site or source with this name: `family.telegram`, `longfast` (D34)."""
         try:
             return self._endpoint_by_name[name]
         except KeyError:

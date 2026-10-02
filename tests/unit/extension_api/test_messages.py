@@ -17,7 +17,7 @@ from chatko.extension_api import (
     Retry,
 )
 
-TG = EndpointRef("tg", "family.tg")
+TG = EndpointRef("telegram", "family.telegram")
 ADA = Account(AccountKey("telegram", "1"), "Ada Lovelace")
 NOW = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 PHOTO = Attachment(AttachmentKind.PHOTO)

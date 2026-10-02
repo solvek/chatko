@@ -63,13 +63,16 @@ src/
     infrastructure/  # the real clock and ids, the routing script's file, SQLite repositories,
                      # config (YAML + ${ENV}), the file watcher, extension discovery
     app/             # cli, run (the composition root of `chatko run`), check_config
-  chatko_telegram/   # extension packages: separate top-level packages, so importing core internals
-                     # is visible and forbidden by import-linter. Telegram (§3.7): config, api
-                     # (the TelegramApi port), aiogram_api, extension, testing (FakeTelegramApi)
-  chatko_meshtastic/ # Meshtastic (§3.8): config, api (the MeshApi port), library_api, provisioning,
-                     # node (MeshNode), testing (FakeMeshApi); the endpoints come in S20 and S21
-  chatko_briar/
-  briarctl/          # the admin's CLI for the hub's Briar account (design.md §7.5); a separate program:
+  extensions/        # extension packages, one directory each, still top-level Python packages (no
+                     # __init__.py here), so importing core internals is visible and forbidden by
+                     # import-linter
+    chatko_telegram/   # Telegram (§3.7): config, api (the TelegramApi port), aiogram_api, extension,
+                       # testing (FakeTelegramApi)
+    chatko_meshtastic/ # Meshtastic (§3.8): config, api (the MeshApi port), library_api, provisioning,
+                       # node (MeshNode), testing (FakeMeshApi); the endpoints come in S20 and S21
+    chatko_briar/
+  tools/
+    briarctl/        # the admin's CLI for the hub's Briar account (design.md §7.5); a separate program:
                      # it imports neither chatko nor chatko_briar, and they never import it
 tests/
   unit/              # domain, the public APIs and application, with fakes
@@ -91,7 +94,7 @@ its rules, and re-exports its public names from the package.
 
 | Module | Contents |
 |---|---|
-| `endpoints` | `EndpointRef(instance, name)`, the name being the admin's (`family.tg`, D34); `Group(name, sites)` with `other_sites(endpoint)` |
+| `endpoints` | `EndpointRef(instance, name)`, the name being the admin's (`family.telegram`, D34); `Group(name, sites)` with `other_sites(endpoint)` |
 | `accounts` | `AccountKey(kind, external_id)` (`telegram:123`, parsed from the config form); `Account(key, display_name, short_name)` as the network shows it now; `Person(label, accounts)`; `Author(account, person, relayed_label)`, where `relayed_label` marks a peer hub's relay (D17) |
 | `messages` | `MessageId`; `Attachment(kind)` with its `[photo]` placeholder; `plain_text(text, attachments)`; `Message` (endpoint, transport id, author, text, attachments, time, `from_recipient`) with `plain_text` and `fingerprint`; `Target(endpoint, text, label, recipients)`, where `recipients` narrows a delivery to some of the endpoint's recipients |
 | `delivery` | `Delivery`: one outbox row (message, endpoint, recipient, author label, text, due time, attempts, last error). `delivered`, `retry(at)` and `failed` return a new value; delivered and failed are final |

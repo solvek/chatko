@@ -58,7 +58,7 @@ class Installation:
 
     @property
     def extension_types(self) -> Mapping[str, str]:
-        """Each instance's extension type: `tg` → `telegram`."""
+        """Each instance's extension type: `telegram` → `telegram`."""
         return {name: extension.type_name for name, extension in self.extensions.items()}
 
     def recipients(self, endpoint: EndpointRef) -> tuple[str, ...]:
