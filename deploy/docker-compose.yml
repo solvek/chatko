@@ -1,0 +1,24 @@
+# chatko's server stack (design.md §11, D30): our Mosquitto, with TLS on 8883 for our gateways, and the
+# hub's virtual Meshtastic node. chatko itself runs next to it and reaches the node on 127.0.0.1:4413.
+# Set up with `deploy/setup.sh` first; state lives in ../data, settings in ../config (both git-ignored).
+name: chatko
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    volumes:
+      - ../config/mosquitto:/mosquitto/config:ro
+    ports:
+      - "8883:8883"            # TLS, for our gateways; the hub's node uses 1883 inside the network
+    restart: unless-stopped
+
+  meshtasticd-kyiv:
+    image: meshtastic/meshtasticd:${MESHTASTICD_TAG:-2.7.26-beta}
+    command: ["meshtasticd", "--config=/etc/meshtasticd/config.yaml", "--fsdir=/var/lib/meshtasticd"]
+    volumes:
+      - ./meshtasticd/kyiv.yaml:/etc/meshtasticd/config.yaml:ro
+      - ../data/meshtasticd-kyiv:/var/lib/meshtasticd
+    ports:
+      - "127.0.0.1:4413:4403"  # no authentication: never publish it beyond localhost
+    depends_on: [mosquitto]
+    restart: unless-stopped    # a node reboot ends the process

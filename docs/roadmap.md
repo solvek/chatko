@@ -388,6 +388,12 @@ For S23: a radio restarted within 10 minutes of its last NodeInfo sends none at 
 heard only when it sends something; see how long a real radio stays quiet, and whether a message
 reaches it twice when an ACK comes after `MAX_RETRANSMIT` (D49).
 
+**S23, prepared without a node (2026-10-02).** The server stack is in `deploy/` (Mosquitto with TLS on
+8883, the hub's `EU_433` node, `setup.sh`, the gateway's settings in `deploy/README.md`). It was tried
+on the server `srv2028154`: the broker accepted TLS from outside and refused anonymous clients, and
+`chatko run` provisioned the node with the Kyiv primary PSK. It was then taken down; production is
+deployed later (S29). The field test waits for a physical `EU_433` node and for broker access (D27).
+
 **S23. Kyiv field test.** *With owner*, once a physical `EU_433` node with internet is available to
 act as our gateway (design.md §6.2, D30), and after the owner has asked the Kyiv community whether a
 bot node is welcome (design.md §6.6): set it up (region, "Ignore MQTT" off, "OK to MQTT" on, the

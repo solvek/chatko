@@ -1,0 +1,10 @@
+# meshtasticd config for the hub's node on the server: simulated radio, no LoRa hardware.
+# The node id comes from the last 4 bytes of the MAC address: !c4a7c001.
+Lora:
+  Module: sim
+General:
+  MACAddress: 02:00:C4:A7:C0:01
+  MaxNodes: 200
+  MaxMessageQueue: 100
+Logging:
+  LogLevel: info
