@@ -4,7 +4,7 @@ Pure functions over the port's types: `MeshNode` sends what they return, one adm
 time.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from chatko_meshtastic.api import (
@@ -128,6 +128,20 @@ def contact_commands(
         entry = nodes.get(num, NodeEntry(num))
         if entry.public_key != key or not entry.favorite:
             commands.append(AddContact(num, key, entry.long_name, entry.short_name))
+    return commands
+
+
+def favorite_commands(
+    nodes: Mapping[int, NodeEntry], favorites: Iterable[int], *, own: int
+) -> list[AddContact]:
+    """`add_contact` for each of `favorites` whose key the node has learned but not as a
+    favorite, with that key and the names it has, so that the node saves it at once and never
+    evicts it (D26). A node without a key waits until the node learns one."""
+    commands: list[AddContact] = []
+    for num in sorted(favorites):
+        entry = nodes.get(num)
+        if num != own and entry is not None and entry.public_key and not entry.favorite:
+            commands.append(AddContact(num, entry.public_key, entry.long_name, entry.short_name))
     return commands
 
 

@@ -62,13 +62,21 @@ class World:
             def __init__(self, instance: str, config: FakeConfig, hub: HubContext) -> None:
                 network = world.networks.setdefault(instance, FakeNetwork())
                 super().__init__(instance, config, hub, network=network)
+                self.given: list[EndpointRef] = []
+                self.live = False
 
             def set_endpoints(self, endpoints: Mapping[EndpointRef, FakeEndpointConfig]) -> None:
                 super().set_endpoints(endpoints)
-                world.endpoints[self.instance] = list(endpoints)
+                self.given = list(endpoints)
+                # The hub also gives a config's endpoints to a fresh instance that only checks
+                # them, before it applies the config; only the running instance counts.
+                if self.live:
+                    world.endpoints[self.instance] = self.given
 
             async def start(self) -> None:
                 await super().start()
+                self.live = True
+                world.endpoints[self.instance] = self.given
                 world.started.setdefault(self.instance, asyncio.Event()).set()
 
             async def stop(self) -> None:

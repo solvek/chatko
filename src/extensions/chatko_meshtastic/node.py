@@ -5,6 +5,8 @@ config on every connection (writing only what differs, one admin message at a ti
 for), and connects again whenever the node closes the connection: after the reboot that every
 commit of settings causes, after a crash, or when another client connected. Packets from other
 nodes go to `on_packet`; ACKs and NAKs are matched to the texts they answer by their request id.
+The nodes the extension names (`keep_favorites`) are made favorites as soon as the node has their
+keys.
 """
 
 import asyncio
@@ -12,8 +14,8 @@ import base64
 import contextlib
 import logging
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable, Iterable
+from dataclasses import dataclass, replace
 from typing import Final
 
 from chatko_meshtastic.api import (
@@ -36,6 +38,7 @@ from chatko_meshtastic.provisioning import (
     contact_commands,
     describe,
     describe_all,
+    favorite_commands,
     settings_commands,
 )
 
@@ -154,7 +157,7 @@ class MeshNode:
     `start` returns at once and connects in the background; `ready` tells whether the node is
     connected and provisioned, and `send_text` raises `NotReadyError` while it is not. The admin is
     told when the node stays unreachable, when it keeps closing the connection (another client),
-    and when it refuses or does not keep a setting.
+    and when it refuses or does not keep a setting or a contact.
     """
 
     def __init__(
@@ -192,6 +195,8 @@ class MeshNode:
         self._committed: str | None = None
         """What the last commit wrote, until the next connection has checked that it stuck."""
         self._logged_key: bytes | None = None
+        self._favorites: frozenset[int] = frozenset()
+        self._favorites_due = asyncio.Event()
 
     # What the extension sees.
 
@@ -222,6 +227,14 @@ class MeshNode:
         the contacts the hub added, and the NodeInfo it took since (not the ones it dropped
         because they carry another key than the one it pinned, D26)."""
         return self._nodes.get(num)
+
+    def keep_favorites(self, nums: Iterable[int]) -> None:
+        """Keep these nodes as favorites of the node, besides the contacts of the config: each
+        as soon as the node has its key, from its database or from a NodeInfo it takes. A
+        favorite is saved at once and never evicted from the node database (D26). Safe to call
+        at any time; the set replaces the one before."""
+        self._favorites = frozenset(nums)
+        self._favorites_due.set()
 
     async def start(self) -> None:
         self._dispatcher = asyncio.create_task(self._dispatch(), name=f"chatko.mesh.{self._name}")
@@ -333,7 +346,7 @@ class MeshNode:
             self._ready_event.set()
             self._log_ready(state)
             self._inbox.put_nowait(_READY)
-            await reader
+            await self._serve_ready(connection, reader)
             self._log.warning("the connection to node %s ended", node_id(state.num))
         except UnreachableError as error:
             self._log.warning("the connection to node %s ended: %s", node_id(state.num), error)
@@ -348,6 +361,33 @@ class MeshNode:
                 outgoing.end()
             self._outgoing.clear()
         return False
+
+    async def _serve_ready(self, connection: MeshConnection, reader: asyncio.Task[None]) -> None:
+        """Keep the favorites until the connection ends. Raises what ended the keeping: an
+        admin message without an answer, or the end of the connection."""
+        self._favorites_due.set()
+        keeper = asyncio.create_task(
+            self._keep_favorites(connection), name=f"chatko.mesh.{self._name}.favorites"
+        )
+        try:
+            await asyncio.wait({reader, keeper}, return_when=asyncio.FIRST_COMPLETED)
+            if keeper.done():
+                keeper.result()
+        finally:
+            keeper.cancel()
+            await asyncio.wait({keeper})
+
+    async def _keep_favorites(self, connection: MeshConnection) -> None:
+        own = connection.state.num
+        while True:
+            await self._favorites_due.wait()
+            self._favorites_due.clear()
+            for contact in favorite_commands(self._nodes, self._favorites, own=own):
+                self._log.info("node %s: keeping %s as a favorite", node_id(own), describe(contact))
+                if await self._command(connection, contact):
+                    entry = self._nodes.get(contact.num)
+                    if entry is not None and entry.public_key == contact.public_key:
+                        self._nodes[contact.num] = replace(entry, favorite=True)
 
     def _log_ready(self, state: NodeState) -> None:
         key = state.settings.public_key
@@ -494,6 +534,8 @@ class MeshNode:
             self._nodes[num] = NodeEntry(
                 num, info.long_name, info.short_name, entry.public_key, favorite=entry.favorite
             )
+        if num in self._favorites:
+            self._favorites_due.set()
 
     async def _dispatch(self) -> None:
         while True:
