@@ -1046,3 +1046,82 @@ Session S22 tried the Meshtastic extension in the lab (Mosquitto and two `meshta
 to an hour) or when it next sends anything (a text, telemetry, a position, its NodeInfo after
 10 minutes), as design.md §6.2 says. S23 checks the same paths on the Kyiv mesh, with real
 airtime and a gateway in between.
+
+## D51. The private-group API as built: every id checked, one transaction per change, the phone confirms no migration
+**Status:** accepted (S24).
+Session S24 built the plan of D29 (spikes.md S3, part 2) in our fork of briar-headless: the
+branch `1664-private-group-api` on `release-1.5.21` in `~/Projects/briar`. It turns private
+groups on in `HeadlessModule.kt` and adds the package `privategroups` (controller, output
+functions, Dagger module), the routes in `Router.kt` and the README sections; nothing in Briar's
+core, no new dependency. The choices made while building it:
+- **Every group id in a path is checked against the hub's private groups**, and anything else is
+  a 404: `removePrivateGroup` would remove any group (a forum, a contact's conversation), and
+  reading another client's group as a private group fails deep in Briar. Marking a message read
+  also checks that the message is in that group, because Briar's message tracker would count it
+  against the wrong group otherwise.
+- **One write transaction per change.** A post reads the hub's previous message and the group's
+  latest time, signs and stores; an invitation takes its timestamp and auto-delete timer, signs
+  and sends. The app spreads both over its executors; in one transaction two requests at once
+  cannot both chain to the same previous message.
+- **Invitations need the creator.** Listing who can be invited and inviting answer 403
+  `NOT_CREATOR` for a group the hub did not create (Briar's sharing status assumes the creator's
+  session), and inviting answers 403 `NOT_SHAREABLE` with the contact's status for anyone not
+  `shareable`. Inviting returns the contact's new status; accepting, declining, leaving and
+  dissolving answer an empty 200, like the existing alias and delete routes.
+- **Messages are listed and sent to the WebSocket in one form**, `groupId` included, joins
+  without `text`; the hub's own messages never reach the WebSocket.
+- **Revealing contacts is in the patch after all** (D52): `POST
+  /v1/groups/{groupId}/members/reveal`. The member list names the contact of every member who is
+  a contact of the hub (Briar names only the visible ones), a visible member is left as it is,
+  and a reveal Briar refuses because one is under way is ignored, as the app does.
+- **JSON fields are typed strictly**: `contactId` a JSON integer, `accept` a boolean, an optional
+  `text` absent, null or a non-empty string.
+- **Tests in upstream style**: 75 new tests (unit tests with mockk and JSONAssert, integration
+  tests against a real peer, its WebSocket included); with the 99 existing ones, 174 pass in about
+  40 s. Sixteen deliberate mutations of the controller each failed a test. A second integration
+  test class needs a port of its own (`IntegrationTest` got a port parameter): the API server of
+  a finished class keeps its port, because stopping it ends the process.
+What the checks showed (2026-10-02):
+- **No migration.** A phone (Briar 1.5.21) showed the hub, running upstream, as "not supported" in
+  the invitation screen; after the switch to the patched peer on the same data, the phone could
+  invite it as soon as they were connected again (10 s). Between two headless peers the same
+  switch took about 4 minutes, the time Tor needed to connect them again.
+- **With the phone, every endpoint and event worked** both ways: a group the phone created
+  (invitation event and list, accept, joins and posts as events, posts from the hub, members,
+  mark read, the phone dissolving it: `GroupDissolvedEvent`, then `DISSOLVED` for posts) and a group
+  the hub created (invite, the phone's acceptance and posts, the hub dissolving it). Declining, a
+  member leaving (the hub then sees it as `sharing` and cannot invite it again) and revealing were
+  checked between headless peers.
+- **A dissolve reaches the hub only when the creator next syncs with it.** The phone dropped its
+  connection about a minute after its last message, so a check must wait for the event, not the
+  clock.
+- `lab/briar/` builds the image from the fork: the build context `briar` is a checkout of it,
+  `../briar` next to chatko by default or `BRIAR_SRC` (a path or a Git URL; the upstream tag's URL
+  builds the unpatched peer). The build needs BuildKit (`docker-buildx`).
+**Consequences:** S25 publishes the fork, builds the production image from it and offers the
+patch upstream, reveal included. S26 builds the extension on these endpoints and events, and S27
+`briarctl` (with `group reveal`, D52). Every Briar release we take means rebasing the branch.
+
+## D52. People create the Briar groups and invite the hub; the hub reveals its contacts; a group the hub creates is the fallback
+**Status:** accepted (S24).
+D23 had a person create each group and invite the hub, the way Telegram works. D24 made the hub's
+account the creator instead, because a member syncs a group only with its creator and with
+the members who are its contacts and have revealed that, so the hub would reach a person's group
+only through the creator's phone. In S24 the owner chose the Telegram way again: a person creates
+the group and adds the others and the hub; a group created by the hub is the fallback for when
+that does not work.
+**Decision:**
+- The recommended setup (design.md §7.1): a person creates the group in the app and invites the
+  hub. The admin joins the hub with `briarctl invitation accept`; the hub does not accept
+  invitations by itself (D24 stays on who manages the account).
+- The patch gets `POST /v1/groups/{groupId}/members/reveal` and `briarctl` gets
+  `group reveal <group> <contact>…`: the hub reveals its relationship with the members who are its
+  contacts, so it syncs the group with them directly, not only through the creator's phone. In
+  S24, after a reveal, a post went from the hub to such a member with the creator stopped.
+- `briarctl group create`, `invite` and `dissolve` stay, for the fallback.
+**Consequences:** a member who is not the hub's contact exchanges messages with the hub through
+the creator, or through another member who is a contact of both and has revealed the
+relationship. Only the creator can invite and dissolve, so cutting someone off is done on the
+creator's phone. If the creator leaves Briar, nobody can be invited any more, and the fallback (a
+new group made by the hub) is the way out. This changes the recommendation of D24, not its split
+between the relay and `briarctl`.

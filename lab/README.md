@@ -133,9 +133,16 @@ CI runs them every night (`.github/workflows/lab.yml`).
 
 ## briar-headless
 
-`briar/` builds upstream briar-headless (tag `release-1.5.21`, JDK 17) and runs it with one Briar
-account, its REST and WebSocket API on `127.0.0.1:7000` and its state in the volume `briar-data`
-(spike S3). It needs internet (Tor) and a phone with Briar for the other side.
+`briar/` builds our fork of briar-headless (upstream tag `release-1.5.21` plus the private-group API,
+D29, D51; JDK 17) and runs it with one Briar account, its REST and WebSocket API on `127.0.0.1:7000`
+and its state in the volume `briar-data` (spike S3, S24). It needs internet (Tor) and a phone with
+Briar for the other side.
+
+The build takes the source from the build context `briar`: by default a checkout of the fork's
+branch (`1664-private-group-api`) at `../briar`, next to this repository, or the path or Git URL in
+`BRIAR_SRC`. `BRIAR_SRC='https://code.briarproject.org/briar/briar.git#release-1.5.21'` builds
+upstream without the patch. The Dockerfile needs BuildKit (`docker buildx`; Ubuntu's package is
+`docker-buildx`).
 
 Put the secrets into `lab/briar/.env` (git-ignored):
 
@@ -170,3 +177,18 @@ uv run lab/spike_briar.py send 1 "hello"
 `pending`, `contacts` and `messages <contactId>` list the rest. Both sides must add the other's link;
 the contact appears within seconds after that. The first build takes about 2 min. `down -v` wipes the
 account, after which the phone has to add the new link again.
+
+The private-group commands (until `briarctl`, S27) take a group id in standard or URL-safe base64:
+
+```bash
+uv run lab/spike_briar.py invitations
+```
+
+```bash
+uv run lab/spike_briar.py accept '<group>'
+```
+
+`groups`, `group-create <name>`, `group-dissolve`, `members`, `sharing` (who can be invited),
+`invite <group> <contactId> [--text T]`, `reveal <group> <contactId>`, `decline`, `posts`, `post <group> <text>` and
+`read <group> <messageId>` cover the rest of the API (design.md §7.4); `--url` talks to another
+peer, with its token in `BRIAR_TOKEN`.

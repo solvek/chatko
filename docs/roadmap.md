@@ -70,7 +70,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S21 | 3 | Meshtastic: `dm` endpoints, ACKs and retries | Opus 5.5 | xhigh | done |
 | S22 | 3 | Meshtastic lab integration tests, radio ⇄ Telegram | Opus 5.5 | high | done |
 | S23 | 3 | Field test on the Kyiv mesh through our own gateway (*with owner*, needs an `EU_433` node) | Sonnet 5.5 | medium | todo |
-| S24 | 4 | briar-headless fork: private-group API (Kotlin; a phone at the end, *with owner*) | Opus 5.5 | xhigh | todo |
+| S24 | 4 | briar-headless fork: private-group API (Kotlin; a phone at the end, *with owner*) | Opus 5.5 | xhigh | done |
 | S25 | 4 | briar-headless Docker image; upstream merge request | Sonnet 5.5 | high | todo |
 | S26 | 4 | Briar extension: port, endpoints, posts in and out, own-post filter | Opus 5.5 | high | todo |
 | S27 | 4 | `briarctl`: contacts, groups, invitations (command-line tool) | Sonnet 5.5 | high | todo |
@@ -412,6 +412,20 @@ routes, README sections, unit and integration tests in upstream style
 First check, with the lab account and its phone contact from S05, that turning the flag on needs no
 migration (the phone sees the hub as able to join groups). Ends *with owner* (a phone). Done when:
 every endpoint and event of design.md §7.4 works against a phone, and the upstream tests pass.
+*Done (D51, D52):* the branch `1664-private-group-api` on `release-1.5.21` in `~/Projects/briar`
+(one local commit; the fork has no remote yet): private groups on, the package `privategroups`, the routes,
+README sections; 75 new tests in upstream style, 174 in all, and sixteen deliberate mutations each
+failed one. `lab/briar/` builds from the fork (the build context `briar`, `BRIAR_SRC`) and needs
+`docker-buildx`; `lab/spike_briar.py` got the group commands. This machine had no S05 account, so
+the check ran on a fresh one: a phone (Briar 1.5.21) saw the hub on upstream as "not supported",
+then invited it 10 s after the switch to the fork. With the phone every endpoint and event worked,
+for a group the phone created and one the hub created; declining, leaving and revealing were
+checked between headless peers. The owner chose people as the creators of groups, with a group
+made by the hub as the fallback (D52), so the patch got `members/reveal`, which lets the hub sync
+directly with members who are its contacts. For S25: the fork has no public home yet (the owner
+picks one; then `BRIAR_SRC`'s default can be its URL), and the merge request includes reveal. For
+S26: listed messages and events have the same form, and a dissolve arrives only when the creator
+next syncs with the hub.
 
 **S25. Packaging.** Docker image for the patched briar-headless (amd64, arm64), non-interactive account
 setup, the compose service; prepare the upstream merge request (rebased on `master`, referring to
@@ -427,11 +441,12 @@ are covered by tests, the extension passes the contract suite, coverage ≥ 85 %
 
 **S27. briarctl.** The command-line tool of design.md §7.5 as the separate `briarctl` package: its own
 small REST client and fake, plain and `--json` output, an `import-linter` contract that keeps it apart
-from chatko, README steps for making a group with the hub as the creator. Done when: every command is
+from chatko, README steps for joining the hub to a group a person made and revealing its contacts
+there (D52), and for the fallback, a group with the hub as the creator. Done when: every command is
 tested against the fake and tried once against the lab `briar-headless` with a phone.
 
-**S28. Three networks.** *With owner*: the cloud setup of D20 (a Briar group made with `briarctl`, a Telegram
-group, Meshtastic in the lab or on the Kyiv mesh). Done when: one group works across all three networks,
+**S28. Three networks.** *With owner*: the cloud setup of D20 (a Briar group made by a person on a
+phone and joined with `briarctl`, D52; a Telegram group; Meshtastic in the lab or on the Kyiv mesh). Done when: one group works across all three networks,
 with Meshtastic both as a channel and as DMs to several nodes.
 
 ### Phase 5: release

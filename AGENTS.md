@@ -44,14 +44,18 @@
   (S20, D47) and its `dm` endpoints: direct messages per node by the node's ACK, retries woken
   by what the hub hears, favorites, key-mismatch notices (S21, D49). The whole hub relays between a fake Telegram
   and the lab's radio with both kinds of endpoint (`tests/integration/test_meshtastic_lab_relay.py`,
-  run nightly in CI by `.github/workflows/lab.yml`; S22, D50). Every
+  run nightly in CI by `.github/workflows/lab.yml`; S22, D50). Our briar-headless fork has the
+  private-group API (S24, D51), tried with a phone; `lab/briar/` builds it. Every
   extension passes the contract suite in `chatko.extension_api.testing`. Phase 0 (spikes S1–S3) is closed (D30): the
   Briar relay on phones, the local Meshtastic lab in `lab/` (channel and direct messages, keys,
   ACKs, provisioning), briar-headless in Docker in `lab/briar/` and the plan for its private-group
   patch (D29). Only the Kyiv broker questions are open (design.md §6.6); they do not block v1.
-  Phases 1 (core) and 2 (Telegram) are closed; phase 3 (Meshtastic) is under way: the next
-  session is the first one marked `todo` in `docs/roadmap.md`.
-- The upstream Briar clone for reading and patching is `~/Projects/briar` (tag `release-1.5.21`).
+  Phases 1 (core) and 2 (Telegram) are closed; phases 3 (Meshtastic, its field test S23) and 4
+  (Briar) are under way: the next session is the first one marked `todo` in `docs/roadmap.md`.
+- The upstream Briar clone for reading and patching is `~/Projects/briar` (tag `release-1.5.21`); its
+  branch `1664-private-group-api` on that tag is our fork with the private-group patch (S24, D51).
+  Build and test it with JDK 17 in Docker (`eclipse-temurin:17-jdk`,
+  `./gradlew --configure-on-demand briar-headless:test`).
 - Development runs locally on the owner's Linux machine. There is no hardware Meshtastic node yet, so
   a second virtual node (`meshtasticd`) plays the member's radio. The production host will be some Linux
   server (Oracle Cloud Always Free is a candidate).
@@ -66,9 +70,10 @@
 - v1 scope (D20): one hub in the cloud that syncs a Briar group, a Telegram group and Meshtastic
   (a channel or DMs to several nodes) through a virtual node. Routing is an admin-written Python script
   (D16), and so is author labelling (D21). The hub only relays: no member management, commands or
-  control surface (D22); channels, PSKs, `dm` node lists and optional people are in the config. The
-  hub's Briar account creates the Briar groups; the admin manages contacts, groups and invitations with
-  `briarctl`, a separate command-line tool outside chatko's architecture (D24). A
+  control surface (D22); channels, PSKs, `dm` node lists and optional people are in the config.
+  People create the Briar groups and invite the hub, which reveals its contacts there; a group the
+  hub creates is the fallback (D52). The admin manages the hub's contacts, groups and invitations
+  with `briarctl`, a separate command-line tool outside chatko's architecture (D24). A
   physical node and several hubs (e.g. a home Raspberry Pi) are later (D17).
 - v1 uses its own Mosquitto, and our own physical gateway node connects it to the Kyiv mesh (D30): the
   Kyiv community broker gives logins only to claimed physical nodes (D27). Each Meshtastic extension

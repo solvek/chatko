@@ -1,13 +1,13 @@
-# briar-headless built from upstream (spike S3). The build stage runs on the build machine and makes
-# the jars for both architectures; the runtime stage takes the one for the target.
+# briar-headless from our fork (D29): upstream plus the private-group API (design.md §7.4).
+# The build stage runs on the build machine and makes the jars for both architectures from the
+# build context `briar`, the fork's source (see docker-compose.yml); the runtime stage takes the
+# jar for the target.
 #   docker compose -f lab/briar/docker-compose.yml build
-ARG BRIAR_REF=release-1.5.21
-
 FROM --platform=$BUILDPLATFORM eclipse-temurin:17-jdk AS build
-ARG BRIAR_REF
-RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
-RUN git clone --depth 1 --branch "$BRIAR_REF" https://code.briarproject.org/briar/briar.git .
+# The source without Git data and build outputs, which a local checkout may have.
+RUN --mount=type=bind,from=briar,target=/checkout \
+    tar -C /checkout --exclude=./.git --exclude=./.gradle --exclude='./*/build' -cf - . | tar -xf -
 RUN --mount=type=cache,target=/root/.gradle \
     ./gradlew --no-daemon --configure-on-demand \
         briar-headless:x86LinuxJar briar-headless:aarch64LinuxJar \

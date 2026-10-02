@@ -507,7 +507,8 @@ Steps and answers needed:
 - *Turning it on for an existing account* needs no migration: `GroupInvitationManagerImpl
   .onDatabaseOpened` creates the client's local group and calls `addingContact` for every existing
   contact, and `ClientVersioningManagerImpl.startService` sends the new client list to all contacts
-  when it changed. (To be confirmed in S24 with the lab account and its phone contact.)
+  when it changed. Confirmed in S24 (D51): a phone saw the hub as "not supported" while it ran
+  upstream and could invite it once they were connected again after the switch, on the same data.
 - *The model* (`briar-spec` clients "Private Group" and "Private Group Sharing"; `briar-core`
   `privategroup/`). A group is a name, a 32-byte salt and its creator; its id is the hash of these.
   **Only the creator can invite.** Each invitation runs as a session in the private conversation
@@ -637,5 +638,5 @@ Still open, and where it is answered:
 | The Kyiv questions of design.md §6.6 (broker routing, PKI and downlink policy, gateways, "Ignore MQTT" on relays, "OK to MQTT", a bot node) | roadmap S04 (a claimed physical node, `lab/spike_kyiv.py`) and S23 |
 | A physical node as the hub's node (serial, BLE, TCP) | later, after v1 (D20) |
 | ARM64: `meshtasticd` was checked only in the manifest, our `briar-headless` jar was built but not run | S25 (the image) and S29 (the server) |
-| Private groups switched on for an existing Briar account need no migration (read in the source) | S24, with the lab account |
+| Private groups switched on for an existing Briar account need no migration (read in the source) | answered in S24 with a phone: none needed (D51) |
 | `RATE_LIMIT_EXCEEDED` addressed to node 0 (S2, part 2): a firmware bug worth reporting upstream | anyone, not blocking |
