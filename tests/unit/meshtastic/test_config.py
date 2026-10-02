@@ -1,6 +1,7 @@
 """The config model of a Meshtastic instance: the hub's node."""
 
 import base64
+import re
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,7 @@ from meshtastic.protobuf import config_pb2
 from pydantic import ValidationError
 
 from chatko.infrastructure.config import parse_config
-from chatko_meshtastic.config import REGIONS, MeshtasticConfig, parse_node_id
+from chatko_meshtastic.config import REGIONS, MeshtasticConfig, MeshtasticEndpoint, parse_node_id
 
 ROOT = Path(__file__).parents[3]
 KEY = base64.b64encode(bytes(range(32))).decode()
@@ -43,7 +44,6 @@ def test_the_example_section_is_valid() -> None:
     env |= {"KYIV_PRIMARY_PSK": KEY, "MESH_FAMILY_PSK": PSK16, "MESH_KYIV_PRIVATE_KEY": KEY}
     raw = dict(parse_config(text, env)["extensions"]["kyiv"])
     del raw["type"]
-    raw["contacts"] = {"!a1b2c3d4": KEY}  # the example's key is a placeholder
 
     config = MeshtasticConfig.model_validate(raw)
 
@@ -169,3 +169,35 @@ def test_the_example_lists_the_settings_this_model_takes() -> None:
     keys = set(raw["extensions"]["kyiv"]) - {"type"}
 
     assert keys <= set(MeshtasticConfig.model_fields)
+
+
+# Endpoints.
+
+
+def test_an_endpoint_is_a_channel_by_name() -> None:
+    endpoint = MeshtasticEndpoint.model_validate({"channel": "family"})
+
+    assert (endpoint.channel, endpoint.dm) == ("family", None)
+
+
+def test_an_endpoint_is_a_list_of_nodes_in_meshtastic_form() -> None:
+    endpoint = MeshtasticEndpoint.model_validate({"dm": ["!A1B2C3D4", "!0badc0de"]})
+
+    assert (endpoint.channel, endpoint.dm) == (None, ("!a1b2c3d4", "!0badc0de"))
+
+
+@pytest.mark.parametrize(
+    ("raw", "problem"),
+    [
+        ({}, "either a `channel` or a `dm`"),
+        ({"channel": "family", "dm": ["!a1b2c3d4"]}, "either a `channel` or a `dm`"),
+        ({"dm": []}, "lists no nodes"),
+        ({"dm": ["!a1b2c3d4", "!A1B2C3D4"]}, "!a1b2c3d4 is listed twice"),
+        ({"dm": ["a1b2c3d4"]}, "not a node id"),
+        ({"channel": ""}, "at least 1 character"),
+        ({"chat": 1}, "Extra inputs are not permitted"),
+    ],
+)
+def test_refuses_what_is_not_an_endpoint(raw: dict[str, Any], problem: str) -> None:
+    with pytest.raises(ValidationError, match=re.escape(problem)):
+        MeshtasticEndpoint.model_validate(raw)

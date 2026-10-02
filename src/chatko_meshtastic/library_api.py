@@ -459,7 +459,7 @@ def _payload(data: mesh_pb2.Data) -> Payload:
     try:
         match data.portnum:
             case _PortNum.TEXT_MESSAGE_APP:
-                return Text(data.payload.decode("utf-8", errors="replace"))
+                return Text(data.payload.decode("utf-8", errors="replace"), bool(data.emoji))
             case _PortNum.ROUTING_APP:
                 routing = mesh_pb2.Routing()
                 routing.ParseFromString(data.payload)

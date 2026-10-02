@@ -23,6 +23,7 @@ from chatko_meshtastic.api import (
     CommitEdit,
     MeshApi,
     MeshConnection,
+    MeshError,
     MqttSettings,
     NodeEntry,
     NodeSettings,
@@ -134,7 +135,8 @@ class FakeConnection(MeshConnection):
 class FakeMeshApi(MeshApi):
     """The hub's node in memory. A test makes things happen at the node (`receive`, `drop`,
     `online`), reads what the hub did (`admin`, `texts`, `settings`, `nodes`) and decides how
-    the node answers (`ack_texts`, `answer_admin`, `refuse`, `ignore`, `answer_early`)."""
+    the node answers (`ack_texts`, `answer_admin`, `refuse`, `ignore`, `answer_early`,
+    `text_error`)."""
 
     def __init__(
         self,
@@ -153,6 +155,8 @@ class FakeMeshApi(MeshApi):
         self.answer_early = False
         """Answers reach the connection before the hub has the packet id of what it sent."""
         self.reboot_on_commit = True
+        self.text_error: MeshError | None = None
+        """Raised for every text the hub hands the node."""
         self.refuse: dict[type[AdminCommand], str] = {}
         """Admin messages of these types are answered with this error."""
         self.ignore: set[type[AdminCommand]] = set()
@@ -207,6 +211,8 @@ class FakeMeshApi(MeshApi):
     # The node at work.
 
     async def take_text(self, connection: FakeConnection, sent: SentText) -> int:
+        if self.text_error is not None:
+            raise self.text_error
         self.texts.append(sent)
         if self.ack_texts and sent.want_ack:
             answers = [_routing(self.num, self.num, sent.packet_id)]

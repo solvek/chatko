@@ -67,7 +67,7 @@ src/
                      # is visible and forbidden by import-linter. Telegram (§3.7): config, api
                      # (the TelegramApi port), aiogram_api, extension, testing (FakeTelegramApi)
   chatko_meshtastic/ # Meshtastic (§3.8): config, api (the MeshApi port), library_api, provisioning,
-                     # node (MeshNode), testing (FakeMeshApi); the endpoints come in S20 and S21
+                     # node (MeshNode), text (parts), extension, testing (FakeMeshApi)
   chatko_briar/
   briarctl/          # the admin's CLI for the hub's Briar account (design.md §7.5); a separate program:
                      # it imports neither chatko nor chatko_briar, and they never import it
@@ -285,21 +285,26 @@ errors is part of the test.
 
 ### 3.8 The Meshtastic extension
 
-`chatko_meshtastic` (design.md §6, D25, D26, D46). One instance drives one node, the hub's node,
-through the official `meshtastic` library. S19 wrote its base; the `channel` and `dm` endpoints
-and the extension class come in S20 and S21.
+`chatko_meshtastic` (design.md §6, D25, D26, D46, D47), registered as `meshtastic`. One instance
+drives one node, the hub's node, through the official `meshtastic` library. The `channel`
+endpoints are written (S20); the `dm` endpoints are validated and list their nodes as recipients,
+and their direct messages come in S21.
 
 | Module | Contents |
 |---|---|
-| `config` | `MeshtasticConfig`: `connection` (`TcpConnection`, `host:port`), names, `region`, `private_key`, `mqtt` (`MqttConfig`: host, port, TLS, login, root topic), `channels` (`ChannelConfig`: name and PSK, in slot order), `contacts` (node id → public key), `min_send_interval_s` (at least 2). Secrets are `SecretStr`s |
-| `api` | the `MeshApi` port: `connect()` returns a `MeshConnection` with `state` (`NodeState`: the node's number, `NodeSettings`, its database of `NodeEntry`s), `events()` (the `Packet`s it hands over until the connection ends: `Text`, `Routing` for an ACK or NAK with its `request_id`, `NodeInfo`, `Other`), `send_text`, `send_admin` (`BeginEdit`, `SetOwner`, `SetLora`, `SetPrivateKey`, `SetMqtt`, `SetChannel`, `AddContact`, `CommitEdit`) and `close`. Errors: `UnreachableError` (connect again), `RejectedError` (cannot work) |
+| `config` | `MeshtasticConfig`: `connection` (`TcpConnection`, `host:port`), names, `region`, `private_key`, `mqtt` (`MqttConfig`: host, port, TLS, login, root topic), `channels` (`ChannelConfig`: name and PSK, in slot order), `contacts` (node id → public key), `min_send_interval_s` (at least 2). Secrets are `SecretStr`s. `MeshtasticEndpoint`, the endpoint: either `channel` (a name) or `dm` (node ids, kept lower case) |
+| `api` | the `MeshApi` port: `connect()` returns a `MeshConnection` with `state` (`NodeState`: the node's number, `NodeSettings`, its database of `NodeEntry`s), `events()` (the `Packet`s it hands over until the connection ends: `Text`, with `reaction` for a tapback, `Routing` for an ACK or NAK with its `request_id`, `NodeInfo`, `Other`), `send_text`, `send_admin` (`BeginEdit`, `SetOwner`, `SetLora`, `SetPrivateKey`, `SetMqtt`, `SetChannel`, `AddContact`, `CommitEdit`) and `close`. Errors: `UnreachableError` (connect again), `RejectedError` (cannot work) |
 | `library_api` | `LibraryMeshApi`, the port over `TCPInterface`, the only module that imports the library. A subclass overrides seven of its hooks so that it never reconnects by itself and the adapter sees every message from the node (D46); each connection has a thread of its own for the blocking calls, and the reader thread hands packets over with `call_soon_threadsafe`. `open_socket` replaces the TCP connection in tests |
 | `provisioning` | `WantedNode` (the node as the config wants it), `settings_commands` (what differs, in a settings transaction, in the order the firmware needs), `contact_commands`, `describe` (for logs and notices, without secrets) |
-| `node` | `MeshNode`: connects and reconnects, provisions on every connection one admin message at a time, is `ready` once the node matches, and serves `send_text` (paced) with an `Outgoing` whose `outcome(within)` is the `Ack` or `Nak` matched by request id; hands other nodes' packets to `on_packet` and tells `on_ready`; keeps the node database (`node(num)`) as the node does; posts the admin notices of D46 |
-| `testing` | `FakeMeshApi`: the node in memory, as `meshtasticd` behaves (it applies and answers admin messages, reboots after a commit, turns `ignore_mqtt` on with a first duty-cycle region, serves one connection at a time, ACKs texts); `text_packet` |
+| `node` | `MeshNode`: connects and reconnects, provisions on every connection one admin message at a time, is `ready` once the node matches (`wait_ready(within)` waits for it), and serves `send_text` (paced) with an `Outgoing` whose `outcome(within)` is the `Ack` or `Nak` matched by request id; hands other nodes' packets to `on_packet` and tells `on_ready`; keeps the node database (`node(num)`) as the node does; posts the admin notices of D46 |
+| `text` | `render(label, text)`: the packets of one message (`Rendered`: the parts and whether the text was cut), `NatAda: text` or up to 3 parts `NatAda (1/3): …` of at most 200 bytes, split at whitespace; `shorten_label` (39 bytes at most) |
+| `extension` | `MeshtasticExtension` on one `MeshNode`: the channel index of each `channel` endpoint (the config must have the channel, and two endpoints cannot share one) and the nodes of each `dm` endpoint as its recipients; submits other nodes' broadcast texts on those channels, authors named from `MeshNode.node`; tells the hub where each node was heard, at most once a minute per node and place (`MeshtasticTimings.heard`, by the hub's clock); delivers a message part by part, each once the broker echoed the one before, remembering the parts that got through so that a retry goes on from there; asks for the waiting deliveries of its channels (`retry_now`) whenever the node is ready again. `MeshtasticTimings` holds its waits and the node's, with the send interval from the config |
+| `testing` | `FakeMeshApi`: the node in memory, as `meshtasticd` behaves (it applies and answers admin messages, reboots after a commit, turns `ignore_mqtt` on with a first duty-cycle region, serves one connection at a time, ACKs texts, or raises `text_error`); `text_packet` |
 
-`tests/unit/meshtastic` tests `MeshNode` over `FakeMeshApi`, and `LibraryMeshApi` with the real
-library over a socket pair, whose other end (`device.FakeDevice`) speaks the node's stream
+`tests/contract/test_meshtastic_extension.py` runs the contract suite over `FakeMeshApi` with
+`channel` endpoints. `tests/unit/meshtastic` tests the extension and `MeshNode` over
+`FakeMeshApi`, `render` with properties (every part fits a packet), and `LibraryMeshApi` with the
+real library over a socket pair, whose other end (`device.FakeDevice`) speaks the node's stream
 protocol. `tests/integration/test_meshtastic_lab.py` runs `MeshNode` over `LibraryMeshApi`
 against the lab's two nodes: provisioning with the reboot, channel texts and direct messages both
 ways with their ACKs, the NAKs of a node without a key and of a radio that is away, and a node

@@ -180,6 +180,17 @@ async def test_hands_over_a_channel_text(device: FakeDevice, connection: MeshCon
     assert not packet.is_direct
 
 
+async def test_marks_a_reaction(device: FakeDevice, connection: MeshConnection) -> None:
+    tapback = mesh_packet(ADA, BROADCAST, PORT.TEXT_MESSAGE_APP, "👍".encode(), channel=1)
+    tapback.decoded.emoji = 1
+    tapback.decoded.reply_id = 76
+
+    device.push(tapback)
+    packet = await next_packet(connection)
+
+    assert packet.payload == Text("👍", reaction=True)
+
+
 async def test_hands_over_a_direct_message_with_the_senders_key(
     device: FakeDevice, connection: MeshConnection
 ) -> None:

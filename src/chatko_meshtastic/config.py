@@ -211,3 +211,33 @@ class MeshtasticConfig(BaseModel):
             if channel.name == name:
                 return index
         return None
+
+
+class MeshtasticEndpoint(BaseModel):
+    """An endpoint of the hub's node (design.md §6.2): a `channel` of the node by name, whose
+    broadcasts it reads and posts, or a `dm` list of nodes, each a recipient of direct messages.
+    Node ids are kept in the form Meshtastic writes them, lower case."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    channel: Annotated[str, Field(min_length=1)] | None = None
+    dm: tuple[str, ...] | None = None
+
+    @field_validator("dm")
+    @classmethod
+    def _are_nodes(cls, dm: tuple[str, ...] | None) -> tuple[str, ...] | None:
+        if dm is None:
+            return None
+        if not dm:
+            raise ValueError("lists no nodes")
+        nodes = tuple(f"!{parse_node_id(node):08x}" for node in dm)
+        for node in nodes:
+            if nodes.count(node) > 1:
+                raise ValueError(f"{node} is listed twice")
+        return nodes
+
+    @model_validator(mode="after")
+    def _is_one_kind(self) -> Self:
+        if (self.channel is None) == (self.dm is None):
+            raise ValueError("an endpoint is either a `channel` or a `dm` list of nodes")
+        return self

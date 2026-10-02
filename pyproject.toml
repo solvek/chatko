@@ -28,6 +28,7 @@ chatko = "chatko.app.cli:main"
 # group (docs/architecture.md §2). Each extension session adds its line here.
 [project.entry-points."chatko.extensions"]
 telegram = "chatko_telegram:TelegramExtension"
+meshtastic = "chatko_meshtastic:MeshtasticExtension"
 
 [dependency-groups]
 dev = [

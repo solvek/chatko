@@ -66,7 +66,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S17 | 2 | Telegram: port, group and private-chat endpoints, allowed chats | Opus 5.5 | high | done |
 | S18 | 2 | Telegram live test with two groups (*with owner*) | Sonnet 5.5 | medium | done |
 | S19 | 3 | Meshtastic: asyncio adapter over the `meshtastic` library (TCP to `meshtasticd`), provisioning from the config | Opus 5.5 | xhigh | done |
-| S20 | 3 | Meshtastic: `channel` endpoints, splitting, rate limit, de-duplication, `LongFast` source | Opus 5.5 | high | todo |
+| S20 | 3 | Meshtastic: `channel` endpoints, splitting, rate limit, de-duplication, `LongFast` source | Opus 5.5 | high | done |
 | S21 | 3 | Meshtastic: `dm` endpoints, ACKs and retries | Opus 5.5 | xhigh | todo |
 | S22 | 3 | Meshtastic lab integration tests, radio ⇄ Telegram | Opus 5.5 | high | todo |
 | S23 | 3 | Field test on the Kyiv mesh through our own gateway (*with owner*, needs an `EU_433` node) | Sonnet 5.5 | medium | todo |
@@ -333,6 +333,20 @@ the contract suite over `FakeMeshApi`.
 truncation, placeholders for non-text, per-node send interval, de-duplication across gateways, drop own
 packets, authors from NodeInfo, `LongFast` as a source, last-heard tracking. Done when: design.md §6.3
 and §6.4 are covered by tests.
+*Done (D47):* `MeshtasticExtension` is registered as `meshtastic`, on `MeshNode`, with
+`MeshtasticEndpoint` (`channel` or `dm`), so `config.example.yaml` is checked against it (its
+contact key is now a valid example key). `channel` endpoints read other nodes' broadcast texts
+(transport id `<node id>/<packet id>`, authors from the node database and NodeInfo, tapbacks
+and blank texts dropped), tell the hub where each node was heard (once a minute per node and
+place), and deliver part by part through `text.render` (≤ 200 bytes, ≤ 3 parts, `…`, labels ≤ 39
+bytes), each part once the broker echoed the previous one; a retry goes on from the part that
+failed. `LongFast` is a `channel` endpoint on index 0 like any other. The contract suite passes
+over `FakeMeshApi`; 1047 tests, coverage of `chatko_meshtastic` 97 %. The lab tests pass (the
+extension itself is tried in the lab in S22); one run had the provisioning test fail once, which
+did not happen again in three runs. For S21: a `dm`
+endpoint now fails its deliveries ("not relayed yet") and the extension drops direct messages in
+`_on_packet`; build the `dm` path there and in `deliver`, reusing `render` and the part progress,
+and hear a direct message at its `dm` endpoint (now at no endpoint).
 
 **S21. DM endpoints.** `dm` endpoints with node lists, each node a recipient (D35): out to every listed node, in from listed nodes
 (first endpoint wins), the delivery states of D26 (the node's ACK, not the implicit one; retry when

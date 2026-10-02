@@ -1,5 +1,7 @@
-"""config.example.yaml and routing.example.py are valid together, with stand-in networks."""
+"""config.example.yaml and routing.example.py are valid together, with the extensions written so
+far and stand-ins for the others."""
 
+import base64
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, ClassVar
@@ -16,6 +18,7 @@ from chatko.extension_api import (
     OutboundMessage,
 )
 from chatko.infrastructure.config import parse_config, read_env_file
+from chatko_meshtastic import MeshtasticEndpoint, MeshtasticExtension
 from chatko_telegram import TelegramExtension
 
 ROOT = Path(__file__).parents[2]
@@ -50,13 +53,21 @@ def stand_in(name: str) -> type[Extension[Any]]:
 # The extensions written so far check their sections; stand-ins take the others.
 TYPES: dict[str, type[Extension[Any]]] = {
     "telegram": TelegramExtension,
-    **{name: stand_in(name) for name in ("meshtastic", "briar")},
+    "meshtastic": MeshtasticExtension,
+    "briar": stand_in("briar"),
 }
 
 
 def example_env() -> dict[str, str]:
     names = read_env_file((ROOT / ".env.example").read_text(encoding="utf-8"))
-    return {**dict.fromkeys(names, "x"), "TELEGRAM_BOT_TOKEN": "123456:example-token"}
+    key = base64.b64encode(bytes(range(32))).decode()
+    return {
+        **dict.fromkeys(names, "x"),
+        "TELEGRAM_BOT_TOKEN": "123456:example-token",
+        "KYIV_PRIMARY_PSK": key,
+        "MESH_FAMILY_PSK": key,
+        "MESH_KYIV_PRIVATE_KEY": key,
+    }
 
 
 def test_the_example_config_is_valid() -> None:
@@ -67,6 +78,9 @@ def test_the_example_config_is_valid() -> None:
     assert list(config.extensions) == ["tg", "kyiv", "briar"]
     assert [group.name for group in config.topology.groups] == ["family", "street"]
     assert config.topology.endpoint("family.radio").instance == "kyiv"
+    radio = config.endpoints["kyiv"][config.topology.endpoint("family.radio")]
+    assert isinstance(radio, MeshtasticEndpoint)
+    assert radio.dm == ("!a1b2c3d4", "!0badc0de")
     assert set(config.topology.sources) == {"longfast", "owner"}
     assert config.admin_endpoint == config.topology.source("owner")
     assert config.topology.people[0].label == "NatAda"

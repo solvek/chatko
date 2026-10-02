@@ -39,7 +39,8 @@ extensions:
         psk: ${MESH_FAMILY_PSK}    # base64, 16 or 32 bytes (AQ== is the default key); give it to people
                                    # as a channel URL/QR code
     contacts:                      # optional: public keys of members' nodes (base64, 32 bytes, from the
-      "!a1b2c3d4": "<public key of !a1b2c3d4>"   # Meshtastic app); the node keeps them as favorites
+                                   # Meshtastic app); the node keeps them as favorites. An example key:
+      "!a1b2c3d4": "B7yTEhZ73TRS3Jg9oECbzdbk+40JH8z+Gyvs7iM6heM="
     min_send_interval_s: 4         # per hub node; at least 2 (the node drops texts that come sooner)
 
   briar:                           # groups are made with `briarctl` (the hub is their creator)
@@ -55,7 +56,7 @@ groups:
     sites:
       tg: { ext: tg, chat: -1001234567890 }
       briar: { ext: briar, group: "<Briar group id>" }          # printed by `briarctl group create`
-      channel: { ext: kyiv, channel: family }                    # broadcast on the private channel
+      channel: { ext: kyiv, channel: family }                    # broadcast on the private channel (by name)
       radio: { ext: kyiv, dm: ["!a1b2c3d4", "!0badc0de"] }       # PKI direct messages to these nodes
 
   street:

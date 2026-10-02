@@ -9,6 +9,7 @@ nodes go to `on_packet`; ACKs and NAKs are matched to the texts they answer by t
 
 import asyncio
 import base64
+import contextlib
 import logging
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable
@@ -181,6 +182,7 @@ class MeshNode:
         self._inbox: asyncio.Queue[Packet | object] = asyncio.Queue()
         self._state: NodeState | None = None
         self._ready: MeshConnection | None = None
+        self._ready_event = asyncio.Event()
         self._nodes: dict[int, NodeEntry] = {}
         self._waiting: dict[int, asyncio.Future[Packet]] = {}
         self._outgoing: dict[int, Outgoing] = {}
@@ -196,6 +198,14 @@ class MeshNode:
     @property
     def ready(self) -> bool:
         return self._ready is not None
+
+    async def wait_ready(self, within: float) -> bool:
+        """Whether the node is ready, or becomes ready within `within` seconds."""
+        if not self.ready:
+            with contextlib.suppress(TimeoutError):
+                async with asyncio.timeout(within):
+                    await self._ready_event.wait()
+        return self.ready
 
     @property
     def num(self) -> int | None:
@@ -320,6 +330,7 @@ class MeshNode:
                     self._log.warning("node %s did not reboot after a commit", node_id(state.num))
                 return True
             self._ready = connection
+            self._ready_event.set()
             self._log_ready(state)
             self._inbox.put_nowait(_READY)
             await reader
@@ -330,6 +341,7 @@ class MeshNode:
             self._log.warning("node %s: %s; connecting again", node_id(state.num), error)
         finally:
             self._ready = None
+            self._ready_event.clear()
             reader.cancel()
             await asyncio.wait({reader})
             for outgoing in self._outgoing.values():
