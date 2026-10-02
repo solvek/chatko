@@ -28,3 +28,6 @@ build/
 .coverage.*
 coverage.xml
 htmlcov/
+
+# Claude Code local state (worktrees, settings)
+.claude/
