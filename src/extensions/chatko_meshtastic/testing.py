@@ -2,9 +2,10 @@
 contract driver.
 
 It behaves like `meshtasticd` where the hub relies on it (spike S2): it applies admin messages to
-its settings and answers each one, reboots (ends the connection) after a commit, turns
-`ignore_mqtt` on when a duty-cycle region is first set, serves one connection at a time, and
-answers texts with an implicit ACK and, for a direct message, the destination's ACK.
+its settings and answers each one, reboots (ends the connection) after a commit, makes its key
+pair and turns `ignore_mqtt` on when a duty-cycle region is first set, serves one connection at a
+time, and answers texts with an implicit ACK and, for a direct message, the destination's ACK or
+a NAK.
 """
 
 import asyncio
@@ -45,6 +46,10 @@ HUB_NUM = 0xC4A7B001
 
 DUTY_CYCLE_REGIONS = frozenset({"EU_433", "EU_868", "UA_433", "UA_868"})
 """Regions for which the firmware turns `ignore_mqtt` on when one is first set."""
+
+OWN_NAKS = frozenset({"MAX_RETRANSMIT", "PKI_SEND_FAIL_PUBLIC_KEY"})
+"""NAKs for a direct message that come from the hub's node; the others come from the
+destination."""
 
 
 def fresh_settings(num: int = HUB_NUM) -> NodeSettings:
@@ -135,7 +140,7 @@ class FakeConnection(MeshConnection):
 class FakeMeshApi(MeshApi):
     """The hub's node in memory. A test makes things happen at the node (`receive`, `drop`,
     `online`), reads what the hub did (`admin`, `texts`, `settings`, `nodes`) and decides how
-    the node answers (`ack_texts`, `answer_admin`, `refuse`, `ignore`, `answer_early`,
+    the node answers (`ack_texts`, `naks`, `answer_admin`, `refuse`, `ignore`, `answer_early`,
     `text_error`)."""
 
     def __init__(
@@ -151,6 +156,10 @@ class FakeMeshApi(MeshApi):
         self.online = True
         self.ack_texts = True
         """Answer a text that wants an ACK: the implicit ACK, and the destination's for a DM."""
+        self.naks: dict[int, str] = {}
+        """Direct messages to these nodes get this NAK instead of the destination's ACK: from
+        the hub's node for `OWN_NAKS`, else from the destination. A text the node refuses to
+        send (`PKI_SEND_FAIL_PUBLIC_KEY`) gets no implicit ACK either (spike S2)."""
         self.answer_admin = True
         self.answer_early = False
         """Answers reach the connection before the hub has the packet id of what it sent."""
@@ -215,9 +224,13 @@ class FakeMeshApi(MeshApi):
             raise self.text_error
         self.texts.append(sent)
         if self.ack_texts and sent.want_ack:
-            answers = [_routing(self.num, self.num, sent.packet_id)]
+            nak = None if sent.to == BROADCAST else self.naks.get(sent.to)
+            answers = []
+            if nak != "PKI_SEND_FAIL_PUBLIC_KEY":
+                answers.append(_routing(self.num, self.num, sent.packet_id))
             if sent.to != BROADCAST:
-                answers.append(_routing(sent.to, self.num, sent.packet_id))
+                by = self.num if nak in OWN_NAKS else sent.to
+                answers.append(_routing(by, self.num, sent.packet_id, nak or "NONE"))
             self._answer(connection, answers)
             if self.answer_early:
                 for _ in range(10):
@@ -264,6 +277,11 @@ class FakeMeshApi(MeshApi):
                 )
             case SetLora():
                 first = settings.region == "UNSET" and command.region in DUTY_CYCLE_REGIONS
+                if settings.region == "UNSET" and not settings.private_key:
+                    private_key = hashlib.sha256(b"private:" + self.num.to_bytes(4)).digest()
+                    settings = replace(
+                        settings, private_key=private_key, public_key=public_key_of(private_key)
+                    )
                 settings = replace(
                     settings,
                     region=command.region,

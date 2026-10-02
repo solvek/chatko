@@ -25,6 +25,7 @@ from chatko_meshtastic.provisioning import (
     contact_commands,
     describe,
     describe_all,
+    favorite_commands,
     settings_commands,
 )
 from chatko_meshtastic.testing import fresh_settings
@@ -200,6 +201,26 @@ def test_leaves_a_favorite_with_the_same_key_alone() -> None:
 
 def test_never_adds_the_node_itself() -> None:
     assert contact_commands({}, WANTED, own=ADA) == []
+
+
+def test_makes_the_wanted_nodes_with_a_learned_key_favorites() -> None:
+    bob, carol, dave = 0x0BADC0DE, 0x00C0FFEE, 0x0000DAFE
+    nodes = {
+        ADA: NodeEntry(ADA, "Ada", "ADA", ADA_KEY),
+        bob: NodeEntry(bob, "Bob", "BOB", b"bob key", favorite=True),
+        carol: NodeEntry(carol, "Carol", "CAR"),  # no key yet
+        dave: NodeEntry(dave, "Dave", "DAV", b"dave key"),  # not wanted
+    }
+
+    commands = favorite_commands(nodes, {ADA, bob, carol, 0x00000001, OWN}, own=OWN)
+
+    assert commands == [AddContact(ADA, ADA_KEY, "Ada", "ADA")]
+
+
+def test_never_makes_the_node_itself_a_favorite() -> None:
+    nodes = {OWN: NodeEntry(OWN, "chatko", "CHKO", b"own key")}
+
+    assert favorite_commands(nodes, {OWN}, own=OWN) == []
 
 
 def test_describes_commands_without_secrets() -> None:

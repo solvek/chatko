@@ -1,4 +1,5 @@
-"""The contract suite against the Meshtastic extension's `channel` endpoints, over the fake node."""
+"""The contract suite against the Meshtastic extension's `channel` and `dm` endpoints, over the
+fake node."""
 
 import asyncio
 import contextlib
@@ -9,7 +10,7 @@ from pydantic import BaseModel
 from chatko.extension_api import Extension, HubContext
 from chatko.extension_api.testing import ContractDriver, ExtensionContract
 from chatko_meshtastic import MeshtasticConfig, MeshtasticExtension, MeshtasticTimings
-from chatko_meshtastic.api import BROADCAST, NodeInfo, Packet
+from chatko_meshtastic.api import BROADCAST, NodeInfo, Packet, node_id
 from chatko_meshtastic.node import NodeTimings
 from chatko_meshtastic.testing import HUB_NUM, FakeMeshApi, text_packet
 
@@ -29,6 +30,11 @@ TIMINGS = MeshtasticTimings(
 
 def channel(place: int) -> str:
     return f"place{place}"
+
+
+def nodes(place: int) -> tuple[int, ...]:
+    """The nodes of the `dm` endpoint at a place: two at each, none shared."""
+    return (0xA1B20000 + 2 * place, 0xA1B20001 + 2 * place)
 
 
 class MeshtasticDriver(ContractDriver[Packet]):
@@ -94,6 +100,32 @@ class MeshtasticDriver(ContractDriver[Packet]):
                     await asyncio.sleep(0.005)
 
 
+class MeshtasticDmDriver(MeshtasticDriver):
+    """Places are `dm` endpoints, each a list of nodes that send the hub direct messages."""
+
+    def endpoint_config(self, place: int) -> dict[str, Any]:
+        return {"dm": [node_id(num) for num in nodes(place)]}
+
+    async def receive(
+        self, place: int, text: str, *, by_hub: bool = False, recipient: str | None = None
+    ) -> Packet:
+        await self._ready()
+        node = nodes(place)[0] if recipient is None else int(recipient[1:], 16)
+        sender = HUB_NUM if by_hub else node
+        self.api.receive(Packet(node, BROADCAST, next(self.ids), NodeInfo("Ada Lovelace", "ADA")))
+        post = text_packet(sender, text, packet_id=next(self.ids), to=node if by_hub else HUB_NUM)
+        self.api.receive(post)
+        return post
+
+    def posted(self, place: int) -> list[str]:
+        return [sent.text for sent in self.api.texts if sent.to in nodes(place)]
+
+
 class TestMeshtasticContract(ExtensionContract):
     def make_driver(self) -> ContractDriver[Any]:
         return MeshtasticDriver()
+
+
+class TestMeshtasticDmContract(ExtensionContract):
+    def make_driver(self) -> ContractDriver[Any]:
+        return MeshtasticDmDriver()

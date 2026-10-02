@@ -67,7 +67,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S18 | 2 | Telegram live test with two groups (*with owner*) | Sonnet 5.5 | medium | done |
 | S19 | 3 | Meshtastic: asyncio adapter over the `meshtastic` library (TCP to `meshtasticd`), provisioning from the config | Opus 5.5 | xhigh | done |
 | S20 | 3 | Meshtastic: `channel` endpoints, splitting, rate limit, de-duplication, `LongFast` source | Opus 5.5 | high | done |
-| S21 | 3 | Meshtastic: `dm` endpoints, ACKs and retries | Opus 5.5 | xhigh | todo |
+| S21 | 3 | Meshtastic: `dm` endpoints, ACKs and retries | Opus 5.5 | xhigh | done |
 | S22 | 3 | Meshtastic lab integration tests, radio ⇄ Telegram | Opus 5.5 | high | todo |
 | S23 | 3 | Field test on the Kyiv mesh through our own gateway (*with owner*, needs an `EU_433` node) | Sonnet 5.5 | medium | todo |
 | S24 | 4 | briar-headless fork: private-group API (Kotlin; a phone at the end, *with owner*) | Opus 5.5 | xhigh | todo |
@@ -353,6 +353,22 @@ and hear a direct message at its `dm` endpoint (now at no endpoint).
 the node is heard again or after a key exchange), listed nodes kept as favorites, key-mismatch admin
 notices, at least 2 s between texts. Done when: design.md §6.2 is
 covered by tests.
+*Done (D49):* a `dm` delivery sends each part as a direct message once the node acknowledged
+the one before (30 s each), the parts counted per recipient. Without the node's ACK the
+extension remembers in memory whether the node's deliveries wait for it to be heard
+(`MAX_RETRANSMIT`, or only the broker's echo) or for its key (`PKI_SEND_FAIL_PUBLIC_KEY`) and
+calls `retry_now` for that node when a packet shows it; the other answers wait for the
+outbox's backoff, and the node being ready again retries every endpoint. PKI direct messages
+from listed nodes come in at the first `dm` endpoint with `from_recipient`; a packet to the hub
+from a listed node is heard at each of its `dm` endpoints. `MeshNode.keep_favorites` makes the
+listed nodes favorites once the node has their keys (a task while ready, one admin message at a
+time). `NO_CHANNEL` and a NodeInfo with another key post one key-mismatch notice per node until
+it acknowledges again. `FakeMeshApi` got `naks` and makes its key pair with the first region.
+The contract suite runs over `channel` and over `dm` endpoints; ten deliberate mutations of the
+new code each failed a test. 1092 tests, coverage of `chatko_meshtastic` 98 %; the lab tests
+pass (8, about 60 s). For S22: the extension itself has not met the lab yet; try the
+`dm` path there (a reset radio for `NO_CHANNEL`, the radio stopped for `MAX_RETRANSMIT` and its
+wake-up when it is heard again) and look at how long a real ACK takes.
 
 **S22. Lab integration.** Opt-in integration tests with the docker lab (Mosquitto, two `meshtasticd`),
 run nightly in CI. Done when: radio ⇄ Telegram works in the lab with both kinds of endpoint.

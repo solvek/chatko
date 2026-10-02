@@ -226,17 +226,26 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
   implicit ACK). Without the echo within 25 s, or with the node's NAK, the delivery is retried
   later, from the first part that did not get through; while the node is connecting or
   provisioning, a delivery waits for it up to 10 s, and when it is ready again the deliveries
-  waiting for its channels are tried at once.
+  waiting for its endpoints are tried at once.
 - Every packet from another node, of any kind, tells the hub that the node was heard: at the
-  `channel` endpoint it came on, if any, or else at no endpoint (a direct message, a packet on a
-  channel that is no endpoint, one the node could not decrypt). The hub is told once a minute at
-  most per node and place, which is precise enough for `last_heard` (§9.5).
+  `channel` endpoint it came on; at every `dm` endpoint that lists the node, if the packet was
+  addressed to the hub's node (a direct message, an ACK); or else at no endpoint (a packet on a
+  channel that is no endpoint, one the node could not decrypt, a direct packet from a node of no
+  `dm` endpoint). The hub is told once a minute at most per node and place, which is precise
+  enough for `last_heard` (§9.5).
 - Each node of a `dm` endpoint is a **recipient** (§9.1): the hub delivers to, waits for the ACK of
   and retries each node on its own, so a radio that is away holds up nobody else, and the messages
-  for it wait, in order, until it is heard again.
-- A node listed in several `dm` endpoints: its direct messages go to the first of them in the config;
-  the routing script can send them elsewhere. Direct messages from nodes not listed anywhere are logged
-  and dropped.
+  for it wait, in order, until it is heard again. A message goes out as one direct message per
+  part (§6.3), each once the node acknowledged the one before; a retry goes on from the first part
+  that got no ACK.
+- A direct message to the hub's node from a listed node comes in at the `dm` endpoint that lists
+  it, with the transport id `<node id>/<packet id>`, and the node as the recipient that posted it
+  (§9.1). A node listed in several `dm` endpoints: its direct messages go to the first of them in
+  the config; the routing script can send them elsewhere. Direct messages from nodes not listed
+  anywhere are logged and dropped, and so are direct messages that are not PKI-encrypted: one
+  encrypted with a channel key could come from anyone who has that key, under any node id (the
+  Kyiv mesh's primary key is public), and current firmware drops them anyway. Tapbacks and blank
+  texts are dropped as on a channel.
 - A direct message from a listed node reaches the group's other sites and, as direct messages, the
   endpoint's other nodes, so the radios of one `dm` endpoint hear each other through the hub (D38).
   It never goes back to the node that sent it. With N nodes, each message from a radio costs N−1
@@ -248,21 +257,42 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
   NodeInfo at once. Asking a node for its NodeInfo works only now and then: a node answers at most once
   per 10 minutes, and once per 12 hours to the same asker (spike S2). So the config may give the
   public key of each `dm` node (`contacts`), which the hub adds to its node as a favorite contact. A
-  listed node whose key the hub's node learned by itself is made a favorite too: favorites are saved at
-  once (other learned keys are written at most once a minute and can be lost on a restart) and are
-  never evicted from the node database (which fills up with the nodes of a busy primary channel).
+  listed node whose key the hub's node learned by itself is made a favorite too, as soon as the node
+  has the key (from its database when the hub connects, or from a NodeInfo it takes, also after the
+  endpoints change): favorites are saved at once (other learned keys are written at most once a
+  minute and can be lost on a restart) and are never evicted from the node database (which fills up
+  with the nodes of a busy primary channel).
 - **Key pinning.** A node keeps the first key it learned for a node and ignores NodeInfo with another
   key. When a person resets their radio, the hub's node keeps the old key: the radio answers the hub's
   direct messages with NAK `NO_CHANNEL` (with `PKI_UNKNOWN_PUBKEY` while it does not know the hub yet),
   and its NodeInfo with the new key reaches the hub but is dropped by the node. The hub posts an admin
-  notice; the admin puts the new key into `contacts`, which replaces the pinned one. The same happens
-  on every radio if the hub's key changes, hence `private_key` (§6.1).
+  notice on either sign, `NO_CHANNEL` or a NodeInfo with another key from a node of a `dm` endpoint
+  (that one names the new key, to be checked with the radio's owner, since anyone with the primary
+  channel's key can send a NodeInfo), once per node until the node acknowledges a message again; the
+  admin puts the new key into `contacts`, which replaces the pinned one. The same happens on every
+  radio if the hub's key changes, hence `private_key` (§6.1); then the radio's owner removes the hub
+  from the radio's node list, and the radio learns the new key from the hub's next NodeInfo.
 - **ACKs.** `dm` messages ask for an acknowledgement, and ACKs come back through MQTT. Only an ACK from
   the listed node means delivered. The hub's own node also reports an "implicit" ACK as soon as the
   broker echoes the packet back, which only means the broker has it; a text that got not even that was
   dropped by the node (e.g. sent too soon, §6.3). Without the real ACK the node publishes the packet
-  twice more (about 7.5 s apart) and gives up after about 23 s; the hub then retries later, when the
-  node is heard again (D26).
+  twice more (about 7.5 s apart) and gives up after about 23 s. A delivery waits up to 30 s for the
+  answer, and then (D26, D49):
+
+  | The answer | Means | Tried again |
+  |---|---|---|
+  | the node's ACK | delivered | (the next part follows) |
+  | none, not even the implicit ACK | the hub's node dropped the text | after the outbox's backoff |
+  | NAK `MAX_RETRANSMIT` from the hub's node, or only the implicit ACK | the radio is away | as soon as any packet from it is heard |
+  | NAK `PKI_SEND_FAIL_PUBLIC_KEY` from the hub's node | the hub's node has no key of the radio | as soon as the hub's node has its key (its NodeInfo) |
+  | NAK `PKI_UNKNOWN_PUBKEY` from the radio | the radio has no key of the hub; the hub's node sends it its NodeInfo at once | after the outbox's backoff (10 s first) |
+  | NAK `NO_CHANNEL` from the radio | the keys do not match (key pinning, above) | after the outbox's backoff, and once the admin fixed the config |
+  | any other NAK | | after the outbox's backoff |
+
+  The outbox's backoff (10 s, doubling up to an hour, §9.1) stays the fallback for a radio whose
+  packets the hub does not hear, and when the hub's node is ready again (after a reconnect, or as a
+  new instance after the config changed) the hub tries every waiting delivery of the instance at
+  once.
 - ACKs and NodeInfo are channel packets on the **primary** channel, while direct messages go under the
   MQTT topic `<root>/2/e/PKI/…`. So `dm` needs uplink and downlink on the primary channel of the hub's
   node, and one direct message is three packets on MQTT: the message, the ACK, and a short ACK of the

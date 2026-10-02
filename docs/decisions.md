@@ -950,3 +950,54 @@ packages are the core and which are plug-ins. The example config also named the 
   can have several instances (a second bot, a second Meshtastic node). Nothing in the code limits the
   instances of a type (design.md §2).
 **Consequences:** a branch that edits files under the old paths merges through git's rename detection.
+
+## D49. Meshtastic `dm` endpoints: the node's ACK per part, retries woken by what the hub hears, favorites kept by the node object
+**Status:** accepted (S21).
+Session S21 wrote the `dm` endpoints of the Meshtastic extension (architecture.md §3.8) on
+`MeshNode` (D46) and the parts of D47. Choices that D26 and design.md §6.2 left open:
+- **One path for both kinds.** A delivery to a `dm` recipient renders the message like a channel
+  one (≤ 3 parts of ≤ 200 bytes) and sends each part as a direct message on channel 0, the next
+  once the node's ACK came within 30 s (`MeshtasticTimings.ack`; the node gives up after about
+  23 s). The parts that got through are remembered per endpoint, message and recipient, so a retry
+  to one node goes on where it stopped and the other nodes are not affected.
+- **What a delivery without the node's ACK waits for** (design.md §6.2 has the table): the
+  extension keeps, in memory, per node and `dm` endpoint, whether the deliveries wait for the node
+  to be heard (`MAX_RETRANSMIT`, or the broker's echo and nothing more) or for the hub's node to
+  have its key (`PKI_SEND_FAIL_PUBLIC_KEY`), and calls `retry_now` for that node when a packet
+  from it shows it (any packet; a packet after which the node has a key). Every result is a
+  `Retry` without `after`, so the outbox's backoff (up to 1 h) stays the fallback for a radio the
+  hub does not hear, e.g. one with "OK to MQTT" off. `PKI_UNKNOWN_PUBKEY`, `NO_CHANNEL`, other
+  NAKs and a text the node dropped are left to the backoff: waking on the radio's own NAK packet
+  would retry at once, before the hub's NodeInfo got there, and a key mismatch needs the admin.
+  Losing these hints in a restart loses nothing: when the node is ready, the extension asks for
+  the waiting deliveries of all its endpoints. This is the only delivery-related state the
+  extension keeps besides the parts (D35 still holds: the outbox owns the deliveries).
+- **Heard at the `dm` endpoints.** A packet addressed to the hub's node (a direct message, an ACK,
+  a NAK) from a listed node is heard at every `dm` endpoint that lists it, not only the first: a
+  script that checks `last_heard` at the second one should see it too. A direct message itself
+  goes to the first endpoint only, with `from_recipient` set to the node (D38).
+- **Only PKI direct messages come in.** A direct message encrypted with a channel key could come
+  from anyone with that key under any node id, and the primary key of the Kyiv mesh is public; the
+  firmware drops such messages from radios anyway (spike S2), so the check costs nothing.
+- **Favorites are `MeshNode`'s job.** The extension gives it the nodes of its `dm` endpoints
+  (`keep_favorites`, at start and on every `set_endpoints`). While the node is ready, a task of
+  `MeshNode` sends `add_contact` with the key and names the node already has for each such node
+  whose key is not a favorite yet: at once after connecting, and whenever it takes a NodeInfo of
+  one of them. It is the only sender of admin messages after provisioning, so they still go one
+  at a time; one without an answer makes it connect again, as in provisioning. It sends only the
+  key the node pinned, so it never replaces one.
+- **Key-mismatch notices:** on `NO_CHANNEL` from a radio, and on a NodeInfo from a node of a `dm`
+  endpoint with another key than the pinned one (the notice names the new key, to be checked with
+  the radio's owner). One per node (key `key-mismatch:<node id>`), until the node acknowledges a
+  message again or the instance restarts, instead of one per retry and hour for three days. A
+  missing key gets no notice: it is the normal state of a new radio until its NodeInfo comes.
+- **The fake node answers like `meshtasticd`:** `FakeMeshApi.naks` gives a destination the NAK it
+  gets (from the hub's node for `MAX_RETRANSMIT` and `PKI_SEND_FAIL_PUBLIC_KEY`, the latter
+  without the broker's echo; from the radio otherwise), and the fake makes its key pair when a
+  region is first set, as the firmware does.
+**Consequences:** the contract suite runs over both kinds of endpoint. Asking a radio for its
+NodeInfo after `PKI_SEND_FAIL_PUBLIC_KEY` (a port command the hub does not have) is left out:
+the throttles of spike S2 make it work only now and then, and `contacts` covers the need. An ACK
+that comes after the node gave up (`MAX_RETRANSMIT`) is not counted, so on a slow real mesh a
+radio may get a message twice; S23 shows whether that happens. S22 tries the extension in the
+lab, radio ⇄ Telegram, with both kinds of endpoint.

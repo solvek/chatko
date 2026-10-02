@@ -252,6 +252,62 @@ async def test_a_refused_contact_is_told_and_not_taken() -> None:
     assert rig.node.node(ADA) is None
 
 
+async def test_keeps_the_nodes_it_is_given_as_favorites_once_it_has_their_keys() -> None:
+    rig = Rig(provisioned(FakeMeshApi()))
+    rig.api.nodes[BOB] = NodeEntry(BOB, "Bob", "BOB", b"bob key")
+    carol = 0x00C0FFEE
+    rig.node.keep_favorites({ADA, BOB, carol})
+    await rig.node.start()
+    try:
+        await rig.ready()
+        await eventually(lambda: rig.api.nodes[BOB].favorite)
+        rig.api.receive(node_info(carol, "Carol", "CAR"))  # no key: nothing to keep yet
+        rig.api.receive(node_info(carol, "Carol", "CAR", b"carol key"))
+        await eventually(lambda: carol in rig.api.nodes)
+        rig.node.keep_favorites({0x0000DAFE})
+        rig.api.nodes[BOB] = NodeEntry(BOB, "Bob", "BOB", b"bob key")  # as if forgotten
+        rig.api.drop()
+        await eventually(lambda: rig.api.connections == 2 and rig.node.ready)
+        await asyncio.sleep(0.05)
+    finally:
+        await rig.node.stop()
+
+    assert [command for command in rig.api.admin if isinstance(command, AddContact)] == [
+        AddContact(BOB, b"bob key", "Bob", "BOB"),
+        AddContact(carol, b"carol key", "Carol", "CAR"),
+    ]
+    assert rig.node.node(BOB) == NodeEntry(BOB, "Bob", "BOB", b"bob key", favorite=False)
+    assert rig.notices == []
+
+
+async def test_a_refused_favorite_is_told_and_not_taken() -> None:
+    rig = Rig(provisioned(FakeMeshApi()))
+    rig.api.nodes[BOB] = NodeEntry(BOB, "Bob", "BOB", b"bob key")
+    rig.api.refuse[AddContact] = "BAD_REQUEST"
+    rig.node.keep_favorites({BOB})
+    await rig.node.start()
+    try:
+        await rig.ready()
+        await eventually(lambda: bool(rig.notices))
+    finally:
+        await rig.node.stop()
+
+    assert rig.notice_keys() == ["refused:contact !0badc0de"]
+    assert rig.node.node(BOB) == NodeEntry(BOB, "Bob", "BOB", b"bob key")
+
+
+async def test_connects_again_when_a_favorite_gets_no_answer(rig: Rig) -> None:
+    rig.api.answer_admin = False
+    rig.api.receive(node_info(BOB, "Bob", "BOB", b"bob key"))
+    await eventually(lambda: rig.node.node(BOB) is not None)
+
+    rig.node.keep_favorites({BOB})
+
+    await eventually(lambda: rig.api.connections == 2)
+    rig.api.answer_admin = True
+    await eventually(lambda: rig.node.ready and rig.api.nodes[BOB].favorite)
+
+
 async def test_matches_admin_answers_that_come_before_the_packet_id() -> None:
     rig = Rig()
     rig.api.answer_early = True
