@@ -40,7 +40,8 @@
   passed the live test with a real bot and groups (S18, D45). The Meshtastic extension has its
   base (`chatko_meshtastic`, S19, D46): the config model, the `MeshApi` port with its adapter over
   the `meshtastic` library and its fake, provisioning and `MeshNode`, tested against the lab
-  (`uv run pytest -m lab`); its endpoints and extension class come in S20 and S21. Every
+  (`uv run pytest -m lab`); `MeshtasticExtension` is registered with its `channel` endpoints
+  (S20, D47), and its `dm` endpoints come in S21. Every
   extension passes the contract suite in `chatko.extension_api.testing`. Phase 0 (spikes S1–S3) is closed (D30): the
   Briar relay on phones, the local Meshtastic lab in `lab/` (channel and direct messages, keys,
   ACKs, provisioning), briar-headless in Docker in `lab/briar/` and the plan for its private-group

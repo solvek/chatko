@@ -896,7 +896,44 @@ handed over while the node is rebooting is lost to the node; the outbox retries 
 A half-open TCP connection (the node gone without closing it) is noticed only when a write fails;
 inside the Docker network this does not happen.
 
-## D47. The extensions live in `src/extensions/`, the admin's tool in `src/tools/`; the example names the instance `telegram`
+## D47. Meshtastic `channel` endpoints: parts sent one at a time on the broker's echo, a retry goes on from the part that failed
+**Status:** accepted (S20).
+Session S20 registered the Meshtastic extension (`meshtastic`, architecture.md §3.8) and wrote its
+`channel` endpoints on `MeshNode` (D46). Choices that design.md §6.2–6.4 left open:
+- **One endpoint model for both kinds.** `MeshtasticEndpoint` is either `channel: <name>` or
+  `dm: [node ids]`, so that `config.example.yaml` is checked against the real extension now. A
+  `channel` must be one of the instance's channels, and two endpoints cannot share one (each
+  channel's texts go to one endpoint). Until S21, a `dm` endpoint lists its nodes as recipients,
+  a delivery to it fails ("not relayed yet") and a direct message to the hub is logged and
+  dropped: failing is quieter than retrying for three days, and nobody runs v1 yet.
+- **The transport id is `<node id>/<packet id>`.** Spike S2 found `(from, id)` stable across
+  gateways, and the hub's node hands a packet over once. Ids are not unique forever, but the core
+  keeps transport ids only for the retention (7 days), and a radio's ids do not repeat that soon.
+- **A part goes out once the one before was echoed.** Each part is a broadcast that asks for an
+  ACK; the implicit ACK (the broker's echo, D26) is what confirms it, within 25 s (the firmware
+  gives up after about 23 s). The extension remembers, in memory, how many parts of each message
+  got through to an endpoint, so a `Retry` sends only the rest; after a restart it sends them all
+  again (at least once). It keeps that for 1024 deliveries at most.
+- **A delivery waits up to 10 s for the node** when it is connecting or provisioning (a commit
+  reboots it), instead of answering `Retry` at once and waiting for the backoff; `on_ready` asks
+  the hub for the deliveries waiting for the instance's channels.
+- **`heard` at most once a minute per node and place**, by the hub's clock: a busy primary
+  channel sends many packets, and each `heard` writes the account to SQLite. A packet is heard at
+  a `channel` endpoint only when it is a decoded broadcast on that channel: the channel field of a
+  packet the node could not decrypt is a hash, and a direct message has none.
+- **Labels and parts.** A label is cut to 39 bytes (a node's longest long name) with `…`. A text
+  that does not fit `NatAda: text` in 200 bytes is split at whitespace into up to 3 parts
+  `NatAda (n/N): …`, each filled as far as it goes, and the last one ends with `…` if the text
+  goes on; a word longer than a part is cut between characters (not grapheme clusters).
+- **Tapbacks are not messages.** The Meshtastic apps send a reaction as a text with the `emoji`
+  flag; the port's `Text` carries it as `reaction`, and the extension drops it, as the Telegram
+  extension ignores reactions.
+**Consequences:** S21 adds the `dm` path to the same extension: direct messages from listed
+nodes (first endpoint wins), deliveries per node by the destination's ACK (D26), `retry_now` for
+a node when it is heard again, favorites, key-mismatch notices. The parts and the remembered
+progress apply to direct messages as well.
+
+## D48. The extensions live in `src/extensions/`, the admin's tool in `src/tools/`; the example names the instance `telegram`
 **Context:** the extension packages sat beside the core in `src/`, so the tree did not show which
 packages are the core and which are plug-ins. The example config also named the Telegram instance
 `tg`, an abbreviation where every other name is a word.

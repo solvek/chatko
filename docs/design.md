@@ -1,6 +1,6 @@
 # chatko design
 
-Status: **draft**; phase 1 (the core) is written and reviewed; phase 2 (Telegram) is done, with its live test; phase 3 (Meshtastic) has the connection to the hub's node and its provisioning, and its endpoints come next. This document describes **behaviour**. The
+Status: **draft**; phase 1 (the core) is written and reviewed; phase 2 (Telegram) is done, with its live test; phase 3 (Meshtastic) has the connection to the hub's node, its provisioning and the `channel` endpoints, and the `dm` endpoints come next. This document describes **behaviour**. The
 code structure is described in [architecture.md](architecture.md). Items marked **(verify)** must be
 confirmed by a spike ([spikes.md](spikes.md)) or by reading the upstream source before we rely on
 them. Phase 0 answered every (verify) that v1 relies on (session S07); the questions still open
@@ -216,6 +216,21 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
 | `channel` | one broadcast on the private channel | any text on that channel | at least one gateway **that has this channel** (name + PSK) with uplink and downlink. Other people's gateways don't know our channel, so this means our own internet-connected node(s), or a trusted gateway operator who adds our channel | 1 packet per message |
 | `dm` with a list of node ids | a PKI direct message to every listed node | a direct message to the hub's node from a listed node | any gateway on the hub's broker that downlinks on the primary channel: it needs no private channel. In v1 that is our own gateway (below, D30); whether the Kyiv gateways would do it is open (§6.6). The hub's node and the person's node must know each other's public keys (below) | 1 packet per listed node, plus an ACK and its ACK |
 
+- A `channel` endpoint names one of the node's channels (`channel: family`); two endpoints cannot
+  share one. A broadcast text on it from another node comes in, with the transport id
+  `<node id>/<packet id>` (`!a1b2c3d4/0973632b`). A packet that arrives through several gateways
+  keeps its sender and id, and the hub's node hands it over once anyway (spike S2); the core drops
+  a repeat by the transport id. The node's own packets, tapbacks (a reaction, which the Meshtastic
+  apps send as an emoji text), blank texts and non-text packets are not relayed. A message goes
+  out as one broadcast per part (§6.3), each once the broker echoed the one before (the node's
+  implicit ACK). Without the echo within 25 s, or with the node's NAK, the delivery is retried
+  later, from the first part that did not get through; while the node is connecting or
+  provisioning, a delivery waits for it up to 10 s, and when it is ready again the deliveries
+  waiting for its channels are tried at once.
+- Every packet from another node, of any kind, tells the hub that the node was heard: at the
+  `channel` endpoint it came on, if any, or else at no endpoint (a direct message, a packet on a
+  channel that is no endpoint, one the node could not decrypt). The hub is told once a minute at
+  most per node and place, which is precise enough for `last_heard` (§9.5).
 - Each node of a `dm` endpoint is a **recipient** (§9.1): the hub delivers to, waits for the ACK of
   and retries each node on its own, so a radio that is away holds up nobody else, and the messages
   for it wait, in order, until it is heard again.
@@ -295,9 +310,11 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
 
 - One text packet carries ≤ 200 UTF-8 bytes. Cyrillic letters take 2 bytes each, so a packet holds
   about 90 Cyrillic characters.
-- Longer text is split on spaces into `NatAda (1/3): …`, at most 3 parts. Anything beyond that is
-  truncated with `…`, and the source endpoint is told about it (a delivery report, §9.1) where the
-  network allows (in Telegram, the bot's ✍ reaction, §5).
+- Longer text is split on spaces into `NatAda (1/3): …`, at most 3 parts, each filled as far as it
+  goes; a word longer than a part is cut between characters, and line breaks inside a part stay.
+  Anything beyond that is truncated with `…`, and the source endpoint is told about it (a delivery
+  report, §9.1) where the network allows (in Telegram, the bot's ✍ reaction, §5).
+- A label longer than 39 bytes (a node's longest long name) is cut with `…`.
 - Non-text content goes out as a placeholder: `NatAda: [photo] caption`.
 - The hub sends no faster than one packet every few seconds per node (configurable), to be a good
   neighbour on a busy mesh. The interval is per hub node (all its endpoints together) and at least 2 s:
@@ -309,8 +326,11 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
 
 A Meshtastic message carries the sender's node id and, once NodeInfo was heard, the node's long and
 short name (a direct message also carries the sender's public key). The author label comes from these
-(§8). Until NodeInfo is heard, only the node id (`!c4a7b002`) is known: the Python library then shows a
-placeholder name `Meshtastic b002`, which is not the node's name and is not used as one.
+(§8). They are the names the hub's node has for it: from its node database, and from the NodeInfo it
+takes since (not one it drops for a key other than the pinned one, §6.2). Until NodeInfo is heard,
+only the node id (`!c4a7b002`) is known, and the label is made from it (`c4a7b0`): the Python
+library then shows a placeholder name `Meshtastic b002`, which is not the node's name and is not used
+as one.
 
 ### 6.5 Feeds
 

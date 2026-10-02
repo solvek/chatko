@@ -102,7 +102,11 @@ class NodeState:
 
 @dataclass(frozen=True, slots=True)
 class Text:
+    """A text message. `reaction` marks a tapback: the Meshtastic apps send a reaction to a
+    message as a text (an emoji) with a flag."""
+
     text: str
+    reaction: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -371,6 +371,20 @@ async def test_is_ready_again_after_the_node_comes_back(rig: Rig) -> None:
     await eventually(lambda: rig.readies == 2)
 
 
+async def test_waits_until_the_node_is_ready(fresh: Rig) -> None:
+    assert await fresh.node.wait_ready(within=2.0)
+    assert fresh.api.connections == 2  # it was provisioned first
+    assert await fresh.node.wait_ready(within=0)
+
+
+async def test_stops_waiting_for_a_node_that_is_not_ready_in_time(rig: Rig) -> None:
+    rig.api.online = False
+    rig.api.drop()
+    await eventually(lambda: not rig.node.ready)
+
+    assert not await rig.node.wait_ready(within=0.05)
+
+
 async def test_logs_the_public_key_when_the_node_is_first_ready(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
