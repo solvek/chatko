@@ -45,7 +45,9 @@
   by what the hub hears, favorites, key-mismatch notices (S21, D49). The whole hub relays between a fake Telegram
   and the lab's radio with both kinds of endpoint (`tests/integration/test_meshtastic_lab_relay.py`,
   run nightly in CI by `.github/workflows/lab.yml`; S22, D50). Our briar-headless fork has the
-  private-group API (S24, D51), tried with a phone; `lab/briar/` builds it. Every
+  private-group API (S24, D51), tried with a phone; `deploy/briar/` builds its image for amd64 and
+  arm64 for the server and the lab, and the upstream merge request waits for the owner (S25, D53,
+  `docs/briar-merge-request.md`). Every
   extension passes the contract suite in `chatko.extension_api.testing`. Phase 0 (spikes S1–S3) is closed (D30): the
   Briar relay on phones, the local Meshtastic lab in `lab/` (channel and direct messages, keys,
   ACKs, provisioning), briar-headless in Docker in `lab/briar/` and the plan for its private-group

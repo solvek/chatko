@@ -1125,3 +1125,36 @@ relationship. Only the creator can invite and dissolve, so cutting someone off i
 creator's phone. If the creator leaves Briar, nobody can be invited any more, and the fallback (a
 new group made by the hub) is the way out. This changes the recommendation of D24, not its split
 between the relay and `briarctl`.
+
+## D53. One briar-headless image for the server and the lab, built from the fork for amd64 and arm64
+**Status:** accepted (S25).
+D28 started briar-headless unattended in the lab; D29 and D51 made our fork, which S25 had to
+package for the server and offer upstream.
+**Decision:**
+- The image lives in `deploy/briar/` and is the only one: `deploy/docker-compose.yml` runs it as the
+  service `briar` (state in `data/briar`, API on `127.0.0.1:7000` like the node's on 4413, since
+  chatko runs on the host for now), and `lab/briar/` builds the same Dockerfile. Gradle runs once on
+  the build machine for both architectures; the runtime stage picks the jar for the target, so an
+  arm64 image builds on an amd64 machine with QEMU only for that stage.
+- The entrypoint starts as root only to give the data directory to the unprivileged `briar` user
+  (a bind mount that Docker creates belongs to root) and runs again as `briar` with `setpriv`. It
+  unsets `BRIAR_PASSWORD` and `BRIAR_AUTH_TOKEN` before starting Java, which has already read them
+  on stdin and from `auth_token`. The image has `curl` for a health check: the API answering 401
+  without a token. Tor is not part of the check, because it connects on its own later.
+- `deploy/setup.sh` makes `BRIAR_PASSWORD` and `BRIAR_AUTH_TOKEN` in `.env` like the other secrets
+  and links `.env` as `deploy/.env`, where Compose reads it for the `briar` service's variables;
+  the container gets only the Briar variables, not the whole `.env`.
+- The source is the build context `briar`, a checkout or the Git URL in `BRIAR_SRC`. No registry
+  yet: the image is built where it runs, or copied with `docker save | docker load`.
+- The upstream merge request is the branch as it is: upstream `master` had no commits after
+  `release-1.5.21` (2026-10-05). `docs/briar-merge-request.md` holds its text, the checklist and
+  the steps; the owner submits it from a fork on code.briarproject.org, which also becomes the
+  fork's public home.
+What the checks showed (2026-10-05): upstream CI's headless tasks pass (174 tests); the lab's
+existing account signs in on the new image; a fresh account on a root-owned bind mount is created,
+the token from `.env` opens the API, and a restart signs in again; the arm64 image under QEMU
+creates an account, bootstraps Tor (an aarch64 binary) and creates a group and a post. The health
+check turns healthy about 25 s after the start, under QEMU as well.
+**Consequences:** the server needs Docker with BuildKit and the fork's source (or a copied image).
+Once the fork is public, `BRIAR_SRC`'s default can be its URL. S29 runs the image on the ARM64 host
+for real and backs up `data/briar` with `BRIAR_PASSWORD` kept among the backups' secrets.

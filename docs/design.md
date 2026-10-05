@@ -543,8 +543,9 @@ was connected again after the switch to the patched peer, on the same data.
 - Not in the patch: replies, read flags beyond the catch-up.
 
 The patch lives in our fork of `briar-headless`, on top of the pinned release tag (the branch
-`1664-private-group-api` on `release-1.5.21`), and is offered upstream (D29). `lab/briar/` builds it
-from a checkout of the fork; its README documents every endpoint and event.
+`1664-private-group-api` on `release-1.5.21`), and is offered upstream (D29, D53). `deploy/briar/`
+builds the image from a checkout of the fork, for both the server and `lab/briar/`; its README
+documents every endpoint and event.
 
 ### 7.5 `briarctl`
 
@@ -826,8 +827,10 @@ old fingerprints are pruned after the retention (7 days by default).
   `private_key` is set). Secrets live in `.env`. `config/` and `data/` are backed up daily.
 - `briar-headless` asks for its account password on every start, because the password encrypts the
   database key. Its container entrypoint gives it `BRIAR_PASSWORD` (and the nickname on the first
-  start) and writes `BRIAR_AUTH_TOKEN` as the API token, so it starts unattended (D28). Its API
-  (port 7000) stays inside the Docker network.
+  start) and writes `BRIAR_AUTH_TOKEN` as the API token, so it starts unattended (D28). The image
+  (`deploy/briar/`, D53) is built from our fork for amd64 and arm64; its entrypoint gives the data
+  directory to an unprivileged user and keeps the secrets out of Java's environment, and a health
+  check asks the API. Its API (port 7000) stays on localhost or inside the Docker network.
 - `docker stop` kills `meshtasticd` after 10 s (it does not exit on `SIGTERM`) without saving, so
   whatever the node learned but has not saved yet is lost (learned keys are saved at most once a
   minute); the hub keeps what it needs as favorites or in its own state (§6.2).

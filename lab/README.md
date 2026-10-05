@@ -138,7 +138,8 @@ D29, D51; JDK 17) and runs it with one Briar account, its REST and WebSocket API
 and its state in the volume `briar-data` (spike S3, S24). It needs internet (Tor) and a phone with
 Briar for the other side.
 
-The build takes the source from the build context `briar`: by default a checkout of the fork's
+The image is the production one of [`deploy/briar/`](../deploy/README.md#briar-headless) (D53),
+tagged `chatko/briar-headless:lab`. The build takes the source from the build context `briar`: by default a checkout of the fork's
 branch (`1664-private-group-api`) at `../briar`, next to this repository, or the path or Git URL in
 `BRIAR_SRC`. `BRIAR_SRC='https://code.briarproject.org/briar/briar.git#release-1.5.21'` builds
 upstream without the patch. The Dockerfile needs BuildKit (`docker buildx`; Ubuntu's package is

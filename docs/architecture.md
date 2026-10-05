@@ -554,7 +554,7 @@ INFO]` logs to stderr and runs the installed extensions (`discover_extensions`).
 | Telegram | `aiogram` 3 (long polling), wrapped behind the extension's `TelegramApi` port (§3.7) |
 | Meshtastic | official `meshtastic` Python library over TCP to `meshtasticd` (serial, BLE and TCP to a physical node later), pinned below 2.8 because the adapter overrides its hooks (§3.8); image `meshtastic/meshtasticd`, tag pinned in the compose files |
 | MQTT broker | Mosquitto 2 in the compose files: users and an ACL per hub node and gateway, TLS on 8883 for gateways (D30). The hub's code never talks MQTT itself; its `meshtasticd` nodes do |
-| Briar | `httpx` + `websockets` to `briar-headless` (our fork: a pinned upstream tag plus the private-group patch, D29, D51; built with JDK 17, run in a Java 17 JRE image, D28) |
+| Briar | `httpx` + `websockets` to `briar-headless` (our fork: a pinned upstream tag plus the private-group patch, D29, D51; built with JDK 17, run in a Java 17 JRE image for amd64 and arm64 from `deploy/briar/`, D28, D53) |
 | License | GPL-3.0-or-later |
 
 ## 7. Quality gates

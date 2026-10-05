@@ -1,5 +1,6 @@
 # briar-headless for the lab: one Briar account (the hub's) with its REST and WebSocket API on
-# 127.0.0.1:7000. Its state (account, database, Tor) is in the briar-data volume.
+# 127.0.0.1:7000, from the production image of deploy/briar/. Its state (account, database, Tor) is
+# in the briar-data volume.
 # Secrets come from lab/briar/.env (git-ignored): BRIAR_PASSWORD, optionally BRIAR_AUTH_TOKEN.
 #   docker compose -f lab/briar/docker-compose.yml up -d --build
 name: chatko-briar
@@ -7,7 +8,7 @@ name: chatko-briar
 services:
   briar:
     build:
-      context: .
+      context: ../../deploy/briar
       additional_contexts:
         # The source of our briar-headless fork (D29): by default a checkout of its branch next
         # to this repository (../briar from chatko), or a Git URL like

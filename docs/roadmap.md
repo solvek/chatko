@@ -71,7 +71,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S22 | 3 | Meshtastic lab integration tests, radio ⇄ Telegram | Opus 5.5 | high | done |
 | S23 | 3 | Field test on the Kyiv mesh through our own gateway (*with owner*, needs an `EU_433` node) | Sonnet 5.5 | medium | todo |
 | S24 | 4 | briar-headless fork: private-group API (Kotlin; a phone at the end, *with owner*) | Opus 5.5 | xhigh | done |
-| S25 | 4 | briar-headless Docker image; upstream merge request | Sonnet 5.5 | high | todo |
+| S25 | 4 | briar-headless Docker image; upstream merge request | Sonnet 5.5 | high | done |
 | S26 | 4 | Briar extension: port, endpoints, posts in and out, own-post filter | Opus 5.5 | high | todo |
 | S27 | 4 | `briarctl`: contacts, groups, invitations (command-line tool) | Sonnet 5.5 | high | todo |
 | S28 | 4 | Three-network test in the cloud setup: Briar ⇄ Telegram ⇄ Meshtastic (`channel` and `dm`) (*with owner*) | Sonnet 5.5 | medium | todo |
@@ -432,6 +432,17 @@ setup, the compose service; prepare the upstream merge request (rebased on `mast
 issue #1664, following the pre-review checklist of spikes.md S3 part 2). Done when: the image runs in
 the lab, the arm64 image runs once (on an ARM64 host or under QEMU emulation), and the merge request is
 ready for the owner to submit.
+*Done (D53):* upstream `master` is still `release-1.5.21`, so the branch needed no rebase; upstream
+CI's headless tasks (`briar-headless:check linuxJars`) pass with 174 tests, and the patch meets the
+pre-review checklist. The image moved to `deploy/briar/` (the lab builds the same one): it starts as
+root only to give `/data` to `briar`, unsets the secrets before Java, and has a health check
+(`curl`, 401 without a token). `deploy/docker-compose.yml` got the `briar` service (`data/briar`,
+`127.0.0.1:7000`), `setup.sh` the Briar secrets and the `deploy/.env` link. Checked: the lab's
+existing account signs in; a fresh account on a root-owned bind mount, a restart; the arm64 image
+under QEMU (binfmt from `tonistiigi/binfmt`) made an account, bootstrapped Tor (aarch64) and created
+a group and a post. `docs/briar-merge-request.md` has the title, description and steps. Left to the
+owner: an account on code.briarproject.org, the fork (which is also the patch's public home, so
+`BRIAR_SRC` can default to its URL) and the merge request.
 
 **S26. Briar endpoints.** `BriarApi` port over `httpx` and `websockets` and its fake; the Briar groups
 in `chatko.yaml` as endpoints; posts in and out with author accounts; drop its own posts; catch-up by

@@ -8,10 +8,12 @@ shift
 [ $# -gt 0 ] || set -- gateway1
 root=$(cd "$(dirname "$0")/.." && pwd)
 cfg=$root/config/mosquitto
-mkdir -p "$cfg/tls" "$root/data/meshtasticd-kyiv"
+mkdir -p "$cfg/tls" "$root/data/meshtasticd-kyiv" "$root/data/briar"
 cp "$root/deploy/mosquitto/mosquitto.conf" "$cfg/mosquitto.conf"
 touch "$root/.env"
 chmod 600 "$root/.env"
+# Compose reads .env next to its file.
+ln -sfn ../.env "$root/deploy/.env"
 
 # A self-signed certificate: gateway firmware does not check it (design.md §11).
 if [ ! -f "$cfg/tls/server.crt" ]; then
@@ -44,6 +46,9 @@ grep -q '^MESH_MQTT_PASSWORD=.' "$root/.env" || echo "MESH_MQTT_PASSWORD=$(value
 # The Kyiv mesh's primary channel key: public, from the QR code at https://meshtastic.kyiv.ua/join.
 grep -q '^KYIV_PRIMARY_PSK=.' "$root/.env" || echo "KYIV_PRIMARY_PSK=XOLPZHTWzHgykJxZ3pnj10mMJdr8glgblsNGLUIvd1w=" >> "$root/.env"
 secret MESH_FAMILY_PSK 32
+# The hub's Briar account (D28): the password encrypts its database, the token opens its API.
+secret BRIAR_PASSWORD 18
+secret BRIAR_AUTH_TOKEN 32
 
 # The password file and the ACL, made from .env by the broker's own tool.
 rm -f "$cfg/passwd"
