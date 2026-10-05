@@ -1250,3 +1250,85 @@ it (a known pitfall, lab/README.md). The Briar extension is now tried against a 
 member, a Telegram message lost to a restart of the hub mid-delivery (covered by tests with fakes and the
 outbox), and anything on a server (S29).
 
+
+## D57. Production is one compose stack with the hub in a container; a daily stop-and-copy backup of `.env`, `config/` and `data/`
+**Status:** accepted (S29).
+D30 and D53 put Mosquitto, the hub's `meshtasticd` and `briar-headless` in `deploy/`; the hub itself
+still ran from a checkout. S29 finishes the stack and sets how it is backed up.
+**Decision:**
+- The hub is a service of `deploy/docker-compose.yml`, built by `deploy/chatko/Dockerfile`
+  (`python:3.12-slim`, dependencies installed from `uv.lock`, the same file for amd64 and arm64).
+  It runs as the host user (`CHATKO_UID` and `CHATKO_GID`, set by `setup.sh`) rather than root, so
+  `data/chatko` stays the operator's own; `config/` is mounted read-only. It gets only the secrets
+  its config names, as an explicit `environment` list (not the Briar password or the gateways'
+  passwords), and a test checks that the list covers `config.example.yaml`. The build context is
+  the repository, so `.dockerignore` keeps `.env`, `config/` and `data/` out of the image.
+- `setup.sh` also makes `MESH_KYIV_PRIVATE_KEY`, the hub node's identity, as D25 and the README advise:
+  the node then keeps its identity when its volume is lost, and members' radios keep trusting it.
+- One backup archive holds `.env`, `config/` and `data/`. Briar's data is useless without
+  `BRIAR_PASSWORD` (D28), and the node's identity is a secret, so the backup has to carry `.env`
+  and is therefore secret itself: mode 0600 in a 0700 directory, and encrypted by the operator when
+  it leaves the server. The script does not encrypt or upload: that depends on where the operator
+  keeps backups, and a script that guesses wrong gives false comfort.
+- The copy is **cold for the hub and `briar-headless`**: they stop, are copied and start again, a few
+  seconds a day. SQLite in WAL mode (D40) and Briar's H2 database are not safe to copy while open, and
+  the alternatives (SQLite's backup API run inside the container; an online backup of Briar's H2
+  database, for which briar-headless has no API) cost more code than a short outage costs messages: the hub's inbound sources replay (Telegram long polling keeps updates for 24 h, Briar's
+  read flag catches up, D54) and the outbox keeps what it had. `meshtasticd` and Mosquitto stay up:
+  the node's files are written atomically and the hub provisions it again; Mosquitto has no state.
+- `restore.sh` checks that the archive is a chatko backup before it touches anything, stops the
+  stack, **moves** what exists to `replaced-<time>/` instead of deleting it, unpacks with numeric
+  owners (the containers' users are not in the host's `/etc/passwd`) and restores the
+  `deploy/.env` link, so it works on a new server with nothing but Docker and a clone.
+- Both scripts are POSIX `sh`, run as root by the timer, and take their `docker compose` command from
+  `COMPOSE`, which the tests replace with a stand-in that records calls. The whole of it was also run
+  for real: a backup of a running stack, an empty tree, a restore, and the same Briar link and node key
+  after the start.
+**Where it runs:** the owner's VPS, which is also the development machine, so no cloud VM was made
+(the Oracle Cloud candidate of D30 is dropped). Production lives in `/opt/chatko` as a snapshot of
+the repository without `.git`, with the hub as the system user `chatko`, and is updated by copying the
+changed files and `up -d --build chatko`. The development checkout keeps its own `.env` and
+`config/` with new secrets and names, the compose project `chatko-dev`, other host ports, and no
+Telegram token: the production bot has one hub (two hubs polling one token take updates from each
+other), and a development bot comes later. The lab and its briar-headless (port 7000) stay as they were,
+so production's briar-headless is published on 7001.
+**Result (2026-10-05):** a stack started from `setup.sh` and a config in about 45 s; a client over TLS
+on the published port was refused without credentials, with a wrong password and in plain text, and
+published inside its root topic only; the public address worked from the machine itself; a backup
+took 3 s of downtime and 25 MB (10 MB with a fresh Briar account); after a restore onto an empty
+tree, once of a scratch stack and once of production's first real backup, the Briar link, the
+node's public key and SQLite integrity were the same. The ARM64 images of `chatko` and `meshtasticd`
+ran under QEMU (`briar-headless` did in S25).
+**Not done:** a physical gateway connecting (the field test, S23), a check of port 8883 from another
+network, and copies of the backups off the VPS (the timer has a line to adapt; the owner chooses
+where). The Mosquitto certificate is self-signed, since gateway firmware does not check it (D30); a
+changed address means a new certificate.
+**Consequences:** a server needs Docker, the repository, the briar-headless image (built for the
+server's architecture until the fork has a public home, D53) and `deploy/setup.sh`.
+Updating is `git pull` and `up -d --build chatko`. A new `${NAME}` in `chatko.yaml` needs a line in
+the service's `environment`.
+
+## D58. v1 reaches the mesh through the Kyiv broker and the owner's claimed physical nodes, not through a gateway of our own
+**Status:** accepted (2026-10-05, after S29); replaces the "own broker and own gateway" path of D30.
+D30 chose our own Mosquitto and a physical gateway node of our own, because the Kyiv broker gives
+logins only to claimed physical nodes (D27). The owner said there will be no gateway of that kind:
+several physical nodes will sit in the Kyiv mesh and only send and receive our messages over LoRa, and
+at least one of them, with MQTT on, is claimed with the community and forwards to the hub's virtual node
+on the server.
+**Decision:**
+- The hub's `meshtasticd` connects to `mqtt.meshtastic.kyiv.ua:1883` with the claimed node's login
+  (`KYIV_MQTT_USER`, its node id in hex; `KYIV_MQTT_PASSWORD`) and the root topic `node/<that id>`, the
+  same as the physical node's. `config.example.yaml` has this as the default and shows our own
+  Mosquitto as the alternative.
+- Our own Mosquitto stays in the stack (the lab and the tests are built on the same configuration, and
+  gateways of our own remain possible) but is not part of the path. Its TLS port is published on
+  `127.0.0.1`; `MQTT_TLS_BIND=0.0.0.0` opens it. The server's only inbound port is SSH.
+- Until the login exists, production keeps the node on our own Mosquitto, with the Kyiv `mqtt:` line
+  ready as a comment in `config/chatko.yaml` and `KYIV_MQTT_*` empty in `.env`: a variable that is empty
+  makes the config invalid (D41), and a node that tries the Kyiv broker without a login would only
+  be refused every few seconds. The Meshtastic endpoints are configured but carry nothing.
+**Consequences:** what was "open questions, not needed for v1" in design.md §6.6 now decides whether
+`channel` and `dm` work: whether the broker passes packets between clients under one `node/<id>` root,
+its PKI and downlink policy, and the owner's node having the group's private channel. The field test
+(S23) is the first connection and fills in spikes.md. The community may still decline a bot node.
+Nothing in the code changed: only the example config, the compose file's port binding and the docs.

@@ -39,7 +39,7 @@ def problems(raw: dict[str, Any]) -> list[str]:
 
 def test_the_example_section_is_valid() -> None:
     text = (ROOT / "config.example.yaml").read_text(encoding="utf-8")
-    names = ("TELEGRAM_BOT_TOKEN", "MESH_MQTT_USER", "MESH_MQTT_PASSWORD", "BRIAR_AUTH_TOKEN")
+    names = ("TELEGRAM_BOT_TOKEN", "KYIV_MQTT_USER", "KYIV_MQTT_PASSWORD", "BRIAR_AUTH_TOKEN")
     env = dict.fromkeys(names, "x")
     env |= {"KYIV_PRIMARY_PSK": KEY, "MESH_FAMILY_PSK": PSK16, "MESH_KYIV_PRIVATE_KEY": KEY}
     raw = dict(parse_config(text, env)["extensions"]["kyiv"])

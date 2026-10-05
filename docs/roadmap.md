@@ -75,7 +75,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S26 | 4 | Briar extension: port, endpoints, posts in and out, own-post filter | Opus 5.5 | high | done |
 | S27 | 4 | `briarctl`: contacts, groups, invitations (command-line tool) | Sonnet 5.5 | high | done |
 | S28 | 4 | Three-network test in the cloud setup: Briar ⇄ Telegram ⇄ Meshtastic (`channel` and `dm`) (*with owner*) | Sonnet 5.5 | medium | done |
-| S29 | 5 | Production deployment, backups, operations docs | Sonnet 5.5 | high | todo |
+| S29 | 5 | Production deployment, backups, operations docs | Sonnet 5.5 | high | done |
 | S30 | 5 | Release review: security, code, docs | Opus 5.5 | xhigh | todo |
 
 Rough cost profile: about two thirds of the sessions on Opus 5.5 and a third on Sonnet 5.5.
@@ -394,7 +394,9 @@ on the server `srv2028154`: the broker accepted TLS from outside and refused ano
 `chatko run` provisioned the node with the Kyiv primary PSK. It was then taken down; production is
 deployed later (S29). The field test waits for a physical `EU_433` node and for broker access (D27).
 
-**S23. Kyiv field test.** *With owner*, once a physical `EU_433` node with internet is available to
+**S23. Kyiv field test.** *(Re-planned by D58: the owner's claimed physical nodes and the Kyiv broker
+replace a gateway of our own; the text below is the original plan, read "gateway" as the owner's node
+with MQTT on, and "our broker" as the Kyiv broker with its login.)* *With owner*, once a physical `EU_433` node with internet is available to
 act as our gateway (design.md §6.2, D30), and after the owner has asked the Kyiv community whether a
 bot node is welcome (design.md §6.6): set it up (region, "Ignore MQTT" off, "OK to MQTT" on, the
 mesh's primary channel and the group's private channel with uplink and downlink, MQTT to our broker
@@ -494,6 +496,20 @@ per gateway and hub node, no anonymous clients; design.md §11, D30), daily back
 `data/`, a guide for a Linux VM (Oracle Cloud Always Free as the example, ARM64: the first run of the
 arm64 `meshtasticd` and `briar-headless` images), operations section in the README. Done when: the
 hub runs on a server, a gateway connects to its broker over TLS, and a restore from backup is tested.
+
+*Done (D57, 2026-10-05).* The owner's VPS, which is also the development machine, is the server (no
+Oracle VM). Production runs from `/opt/chatko` (the hub as user `chatko`, a Telegram bot and groups
+of the S18 test, a `kyiv` node and Briar with no group yet); this checkout became the development
+setup with its own keys and names. Built: the hub as a service of `deploy/docker-compose.yml`
+(`deploy/chatko/Dockerfile`, amd64 and arm64, only its own secrets); `setup.sh` also makes the node's
+private key; `backup.sh` (hub and Briar stop for a few seconds), `restore.sh` (moves what exists
+aside) and `chatko-backup.timer`, enabled; `docs/deployment.md`, the README's operations section;
+`tests/deploy` (14 tests with a stand-in for `docker`). Checked: a client over TLS on the public
+address (refused with a wrong password, accepted with the gateway's), the first backup restored
+onto an empty tree with the same Briar link and node key, the arm64 `meshtasticd` and `chatko` images
+under QEMU. Left over: the Kyiv broker login and a physical node connecting (S23, D58: no gateway of our own),
+a Briar group for production (*with owner*, `briarctl`), and a copy of the backups off the VPS (the
+owner's choice of place).
 
 **S30. Release review.** `/security-review`, full code review, docs versus code, the known limitations in
 the README. Done when: findings are fixed or accepted, and v1 is tagged by the owner.

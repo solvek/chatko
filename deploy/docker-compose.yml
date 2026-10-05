@@ -1,17 +1,54 @@
-# chatko's server stack (design.md §11, D30): our Mosquitto, with TLS on 8883 for our gateways, the
-# hub's virtual Meshtastic node and its briar-headless (D53). chatko itself runs next to it and reaches
-# the node on 127.0.0.1:4413 and briar-headless on 127.0.0.1:7000.
+# chatko's production stack (design.md §11, D57, D58): the hub, our Mosquitto (the hub's own broker for
+# the lab and for gateways of our own, TLS on 8883; v1 uses the Kyiv broker instead), the hub's virtual Meshtastic node and its briar-headless (D53). The hub reaches the
+# others by their service names (config.example.yaml); the node's API and briar-headless's are also
+# on 127.0.0.1 for `briarctl` and the admin.
 # Set up with `deploy/setup.sh` first; state lives in ../data, settings in ../config (both git-ignored).
 # Secrets come from ../.env, which setup.sh links as deploy/.env for Compose.
+# The host ports can be moved with MQTT_TLS_PORT, MESH_API_PORT and BRIAR_API_PORT in .env.
 name: chatko
 
+x-logging: &logging
+  # Docker's default keeps every log line for ever.
+  driver: json-file
+  options: { max-size: 10m, max-file: "5" }
+
 services:
+  chatko:
+    build:
+      context: ..
+      dockerfile: deploy/chatko/Dockerfile
+    image: chatko/chatko:${CHATKO_IMAGE_TAG:-local}
+    # The host user, so that data/chatko is theirs (setup.sh puts the ids in .env).
+    user: "${CHATKO_UID:?run deploy/setup.sh}:${CHATKO_GID:?run deploy/setup.sh}"
+    # Only the variables chatko.yaml refers to as ${NAME} (not the Briar password or the gateways'
+    # passwords). Add a line here for each new one; `check-config` names a missing variable.
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      KYIV_MQTT_USER: ${KYIV_MQTT_USER:-}
+      KYIV_MQTT_PASSWORD: ${KYIV_MQTT_PASSWORD:-}
+      MESH_MQTT_USER: ${MESH_MQTT_USER:-}
+      MESH_MQTT_PASSWORD: ${MESH_MQTT_PASSWORD:-}
+      KYIV_PRIMARY_PSK: ${KYIV_PRIMARY_PSK:-}
+      MESH_FAMILY_PSK: ${MESH_FAMILY_PSK:-}
+      MESH_KYIV_PRIVATE_KEY: ${MESH_KYIV_PRIVATE_KEY:-}
+      BRIAR_AUTH_TOKEN: ${BRIAR_AUTH_TOKEN:-}
+    volumes:
+      - ../config:/app/config:ro   # chatko.yaml and routing.py; the hub reloads them when they change
+      - ../data/chatko:/app/data   # its SQLite database
+    depends_on: [mosquitto, meshtasticd-kyiv, briar]
+    logging: *logging
+    restart: unless-stopped
+    stop_grace_period: 30s
+
   mosquitto:
     image: eclipse-mosquitto:2
     volumes:
       - ../config/mosquitto:/mosquitto/config:ro
     ports:
-      - "8883:8883"            # TLS, for our gateways; the hub's node uses 1883 inside the network
+      # TLS, for gateways of our own: closed to the internet unless MQTT_TLS_BIND=0.0.0.0 (D58). The
+      # hub's node uses 1883 inside the network, or the Kyiv broker.
+      - "${MQTT_TLS_BIND:-127.0.0.1}:${MQTT_TLS_PORT:-8883}:8883"
+    logging: *logging
     restart: unless-stopped
 
   meshtasticd-kyiv:
@@ -21,8 +58,9 @@ services:
       - ./meshtasticd/kyiv.yaml:/etc/meshtasticd/config.yaml:ro
       - ../data/meshtasticd-kyiv:/var/lib/meshtasticd
     ports:
-      - "127.0.0.1:4413:4403"  # no authentication: never publish it beyond localhost
+      - "127.0.0.1:${MESH_API_PORT:-4413}:4403"  # no authentication: never publish it beyond localhost
     depends_on: [mosquitto]
+    logging: *logging
     restart: unless-stopped    # a node reboot ends the process
 
   briar:
@@ -40,5 +78,6 @@ services:
     volumes:
       - ../data/briar:/data    # the account, its database and Tor: useless without BRIAR_PASSWORD
     ports:
-      - "127.0.0.1:7000:7000"  # the token protects it, but it stays on localhost all the same
+      - "127.0.0.1:${BRIAR_API_PORT:-7000}:7000"  # the token protects it, but it stays on localhost all the same
+    logging: *logging
     restart: unless-stopped    # a wrong password makes it exit; the log says so

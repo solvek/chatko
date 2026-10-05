@@ -47,21 +47,29 @@
   run nightly in CI by `.github/workflows/lab.yml`; S22, D50). Our briar-headless fork has the
   private-group API (S24, D51), tried with a phone; `deploy/briar/` builds its image for amd64 and
   arm64 for the server and the lab, and the upstream merge request waits for the owner (S25, D53,
-  `docs/briar-merge-request.md`). The Briar extension (`chatko_briar`, S26, D54) is tested against a fake of its `BriarApi` port. `briarctl` (S27, D55, `src/tools/briarctl`) is built and tried on the lab with a phone. One group works across Telegram, Briar and Meshtastic (a channel and DMs to two lab nodes) with the whole hub on the lab (S28, D56, `lab/three-networks/`). Every
+  `docs/briar-merge-request.md`). The Briar extension (`chatko_briar`, S26, D54) is tested against a fake of its `BriarApi` port. `briarctl` (S27, D55, `src/tools/briarctl`) is built and tried on the lab with a phone. One group works across Telegram, Briar and Meshtastic (a channel and DMs to two lab nodes) with the whole hub on the lab (S28, D56, `lab/three-networks/`). The
+  production stack (S29, D57: `deploy/`, `docs/deployment.md`) has the hub in a container and a daily
+  backup (`backup.sh`, `restore.sh`); it runs in production on the owner's VPS (S29 done) and is tried with a TLS client, a restore
+  and the arm64 images under QEMU; no radio has connected yet: v1 uses the Kyiv broker with the login of a physical node of the owner (D58), which the owner does not have yet (S23). Every
   extension passes the contract suite in `chatko.extension_api.testing`. Phase 0 (spikes S1–S3) is closed (D30): the
   Briar relay on phones, the local Meshtastic lab in `lab/` (channel and direct messages, keys,
   ACKs, provisioning), briar-headless in Docker in `lab/briar/` and the plan for its private-group
-  patch (D29). Only the Kyiv broker questions are open (design.md §6.6); they do not block v1.
+  patch (D29). The Kyiv broker questions (design.md §6.6) are open and now decide how well the Meshtastic path works (D58).
   Phases 1 (core), 2 (Telegram) and 4 (Briar) are closed; phase 3 (Meshtastic) waits for its
   field test S23, which needs hardware: the next session is the first one marked `todo` in
-  `docs/roadmap.md` that can run (S29 does not need S23's result).
+  `docs/roadmap.md` that can run. S29 is done, so S30 is next if S23's hardware is still missing.
 - The upstream Briar clone for reading and patching is `~/Projects/briar` (tag `release-1.5.21`); its
   branch `1664-private-group-api` on that tag is our fork with the private-group patch (S24, D51).
   Build and test it with JDK 17 in Docker (`eclipse-temurin:17-jdk`,
   `./gradlew --configure-on-demand briar-headless:test`).
-- Development runs locally on the owner's Linux machine. There is no hardware Meshtastic node yet, so
-  a second virtual node (`meshtasticd`) plays the member's radio. The production host will be some Linux
-  server (Oracle Cloud Always Free is a candidate).
+- Development runs on the owner's Linux machine, which is also the production server (a VPS, no
+  Oracle or other VM). **Production runs from `/opt/chatko`** (compose project `chatko`, the
+  production Telegram bot, a snapshot without `.git`; updating and the table of what differs are in
+  `docs/deployment.md` §8). **This checkout is development:** its `.env` and `config/` have their own
+  keys and names (`COMPOSE_PROJECT_NAME=chatko-dev`, other host ports, node `chatko dev`) and no bot
+  token until the owner makes a development bot. Never put production's token or groups here, and
+  never touch `/opt/chatko` except to deploy. There is no hardware Meshtastic node yet, so a second
+  virtual node (`meshtasticd`) plays the member's radio.
 - The owner has 3 Android phones for the Briar test.
 
 ## Background
@@ -78,6 +86,8 @@
   hub creates is the fallback (D52). The admin manages the hub's contacts, groups and invitations
   with `briarctl`, a separate command-line tool outside chatko's architecture (D24). A
   physical node and several hubs (e.g. a home Raspberry Pi) are later (D17).
-- v1 uses its own Mosquitto, and our own physical gateway node connects it to the Kyiv mesh (D30): the
-  Kyiv community broker gives logins only to claimed physical nodes (D27). Each Meshtastic extension
-  instance can use any broker. The owner will have hardware gateway nodes later.
+- v1 reaches the Kyiv mesh through the Kyiv community broker (D58, superseding D30's own gateway): the
+  owner's several physical nodes sit in the mesh, one with MQTT on is claimed (logins go only to claimed
+  physical nodes, D27), and the hub's virtual node uses its login and root topic `node/<id>`. The login
+  does not exist yet, so production's node uses our own Mosquitto meanwhile. Each Meshtastic extension
+  instance can use any broker.

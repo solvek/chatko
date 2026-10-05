@@ -84,7 +84,7 @@ state are backed up daily, so the hub can be moved to another server within an h
 |---|---|---|
 | chatko hub | Core plus extensions, one Python process | [architecture.md](architecture.md) |
 | `meshtasticd` | The official Meshtastic Linux firmware in Docker, simulated radio (no LoRa hardware), MQTT client on (§6.1) | A complete node: NodeInfo, PKI, channel crypto, retries. We don't write our own virtual node. One container per virtual node (one MQTT broker each). |
-| Mosquitto | Our MQTT broker, in the same compose file; the hub's nodes and our gateways connect to it (§6.2) | The Kyiv broker gives logins only to claimed physical nodes (D27, D30). With a broker of our own, the gateways that know our private channels are ours too |
+| Mosquitto | Our MQTT broker, in the same compose file; the lab and tests use it, and so would gateways of our own (§6.2). Production does not need it while the hub's node uses the Kyiv broker (D58) | The Kyiv broker gives logins only to claimed physical nodes (D27), so until the owner has one, the hub's node uses this broker |
 | `briar-headless` | The official Briar peer with a REST API, plus our private-group API (§7.4) | The only supported way to talk to Briar from a program |
 | `briarctl` | A command-line tool for the admin to manage the hub's Briar account: contacts, groups, invitations (§7.5) | Kept out of the relay, so chatko itself never manages people |
 
@@ -308,15 +308,22 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
   members), so the hub's primary channel must use that PSK. The broker `mqtt.meshtastic.kyiv.ua`
   gives a login and the root topic `node/<node id>` per **claimed physical node** that the registry has
   seen; a virtual node cannot get them (D27). What that broker does with the packets is open (§6.6).
-- **The v1 path: our own broker and our own gateway (D30).** The hub's node uses our own Mosquitto,
-  which runs next to the hub. At least one **gateway of our own** connects to the same broker over the
-  internet: a physical `EU_433` radio with internet (an ESP32 node on Wi-Fi; a node whose phone app
-  relays MQTT for it may do as well, untested), with the same root topic, the mesh's primary channel and the group's private
-  channels, uplink and downlink on, "Ignore MQTT" off. It is the only way between the hub and the air
-  until the Kyiv broker is open to the hub, so it carries both `channel` and `dm` endpoints, and it
-  should stand where the group's radios, or relays that reach them, can hear it. Its uplink of other
-  radios' packets follows "OK to MQTT" (above), because the broker has a public address. Such a node
-  can later be claimed for the Kyiv broker (D27).
+- **The v1 path: the Kyiv broker and the owner's physical nodes (D58).** The owner has several physical
+  `EU_433` nodes in the Kyiv mesh. They only talk over LoRa to other nodes of the mesh, and send and
+  receive our messages there. At least one of them has MQTT on and is **claimed** in the community's
+  registry (D27), which gives it a login (its node id in hex) and the root topic `node/<node id>` on
+  `mqtt.meshtastic.kyiv.ua`. That node is the gateway: it uplinks what it hears to the broker and
+  downlinks what arrives, with the mesh's primary channel and the group's private channel, uplink and
+  downlink on, "Ignore MQTT" off. The hub's virtual node connects to the same broker with the same
+  login and root topic, so it hears the gateway's packets and the gateway hears its own (the config
+  needs only the login in `.env`: `KYIV_MQTT_USER`, `KYIV_MQTT_PASSWORD`). No gateway and no broker
+  of our own are needed, and nothing but SSH has to be open on the server. **Not yet tried:** the
+  login does not exist yet. Until it does, production uses our own Mosquitto inside the compose
+  network, which no radio can reach, so Meshtastic endpoints are configured but carry nothing. Whether
+  the Kyiv broker passes packets between clients under one `node/<id>` root, and whether it carries
+  PKI direct messages, is the first question of §6.6 and decides `dm`. Our own broker with a gateway
+  of our own (D30) stays possible: it is the lab's setup, and `MQTT_TLS_BIND=0.0.0.0` publishes
+  Mosquitto's TLS port (deploy/README.md).
 - Both kinds can be used in one group. Then a person with a node on both gets the message twice, unless
   the routing script skips `dm` for nodes recently heard on the channel (`last_heard` and a target's
   `recipients`, §9.5; `routing.example.py` does it).
@@ -372,15 +379,15 @@ as one.
   `[BC1] Base Camp: text`.
 - A feed is one-way: messages in the target endpoint are routed by their own rules, not back to the
   source, unless the script says so.
-- With our own broker (§6.2), the hub hears the mesh's `LongFast` only through our gateways, so the
-  feed carries what they hear.
+- Through the Kyiv broker (§6.2) the hub hears the mesh's `LongFast` as the owner's gateway nodes
+  hear it; with a broker of our own, only what our gateways hear.
 
-### 6.6 Open questions about the Kyiv mesh (not needed for v1)
+### 6.6 Open questions about the Kyiv mesh
 
-v1 reaches the Kyiv mesh only through our own broker and gateway (§6.2, D30), so none of these block
-it. They decide whether the hub can later use the Kyiv broker and the community's gateways directly
-(D27). The questions were drafted for the community in session S04; the answers go into spikes.md
-(S2, part 3) and here, once a physical node is claimed (roadmap S04) or during the field test (S23).
+v1 reaches the Kyiv mesh through the Kyiv broker and the owner's claimed nodes (§6.2, D58), so these
+now decide whether and how well it works. The questions were drafted for the community in session
+S04; the answers go into spikes.md (S2, part 3) and here, once a node is claimed and the login is
+there (the field test, S23).
 
 | Question | What it decides |
 |---|---|
@@ -830,8 +837,11 @@ old fingerprints are pruned after the retention (7 days by default).
   no anonymous clients, a user per node, an ACL that keeps each to the lab's root topic (D46).
   Tests run the hub against it, with Telegram faked and the lab's second node as a member's radio,
   on demand and nightly in CI (D50).
-- **Production:** a Linux server (cloud VM, x86-64 or ARM64), the same compose file, which also runs
-  our Mosquitto (§6.2, D30). Inbound ports: SSH, and MQTT over TLS (8883) for our gateways. Mosquitto
+- **Production:** a Linux server (a VPS, x86-64 or ARM64) running `deploy/docker-compose.yml`
+  (the guide is [deployment.md](deployment.md)): the hub itself in a container too, as the host's user and
+  with `config/` read-only, given only the secrets its config names; our Mosquitto (§6.2, D30); the
+  hub's `meshtasticd` and `briar-headless`. Every container restarts after a crash or a reboot, and
+  the logs rotate. Inbound ports: SSH, and MQTT over TLS (8883) for our gateways. Mosquitto
   allows no anonymous clients: each gateway and each hub node has its own user, limited by an ACL to
   the root topic. Gateway firmware does not check the broker's certificate (`setInsecure`), so TLS
   hides the passwords from eavesdroppers but not from an active attacker; the packets themselves are
@@ -841,7 +851,16 @@ old fingerprints are pruned after the retention (7 days by default).
   policy, because a node reboot ends the process.
 - Volumes: `config/` (chatko.yaml, routing.py, meshtasticd configs) and `data/` (SQLite, Briar and
   meshtasticd state: settings, the node database with members' keys, and the node's own key unless
-  `private_key` is set). Secrets live in `.env`. `config/` and `data/` are backed up daily.
+  `private_key` is set). Secrets live in `.env`; `setup.sh` makes them, among them `private_key`, so
+  that a rebuilt node keeps its identity. **Backups (D57):** once a day `deploy/backup.sh` archives
+  `.env`, `config/` and `data/` and keeps the newest 14. The hub and `briar-headless` stop for the
+  copy (a few seconds), because SQLite in WAL mode and Briar's database cannot be copied while open;
+  both catch up on what they missed (the outbox, Briar's read flag). `meshtasticd` is copied as it
+  runs (its files are written atomically, and the hub provisions it again if one is stale).
+  Mosquitto keeps no state worth saving. The archive holds every secret, so it stays private on
+  the server (mode 0600) and is copied off the server encrypted, by the operator (a lost server must
+  not take its backups along). `deploy/restore.sh` unpacks an archive with the original owners,
+  after moving what is there to `replaced-<time>/`.
 - `briar-headless` asks for its account password on every start, because the password encrypts the
   database key. Its container entrypoint gives it `BRIAR_PASSWORD` (and the nickname on the first
   start) and writes `BRIAR_AUTH_TOKEN` as the API token, so it starts unattended (D28). The image
@@ -851,8 +870,8 @@ old fingerprints are pruned after the retention (7 days by default).
 - `docker stop` kills `meshtasticd` after 10 s (it does not exit on `SIGTERM`) without saving, so
   whatever the node learned but has not saved yet is lost (learned keys are saved at most once a
   minute); the hub keeps what it needs as favorites or in its own state (§6.2).
-- Hosting candidate: Oracle Cloud Always Free (Ampere A1, ARM64). Oracle reclaims Always Free instances
-  that look idle for 7 days. A Pay As You Go account keeps the free limits and is not reclaimed.
+- Hosting: the owner's VPS, which is also the development machine; production is in `/opt/chatko`
+  and the development checkout is kept apart (deployment.md §8).
 
 ## 12. Plan
 

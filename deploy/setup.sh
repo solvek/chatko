@@ -8,7 +8,7 @@ shift
 [ $# -gt 0 ] || set -- gateway1
 root=$(cd "$(dirname "$0")/.." && pwd)
 cfg=$root/config/mosquitto
-mkdir -p "$cfg/tls" "$root/data/meshtasticd-kyiv" "$root/data/briar"
+mkdir -p "$cfg/tls" "$root/data/chatko" "$root/data/meshtasticd-kyiv" "$root/data/briar"
 cp "$root/deploy/mosquitto/mosquitto.conf" "$cfg/mosquitto.conf"
 touch "$root/.env"
 chmod 600 "$root/.env"
@@ -25,6 +25,13 @@ if [ ! -f "$cfg/tls/server.crt" ]; then
         -addext "subjectAltName=$san" -keyout "$cfg/tls/server.key" -out "$cfg/tls/server.crt" 2>/dev/null
     chmod 644 "$cfg/tls/server.key"  # the broker's user inside the container must read it
 fi
+
+# The hub's container runs as the user who set the stack up (not as root), so data/chatko is theirs.
+# Under sudo that is the user who called it.
+set_value() { grep -q "^$1=." "$root/.env" || echo "$1=$2" >> "$root/.env"; }
+set_value CHATKO_UID "${SUDO_UID:-$(id -u)}"
+set_value CHATKO_GID "${SUDO_GID:-$(id -g)}"
+[ "$(id -u)" != 0 ] || chown "$(grep '^CHATKO_UID=' "$root/.env" | cut -d= -f2):$(grep '^CHATKO_GID=' "$root/.env" | cut -d= -f2)" "$root/data/chatko"
 
 # Sets VAR in .env to a new random value unless it is there; prints the name of what it made.
 secret() {
@@ -46,6 +53,9 @@ grep -q '^MESH_MQTT_PASSWORD=.' "$root/.env" || echo "MESH_MQTT_PASSWORD=$(value
 # The Kyiv mesh's primary channel key: public, from the QR code at https://meshtastic.kyiv.ua/join.
 grep -q '^KYIV_PRIMARY_PSK=.' "$root/.env" || echo "KYIV_PRIMARY_PSK=XOLPZHTWzHgykJxZ3pnj10mMJdr8glgblsNGLUIvd1w=" >> "$root/.env"
 secret MESH_FAMILY_PSK 32
+# The hub's node key: with it in the config the node keeps its identity (and members' radios keep
+# trusting it) even if its volume is lost, so it is part of the backup like the other secrets.
+secret MESH_KYIV_PRIVATE_KEY 32
 # The hub's Briar account (D28): the password encrypts its database, the token opens its API.
 secret BRIAR_PASSWORD 18
 secret BRIAR_AUTH_TOKEN 32

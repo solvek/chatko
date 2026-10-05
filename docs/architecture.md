@@ -80,7 +80,11 @@ tests/
   contract/          # each extension against extension_api.testing
   integration/       # real SQLite; the docker lab (Mosquitto + meshtasticd), opt-in: pytest -m lab
                      # (lab.py: what the lab tests share)
+  deploy/            # backup.sh and restore.sh with a stand-in for docker; the compose file against
+                     # the config example (POSIX shell: skipped on Windows)
 routing.example.py   # sample routing script, tested in CI like any other code
+deploy/              # the production stack (D57): compose file, the hub's Dockerfile, briar-headless
+                     # image, setup.sh, backup.sh, restore.sh, systemd timer; guide: docs/deployment.md
 lab/                 # docker compose lab: Mosquitto + three meshtasticd nodes (hub, radio, radio2), plus spike scripts
 ```
 
@@ -593,6 +597,7 @@ INFO]` logs to stderr and runs the installed extensions (`discover_extensions`).
 | Storage | SQLite via `aiosqlite`, schema migrations in code |
 | Telegram | `aiogram` 3 (long polling), wrapped behind the extension's `TelegramApi` port (§3.7) |
 | Meshtastic | official `meshtastic` Python library over TCP to `meshtasticd` (serial, BLE and TCP to a physical node later), pinned below 2.8 because the adapter overrides its hooks (§3.8); image `meshtastic/meshtasticd`, tag pinned in the compose files |
+| Deployment | Docker Compose in `deploy/` (D57): the hub's image from `deploy/chatko/Dockerfile` (`python:3.12-slim`, dependencies from `uv.lock`, amd64 and arm64), the services of the stack, `setup.sh`, `backup.sh`, `restore.sh` and a systemd timer for the backup; guide in `docs/deployment.md`. The scripts are POSIX `sh`, tested in `tests/deploy` with a stand-in for `docker` |
 | MQTT broker | Mosquitto 2 in the compose files: users and an ACL per hub node and gateway, TLS on 8883 for gateways (D30). The hub's code never talks MQTT itself; its `meshtasticd` nodes do |
 | Briar | `httpx` + `websockets` to `briar-headless` (our fork: a pinned upstream tag plus the private-group patch, D29, D51; built with JDK 17, run in a Java 17 JRE image for amd64 and arm64 from `deploy/briar/`, D28, D53) |
 | `briarctl` | `argparse` and a synchronous `httpx` client; no dependency beyond the hub's (§3.10) |

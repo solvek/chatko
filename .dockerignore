@@ -1,0 +1,20 @@
+# The build context of deploy/chatko/Dockerfile is the repository: keep secrets, state and
+# development files out of it.
+.env
+config/
+data/
+backups/
+.git/
+.github/
+.venv/
+.claude/
+**/__pycache__/
+.*_cache/
+.hypothesis/
+.coverage*
+tests/
+lab/
+docs/
+deploy/
+backups/
+replaced-*/

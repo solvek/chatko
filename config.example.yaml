@@ -21,16 +21,17 @@ extensions:
     short_name: CHKO               # up to 4 characters
     region: EU_433                 # Kyiv mesh: 433.125 MHz, LongFast; the hub sets it and keeps ignore_mqtt off (design.md §6.1)
     private_key: ${MESH_KYIV_PRIVATE_KEY}  # optional, base64, 32 bytes: keeps the node's identity if its volume is lost
-    mqtt:                          # required for a virtual node; any broker works
-      host: mosquitto              # v1: our own Mosquitto in the same compose file (design.md §6.2, D30)
-      port: 1883                   # inside the Docker network; our gateways connect on 8883 with TLS
+    mqtt:                          # required for a virtual node. v1: the Kyiv community broker, with the
+                                   # login of the owner's claimed physical node (design.md §6.2, D27, D58)
+      host: mqtt.meshtastic.kyiv.ua
+      port: 1883
       tls: false
-      username: ${MESH_MQTT_USER}  # one Mosquitto user per hub node and per gateway
-      password: ${MESH_MQTT_PASSWORD}
-      root_topic: msh/EU_433       # our gateways use the same root topic
-      # Later, the Kyiv community broker (logins only for a claimed physical node, D27):
-      # host: mqtt.meshtastic.kyiv.ua, port: 1883, tls: false, username: <node id in hex>,
-      # root_topic: node/<node id>
+      username: ${KYIV_MQTT_USER}  # the claimed node's id in hex, without the "!"
+      password: ${KYIV_MQTT_PASSWORD}
+      root_topic: node/${KYIV_MQTT_USER}
+      # Our own Mosquitto instead (the lab, tests, or gateways of our own; deploy/README.md): inside
+      # the compose network host: mosquitto, port: 1883, username: ${MESH_MQTT_USER},
+      # password: ${MESH_MQTT_PASSWORD}, root_topic: msh/EU_433
     channels:                      # the hub provisions its node with these, in this order; the node's
                                    # other channel slots are turned off. Names: up to 11 bytes, no spaces
       - name: LongFast             # index 0: the primary channel of the Kyiv mesh; its PSK is not the

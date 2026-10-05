@@ -1,0 +1,11 @@
+[Unit]
+Description=chatko daily backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# The repository is /opt/chatko (docs/deployment.md); change the path if it is elsewhere.
+ExecStart=/opt/chatko/deploy/backup.sh
+# Copy the archives to another machine here, e.g. with rclone (docs/deployment.md):
+# ExecStartPost=/usr/bin/rclone copy /opt/chatko/backups remote:chatko-backups

@@ -5,7 +5,7 @@ internet.** A group lives in several networks at once: a Telegram group, a Briar
 Meshtastic LoRa channels. A hub copies every message to all the other places.
 
 ```
- Telegram group ◄──► chatko hub ◄──► Meshtastic channel (virtual node → MQTT → gateway node → radios)
+ Telegram group ◄──► chatko hub ◄──► Meshtastic channel (virtual node → Kyiv MQTT broker → our node with MQTT → radios)
                          ▲
                          └──► Briar private group (members also relay it to each other over Bluetooth/Wi-Fi)
 ```
@@ -16,14 +16,15 @@ Meshtastic LoRa channels. A hub copies every message to all the other places.
   Without it, every message goes to all the other places of its group.
 - It can forward the mesh's primary Meshtastic chat (e.g. the Kyiv `LongFast`) to selected chats.
 
-> **Status: phases 1 (core) and 2 (Telegram) are done; phase 3 (Meshtastic) is under way.** The project skeleton, tooling, domain model, the extension and routing APIs, the inbound pipeline with the outbox worker, the routing engine with a test kit for routing scripts, SQLite storage, the configuration and `chatko run` are in place and reviewed. The Telegram extension works with a real bot and groups. The Meshtastic extension provisions the hub's node and relays its channels and direct messages to radios; the hub relays between Telegram and a radio in the local lab, tested nightly. The field test on the Kyiv mesh comes next, then Briar. Start with the [design](docs/design.md).
+> **Status: the code of v1 is written; the field test on a real mesh and the release review remain.** The core, the Telegram, Briar and Meshtastic extensions, `briarctl` and the production stack (Docker Compose, backups) are in place and tried: a group relays across Telegram, Briar and Meshtastic (a channel and direct messages) in the local lab, and the stack and a restore from backup run on a server-like machine. What waits is the field test with a physical gateway node on the Kyiv mesh, a first deployment on a real VM, and the release review. Start with the [design](docs/design.md).
 
 ## Known limitations
 
 - **A cloud hub reaches radios only through an internet-connected gateway node.** A radio node without
-  internet only relays. chatko runs its own MQTT broker, and at least one gateway of your own (a radio
-  with internet near the group) connects to it; community brokers give access only to registered
-  physical nodes. chatko sends to radios as direct messages to each member's node (one packet per
+  internet only relays. The hub's virtual node connects to the Kyiv community's MQTT broker with the
+  login of a claimed physical node of the owner's, and that node (with MQTT on) carries the
+  messages to and from the mesh; the community gives logins only to registered physical nodes. A broker
+  of your own with a gateway of your own works too. chatko sends to radios as direct messages to each member's node (one packet per
   node, with delivery confirmation), or as one broadcast on a private group channel. A hub within
   radio range will be able to use a physical node instead and need no gateway (not in v1).
 - **Radios must not ignore MQTT, and must allow it.** Messages from a cloud hub reach the air through
@@ -83,12 +84,32 @@ uv run pytest -m lab tests/integration
 
 The gates and their limits are in [docs/architecture.md §7](docs/architecture.md#7-quality-gates).
 
+## Operations
+
+The hub runs on a Linux server as a Docker Compose stack: the hub, our Mosquitto (for the lab and gateways
+of your own; the hub's node uses the Kyiv broker), the hub's virtual Meshtastic node and briar-headless. [docs/deployment.md](docs/deployment.md)
+is the guide: preparing a Linux server, installing, joining a Briar group,
+connecting to the Kyiv broker, and the day-to-day tasks. In short:
+
+```bash
+deploy/setup.sh <host or IP> [gateway names]       # certificate, broker users, secrets in .env
+docker compose -f deploy/docker-compose.yml up -d  # config/chatko.yaml first; see the guide
+docker compose -f deploy/docker-compose.yml logs -f chatko
+```
+
+**Backups.** `deploy/backup.sh` archives `.env` (the secrets), `config/` and `data/` once a day (a
+systemd timer in `deploy/systemd/`; the hub and Briar are down for a few seconds) and keeps 14.
+Copy the archives off the server, encrypted: a lost server takes `data/` and the Briar account with
+it. `deploy/restore.sh <archive>` brings everything back, on the same server or a new one; test it
+before you need it.
+
 ## Documentation
 
 - [Design](docs/design.md): behaviour, concepts, extensions, routing, configuration, plan
 - [Architecture](docs/architecture.md): code structure, extension API, quality gates
 - [Decisions](docs/decisions.md): key decisions and why
 - [Spikes](docs/spikes.md): experiments that answer the open questions
+- [Deployment](docs/deployment.md): running the hub on a server, backups, operations
 - [Roadmap](docs/roadmap.md): the plan by working session
 - [`config.example.yaml`](config.example.yaml), [`.env.example`](.env.example): configuration format
 - [AGENTS.md](AGENTS.md): guide for contributors and AI coding agents
