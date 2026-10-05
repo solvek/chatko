@@ -1,0 +1,41 @@
+# The whole hub on the lab (S28, lab/README.md): Telegram, Briar and the three lab nodes. Edit the Telegram
+# chat ids and the Briar group id; the owner chat is yours with the bot.
+extensions:
+  tg:
+    type: telegram
+    bot_token: ${TELEGRAM_BOT_TOKEN}
+  lab:
+    type: meshtastic
+    connection: { tcp: "127.0.0.1:4403" }
+    long_name: chatko hub
+    short_name: HUB
+    region: EU_868
+    mqtt: { host: mosquitto, port: 1883, tls: false, username: hub, password: chatko-lab-hub, root_topic: msh/lab }
+    channels:
+      - { name: LongFast, psk: AQ== }
+      - { name: Family, psk: "zqkV0BFcz88wf/5xB/x/vjFP3AJupe7NjnpJ621kVxY=" }
+    contacts:
+      "!c4a7b002": "rwNcZyJw4Y01MFNSJyzpduhjNc5dRS4qDS4QRhNlQRM="
+      "!c4a7b003": "8tV2OophjdKbo/UDsgGDIpJv9KybGrML14Fpt8grylQ="
+    min_send_interval_s: 2.5
+  briar:
+    type: briar
+    api: http://127.0.0.1:7000
+    auth_token: ${BRIAR_AUTH_TOKEN}
+
+groups:
+  family:
+    sites:
+      telegram: { ext: tg, chat: -1001234567890 }
+      briar: { ext: briar, group: "<Briar group id>" }
+      channel: { ext: lab, channel: Family }
+      radio: { ext: lab, dm: ["!c4a7b002", "!c4a7b003"] }
+
+sources:
+  owner: { ext: tg, chat: 123456789 }
+
+admin_notices:
+  to: owner
+  new_accounts: true
+
+routing: routing.py

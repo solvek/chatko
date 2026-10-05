@@ -1222,3 +1222,31 @@ distribution and the `briarctl` command.
 its own README steps (`deploy/README.md`, `lab/README.md`). `lab/spike_briar.py` stays as the spike
 client. Whether the whole flow works with a phone, a group a person made, is S27's last check and S28's
 first step.
+
+## D56. The three-network test runs the whole hub on the lab with a third node; nothing in the code changed
+**Status:** accepted (S28).
+D20 sets v1: one hub that syncs a Briar group, a Telegram group and Meshtastic as a channel and as DMs
+to several nodes. S28 tried that on the lab, with the owner and their phone.
+**Decision:**
+- The "cloud setup" of the roadmap is the lab on the owner's machine: the real Telegram bot and group,
+  the lab's `briar-headless` with the group "Chatko test" that the phone made (D52), and the lab's
+  Meshtastic nodes. `chatko run` ran on the host, as a person would run it on a server; only the
+  addresses differ (`127.0.0.1` instead of compose service names). The server itself is S29.
+- The lab gets a third node, `radio2` (`!c4a7b003`, port 4405, its own Mosquitto user), because direct
+  messages "to several nodes" need two. `provision.py` already gave every node the others' keys. The
+  lab tests still use `hub` and `radio` only, so CI starts only those services.
+- The config and routing script are kept in `lab/three-networks/` (the Telegram chat and Briar group
+  are placeholders), so the test can be repeated. Its routing script is the example's rule: a radio heard on
+  the channel within the hour gets the channel's copy only, the others a direct message.
+**Result:** all of it worked at the first run, with no code change. A Briar post made earlier by the
+phone (still unread) was caught up at start and went to Telegram, the channel and both radios by
+direct message, each with its ACK. Texts from `radio` and `radio2` on the channel, and direct
+messages from both to the hub, reached Telegram and Briar (and the channel or the other radio as the
+script chose). A Telegram message and a Briar message from the owner's phone reached the channel and
+the other network, and the owner saw everything on both. A clean stop (SIGTERM) took under two
+seconds. The only warning was the broken pipe of a node that rebooted to save the settings the hub gave
+it (a known pitfall, lab/README.md). The Briar extension is now tried against a real `briar-headless`.
+**Consequences:** v1's phase 4 is closed. What is not tried: a Briar group with more than one other
+member, a Telegram message lost to a restart of the hub mid-delivery (covered by tests with fakes and the
+outbox), and anything on a server (S29).
+

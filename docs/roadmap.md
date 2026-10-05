@@ -74,7 +74,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S25 | 4 | briar-headless Docker image; upstream merge request | Sonnet 5.5 | high | done |
 | S26 | 4 | Briar extension: port, endpoints, posts in and out, own-post filter | Opus 5.5 | high | done |
 | S27 | 4 | `briarctl`: contacts, groups, invitations (command-line tool) | Sonnet 5.5 | high | done |
-| S28 | 4 | Three-network test in the cloud setup: Briar ⇄ Telegram ⇄ Meshtastic (`channel` and `dm`) (*with owner*) | Sonnet 5.5 | medium | todo |
+| S28 | 4 | Three-network test in the cloud setup: Briar ⇄ Telegram ⇄ Meshtastic (`channel` and `dm`) (*with owner*) | Sonnet 5.5 | medium | done |
 | S29 | 5 | Production deployment, backups, operations docs | Sonnet 5.5 | high | todo |
 | S30 | 5 | Release review: security, code, docs | Opus 5.5 | xhigh | todo |
 
@@ -481,6 +481,11 @@ hub's test groups. The group the phone made, "Chatko test", stays in the lab for
 **S28. Three networks.** *With owner*: the cloud setup of D20 (a Briar group made by a person on a
 phone and joined with `briarctl`, D52; a Telegram group; Meshtastic in the lab or on the Kyiv mesh). Done when: one group works across all three networks,
 with Meshtastic both as a channel and as DMs to several nodes.
+*Done (D56, 2026-10-05):* the lab stood for the cloud: the real Telegram bot and group, the lab's
+`briar-headless` with the phone's group "Chatko test", and the lab's Meshtastic nodes with a new
+third one, `radio2`, so that DMs go to two nodes. `chatko run` relayed all ways at the first run, with
+the owner on Telegram and the phone and two radios driven by a script; no code changed. The config is
+in `lab/three-networks/`. The Briar extension is now tried against a real `briar-headless`.
 
 ### Phase 5: release
 

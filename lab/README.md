@@ -4,7 +4,7 @@ Two independent setups: the Meshtastic lab (below) and briar-headless ([Briar](#
 
 ## Meshtastic
 
-A Mosquitto broker and two virtual Meshtastic nodes (`meshtasticd` with a simulated radio), so the
+A Mosquitto broker and three virtual Meshtastic nodes (`meshtasticd` with a simulated radio), so the
 Meshtastic extension can be developed and tested without hardware (design.md §11, spike S2).
 
 | Service | Plays | Node id | TCP API on the host |
@@ -12,6 +12,7 @@ Meshtastic extension can be developed and tested without hardware (design.md §1
 | `mosquitto` | the MQTT broker | — | `127.0.0.1:1883` |
 | `hub` | chatko's virtual node | `!c4a7b001` | `127.0.0.1:4403` |
 | `radio` | a member's radio node | `!c4a7b002` | `127.0.0.1:4404` |
+| `radio2` | another member's radio node, for direct messages to several nodes (S28) | `!c4a7b003` | `127.0.0.1:4405` |
 
 The nodes reach each other **only through MQTT**: the simulated radio does not transmit, and UDP
 between nodes is off. All ports listen on `127.0.0.1` only; the `meshtasticd` API has no
@@ -25,6 +26,7 @@ is `chatko-lab-X`, a lab value for a broker on `127.0.0.1` only, never for a rea
 |---|---|
 | `hub` | the hub node's MQTT client |
 | `radio` | the radio node's MQTT client |
+| `radio2` | the second radio node's MQTT client |
 | `lab` | the spike scripts and anyone watching the broker (`mosquitto_sub -u lab -P chatko-lab-lab -t 'msh/lab/#' -v`) |
 
 ### Use
@@ -53,7 +55,7 @@ uv run lab/spike_dm.py
 both channels) and the private channel `Family` at index 1, in one settings transaction per node, waiting for the node's response to
 each admin message. Then it gives each node the other one's public key as a contact, so direct
 messages work at once. It is idempotent; a run that changes settings reboots the node once.
-`--only hub|radio` provisions one node (e.g. after wiping its volume), `--no-contacts` leaves key
+`--only hub|radio|radio2` provisions one node (e.g. after wiping its volume), `--no-contacts` leaves key
 discovery to NodeInfo.
 
 `spike_channel.py` sends a text on `Family` radio → hub and hub → radio; `spike_dm.py` sends direct
@@ -66,12 +68,12 @@ Stop the lab with `docker compose -f lab/docker-compose.yml down`; add `-v` to w
 ### Files
 
 - `docker-compose.yml`: the three services. `MESHTASTICD_TAG` overrides the pinned image tag.
-- `meshtasticd/{hub,radio}.yaml`: the `meshtasticd` config. `Lora: Module: sim` selects the simulated
+- `meshtasticd/{hub,radio,radio2}.yaml`: the `meshtasticd` config. `Lora: Module: sim` selects the simulated
   radio; `General: MACAddress` fixes the node id (its last 4 bytes). Set `Logging: LogLevel: debug` to
   see why a packet is dropped.
 - `mosquitto/mosquitto.conf`, `mosquitto/acl`, `mosquitto/start.sh`: the broker's settings, the
   ACL, and the start script that makes the password file of the lab users.
-- `provision.py`: provisions both nodes (see above).
+- `provision.py`: provisions all three nodes (see above).
 - `spike_channel.py`, `spike_dm.py`, `spike_keys.py`, `spike_admin.py`: spike scripts, not chatko
   code. `spike_dm.py --offline` also stops the radio to see the retries; `spike_keys.py show|learn|
   contact` shows the node databases, forgets and re-learns keys, or adds a key with `add_contact`;
@@ -106,6 +108,28 @@ change they put back. They provision both nodes with the settings of `provision.
 primary channel named `LongFast`, which changes nothing on the air), so the two do not undo each
 other, and they need no `provision.py` before them: they also pass on wiped volumes, which is how
 CI runs them every night (`.github/workflows/lab.yml`).
+
+### The whole hub across three networks (S28)
+
+`three-networks/` has a config and a routing script for `chatko run` with Telegram (a real bot and
+group), the Briar group of the lab's `briar-headless` (made by a phone and joined with `briarctl`,
+D52) and the lab's three nodes: the hub's node serves the private channel `Family` and direct messages to
+`radio` and `radio2`. Both labs must be up and provisioned. Copy the two files, put in the group's
+Telegram chat id and its Briar group id (`briarctl group list`), and run the hub on the host with
+the token from the Briar container:
+
+```bash
+export BRIAR_AUTH_TOKEN="$(docker compose -f lab/briar/docker-compose.yml exec -T briar cat /data/auth_token)"
+```
+
+```bash
+uv run chatko run --config /path/to/chatko.yaml --env-file .env --data /path/to/data
+```
+
+The hub takes the hub node's one API connection, so nothing else can use port 4403 meanwhile. The two
+radios are driven by a script (a `labkit.connect(4404)` and `sendText`) or the `meshtastic` CLI on
+`--port 127.0.0.1:4404` and `:4405`. The routing script gives a radio that was heard on the channel within
+the hour only the channel's copy, and the others a direct message (see `routing.example.py`).
 
 ### Pitfalls found in the spike
 

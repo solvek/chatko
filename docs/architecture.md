@@ -81,7 +81,7 @@ tests/
   integration/       # real SQLite; the docker lab (Mosquitto + meshtasticd), opt-in: pytest -m lab
                      # (lab.py: what the lab tests share)
 routing.example.py   # sample routing script, tested in CI like any other code
-lab/                 # docker compose lab: Mosquitto + two meshtasticd nodes, plus spike scripts
+lab/                 # docker compose lab: Mosquitto + three meshtasticd nodes (hub, radio, radio2), plus spike scripts
 ```
 
 Built-in extensions are shipped in the same repository and distribution for now, but they are registered

@@ -4,7 +4,7 @@
 set -eu
 passwd=/mosquitto/data/passwd
 rm -f "$passwd"
-for user in hub radio lab; do
+for user in hub radio radio2 lab; do
     if [ -f "$passwd" ]; then
         mosquitto_passwd -b "$passwd" "$user" "chatko-lab-$user"
     else

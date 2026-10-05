@@ -5,11 +5,11 @@
 """Provision the lab's virtual nodes over their TCP API (spike S2).
 
 Sets each node's names, region, private key, private channel and MQTT client (with the node's own
-login to the lab's Mosquitto), so that the nodes reach each other through the broker, then gives each node the other one's public key as
+login to the lab's Mosquitto), so that the nodes reach each other through the broker, then gives each node the others' public keys as
 a contact, so direct messages work at once. Idempotent: a node whose settings already match is
 left alone and not rebooted.
 
-    uv run lab/provision.py [--only hub|radio] [--no-contacts]
+    uv run lab/provision.py [--only hub|radio|radio2] [--no-contacts]
 
 --only provisions one node, e.g. after its volume was wiped. --no-contacts skips the contacts and
 leaves key discovery to NodeInfo (see spike_keys.py).
@@ -62,6 +62,7 @@ class LabNode:
 NODES = (
     LabNode(name="hub", port=4403, long_name="chatko hub", short_name="HUB"),
     LabNode(name="radio", port=4404, long_name="Lab radio", short_name="RAD"),
+    LabNode(name="radio2", port=4405, long_name="Lab radio 2", short_name="RD2"),
 )
 
 

@@ -19,9 +19,9 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked
-      # Fresh volumes: the tests provision both nodes themselves.
+      # Fresh volumes: the tests provision both nodes themselves. radio2 is for S28's manual test only.
       # No --wait: meshtasticd has no healthcheck, and the tests connect until a node answers.
-      - run: docker compose -f lab/docker-compose.yml up -d
+      - run: docker compose -f lab/docker-compose.yml up -d mosquitto hub radio
       - run: uv run pytest -m lab tests/integration -o log_cli=true --log-cli-level=INFO
       - if: failure()
         run: docker compose -f lab/docker-compose.yml logs --timestamps

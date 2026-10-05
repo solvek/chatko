@@ -6,6 +6,9 @@ topic readwrite msh/lab/#
 user radio
 topic readwrite msh/lab/#
 
+user radio2
+topic readwrite msh/lab/#
+
 # The spike scripts and the lab tests, which watch the broker.
 user lab
 topic readwrite msh/lab/#

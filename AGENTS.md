@@ -47,13 +47,14 @@
   run nightly in CI by `.github/workflows/lab.yml`; S22, D50). Our briar-headless fork has the
   private-group API (S24, D51), tried with a phone; `deploy/briar/` builds its image for amd64 and
   arm64 for the server and the lab, and the upstream merge request waits for the owner (S25, D53,
-  `docs/briar-merge-request.md`). The Briar extension (`chatko_briar`, S26, D54) is tested against a fake of its `BriarApi` port, not yet against a real `briar-headless`. `briarctl` (S27, D55, `src/tools/briarctl`) is built and tried on the lab with a phone. Every
+  `docs/briar-merge-request.md`). The Briar extension (`chatko_briar`, S26, D54) is tested against a fake of its `BriarApi` port. `briarctl` (S27, D55, `src/tools/briarctl`) is built and tried on the lab with a phone. One group works across Telegram, Briar and Meshtastic (a channel and DMs to two lab nodes) with the whole hub on the lab (S28, D56, `lab/three-networks/`). Every
   extension passes the contract suite in `chatko.extension_api.testing`. Phase 0 (spikes S1–S3) is closed (D30): the
   Briar relay on phones, the local Meshtastic lab in `lab/` (channel and direct messages, keys,
   ACKs, provisioning), briar-headless in Docker in `lab/briar/` and the plan for its private-group
   patch (D29). Only the Kyiv broker questions are open (design.md §6.6); they do not block v1.
-  Phases 1 (core) and 2 (Telegram) are closed; phases 3 (Meshtastic, its field test S23) and 4
-  (Briar) are under way: the next session is the first one marked `todo` in `docs/roadmap.md`.
+  Phases 1 (core), 2 (Telegram) and 4 (Briar) are closed; phase 3 (Meshtastic) waits for its
+  field test S23, which needs hardware: the next session is the first one marked `todo` in
+  `docs/roadmap.md` that can run (S29 does not need S23's result).
 - The upstream Briar clone for reading and patching is `~/Projects/briar` (tag `release-1.5.21`); its
   branch `1664-private-group-api` on that tag is our fork with the private-group patch (S24, D51).
   Build and test it with JDK 17 in Docker (`eclipse-temurin:17-jdk`,
