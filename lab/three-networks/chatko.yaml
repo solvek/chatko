@@ -9,7 +9,7 @@ extensions:
     connection: { tcp: "127.0.0.1:4403" }
     long_name: chatko hub
     short_name: HUB
-    region: EU_868
+    region: EU_433
     mqtt: { host: mosquitto, port: 1883, tls: false, username: hub, password: chatko-lab-hub, root_topic: msh/lab }
     channels:
       - { name: LongFast, psk: AQ== }

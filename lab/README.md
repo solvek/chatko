@@ -50,7 +50,7 @@ uv run lab/spike_channel.py
 uv run lab/spike_dm.py
 ```
 
-`provision.py` sets names, region `EU_868` (with `ignore_mqtt` off), a private key, the MQTT client
+`provision.py` sets names, region `EU_433`, the Kyiv mesh's (with `ignore_mqtt` off), a private key, the MQTT client
 (broker `mosquitto` with the node's own login, root `msh/lab`, encrypted, uplink and downlink on
 both channels) and the private channel `Family` at index 1, in one settings transaction per node, waiting for the node's response to
 each admin message. Then it gives each node the other one's public key as a contact, so direct
@@ -133,7 +133,7 @@ the hour only the channel's copy, and the others a direct message (see `routing.
 
 ### Pitfalls found in the spike
 
-- Setting a region with a duty-cycle limit (`EU_868`) for the first time makes the firmware turn
+- Setting a region with a duty-cycle limit (`EU_433`) for the first time makes the firmware turn
   `lora.ignore_mqtt` on. The node then drops (and does not relay) every packet that crossed MQTT.
   `provision.py` writes the LoRa config a second time to turn it off.
 - The node keeps at most 4 packets addressed to itself in a queue and drops the oldest, so admin

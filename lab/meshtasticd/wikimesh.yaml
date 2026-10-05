@@ -1,0 +1,11 @@
+# meshtasticd config for the lab's "wikimesh" probe node (S23, D62): simulated radio, no LoRa hardware.
+# It talks to the community broker named in .env, not to the lab's Mosquitto. The node id is
+# !c4a7b004 (the last 4 bytes of the MAC address).
+Lora:
+  Module: sim
+General:
+  MACAddress: 02:00:C4:A7:B0:04
+  MaxNodes: 200
+  MaxMessageQueue: 100
+Logging:
+  LogLevel: info

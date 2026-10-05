@@ -1374,3 +1374,45 @@ the lab. The owner's rule: what is real lives in production, and development is 
 - The hub's Briar link is the one the people already have; nothing is to be re-added.
 - The Briar account's nickname stays `chatko-lab`: the nickname is set only when an account is created.
 - Tested by the owner both ways, Telegram → Briar and Briar → Telegram.
+
+
+## D61. The login belongs to the claimed node's id; the hub's own node id and keys stay its own, and the node's keys are made new before it is claimed
+**Status:** accepted (2026-10-05, the owner); refines D58.
+The Kyiv registry (screenshots from a member's page) shows that the MQTT access is per node entry: the
+login is the node id in hex, the password is a short string, the topic is `node/<id>`, and the entry has
+"unbind" and "delete access" buttons. The owner's physical node (a Meshadventurer) came from a previous
+owner who knows its keys, so its keys must be replaced.
+**Decision:**
+- The hub uses the claimed node's login, password and root topic (D58) but keeps **its own** node id and
+  keys; it does not copy the physical node's private key. Whether the broker accepts a second client under
+  the same login (the hub's client id differs) and whether the gateway id in a `ServiceEnvelope` must match
+  the topic are open (§6.6) and answered by the field test (S23).
+- The physical node's keys are made new **before** it appears in the mesh and before the community
+  registers it. Firmware 2.7 derives the node id from the MAC, so new keys keep the id. From 2.8 the node
+  id is `crc32(public key)`, so new keys change the id, and **any key change after the login was issued
+  breaks it**: the keys are final before the registration. The owner flashes 2.8.1 (alpha) and backs up
+  the keys (`meshtastic --export-config`, kept outside the repository).
+- The Kyiv network runs on 433 MHz, and the owner chose region `EU_433` (the website's text) for the node and
+  for the lab. The community's QR carries region enum 14, which the library names `UA_433`; the band is the
+  same. The node took the QR first and was then set to `EU_433` (its id and key are unaffected).
+- The password goes only into `.env` (`KYIV_MQTT_PASSWORD`), never into chat or the repository.
+**Consequences:** nothing in the code changes. design.md §6.6 gets the two open questions above.
+
+
+## D62. The first credentials received are for another broker and do not match D58; nothing is connected until the owner confirms them
+**Status:** open (2026-10-05, the owner).
+The owner's node was flashed with 2.8.1, its keys replaced and its id fixed (D61). The credentials that
+came back are for `mqtt.wikimesh.in.ua`, not `mqtt.meshtastic.kyiv.ua`: the login looks like a person's
+name and is not the node's id, the root topic is `kyiv` and not `node/<id>`, and encryption is **off**
+(the node would publish decoded packets). D58 and D61 assumed the Kyiv broker, the node's id as the login and
+`node/<id>` as the root.
+**Decision:** the owner asks the issuers whether the access is meant for this node and hub; the node's id
+is not written to the server's configuration until then. The credentials go only into `.env` (a separate
+variable pair, not `KYIV_MQTT_*`), never into chat or the repository. If they are confirmed, a read-only
+check shows what the broker passes under `kyiv/#`, and whether the hub's node, which expects encrypted
+packets, can read decoded ones; the result goes into spikes.md and D58 is amended.
+**Consequences:** no code or config changes; the Meshtastic endpoints stay unconnected in production.
+**Progress (2026-10-05):** the login works and the owner's node reaches the broker through the phone's proxy (spikes.md S23 part 1).
+A stock `meshtasticd` does not read decoded envelopes from MQTT; whether it reads the owner's encrypted ones is still open, and so is
+what the broker does with downlink, so the hub is not connected to it.
+

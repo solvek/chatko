@@ -375,7 +375,7 @@ checked on the Kyiv mesh in S04 and S23):
 **Result, part 3 (2026-09-30, session S04; Kyiv broker, read-only):**
 - *What the website <https://meshtastic.kyiv.ua/join> tells.* The QR code is a channel URL
   (<https://meshtastic.org/e/#CjQSIFziz2R01sx4MpCcWd6Z49dJjCXa_IJYG5bDRi1CL3dcGghMb25nRmFzdCgBMAE6AgggCjISIHJheFM1Vm52VkNMcWZRcmVwUm9sYWh0TUpCNWxYWm81GgZLeWl2VUEoATABOgIIIBIOCAE4DkAFSAFQClgBaAE>);
-  decoded, it holds: region **EU_433** (433.125 MHz, not `EU_868`), preset `LONG_FAST`, hop limit 5,
+  decoded, it holds: region **EU_433** per the website (433.125 MHz, not `EU_868`; the URL's region field is enum 14, which the library names `UA_433`, a band-identical code; the owner chose `EU_433` for the node and the lab on 2026-10-05), preset `LONG_FAST`, hop limit 5,
   TX power 10 dBm, and two channels: channel 0 **`LongFast`** with a **non-default 32-byte PSK**
   (public, in the URL), and a secondary channel **`KyivUA`** with its own 32-byte PSK. Members are told
   to use the secondary channel for chat. The website states the broker host in its page config:
@@ -640,3 +640,19 @@ Still open, and where it is answered:
 | ARM64: `meshtasticd` was checked only in the manifest, our `briar-headless` jar was built but not run | S25 (the image) and S29 (the server) |
 | Private groups switched on for an existing Briar account need no migration (read in the source) | answered in S24 with a phone: none needed (D51) |
 | `RATE_LIMIT_EXCEEDED` addressed to node 0 (S2, part 2): a firmware bug worth reporting upstream | anyone, not blocking |
+
+**Result, S23 part 1 (2026-10-05, the community broker `mqtt.wikimesh.in.ua`, D62; owner's login; read-only except the owner's own node):**
+- *The broker.* Login accepted; topics are `kyiv/2/e/<channel>/!<gateway>`, `kyiv/2/c/…` and `kyiv/2/stat/!<gateway>`; every envelope seen
+  in minutes was already decoded (`encrypted, not decoded: 0`), the owner's node having *Encryption Enabled* off as told.
+  Traffic seen: position, telemetry, traceroute, routing; no text from other people within 4 minutes.
+- *The owner's node as a gateway.* A nRF52840 (no Wi-Fi) reaches the broker through the Android app's MQTT client proxy
+  (the node's "proxy to client" on and the phone's proxy switch on). A text sent on `LongFast` appeared on the broker as
+  `kyiv/2/e/LongFast/!<node>`, three copies seven seconds apart; the app showed "Failed to deliver to mesh" (no radio
+  neighbour repeated it), which does not mean MQTT failed. Firmware 2.8.1 had to turn *Ignore MQTT* off and *Ok to MQTT* on
+  by hand (the first-time duty-cycle region pitfall).
+- *The lab's `wikimesh` probe* (`lab/spike_wikimesh.py`, a `meshtasticd` 2.7.26 with the Kyiv channels, encryption off, uplink off):
+  it connects, subscribes only to `…/e/LongFast/+`, `…/e/KyivUA/+` and `…/e/PKI/+` (not `c/`), receives the broker's envelopes,
+  **including the owner's node's**, but handles none: no router log line, node database stays empty. That held with decoded
+  envelopes and also with the owner's encrypted ones; why the encrypted ones were not handled is **open** (candidates: firmware
+  2.8.1 vs 2.7.26, packet signing, channel hash; to check next with the packets' channel hash and a 2.8.x probe).
+- *A pitfall.* `meshtasticd` prints the MQTT password in its log at start; do not paste logs.

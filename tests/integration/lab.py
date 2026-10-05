@@ -47,7 +47,7 @@ def lab_settings(name: str, **changes: Any) -> dict[str, Any]:
         "connection": {"tcp": f"{HOST}:{PORTS[name]}"},
         "long_name": {"hub": "chatko hub", "radio": "Lab radio"}[name],
         "short_name": short,
-        "region": "EU_868",
+        "region": "EU_433",
         "private_key": lab_key(short),
         "mqtt": {
             "host": "mosquitto",

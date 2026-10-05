@@ -48,7 +48,19 @@ services:
     ports:
       - "127.0.0.1:4405:4403"
 
+  # The probe for the community broker (spike S23, D62). Not started by a plain `up`: it needs
+  # the WIKIMESH_MQTT_* login in .env. Start it with `--profile wikimesh`.
+  wikimesh:
+    <<: *meshtasticd
+    profiles: ["wikimesh"]
+    volumes:
+      - ./meshtasticd/wikimesh.yaml:/etc/meshtasticd/config.yaml:ro
+      - wikimesh-data:/var/lib/meshtasticd
+    ports:
+      - "127.0.0.1:4406:4403"
+
 volumes:
   hub-data:
   radio-data:
   radio2-data:
+  wikimesh-data:

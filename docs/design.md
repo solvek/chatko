@@ -402,6 +402,8 @@ there (the field test, S23).
 | The firmware versions and settings of the gateways: downlink on the primary channel, "Ignore MQTT", rebroadcast mode | whether a gateway learns the hub's node and downlinks its packets (§6.2) |
 | How many relays run with "Ignore MQTT" on, and how many radios have "OK to MQTT" on | how far the hub's packets travel over the air, and whether replies come back |
 | Whether the community accepts a bot node on the mesh | the hub's node is visible on `LongFast` through our gateway in v1 too (NodeInfo, ACKs), so the owner asks before the field test (S23) |
+| Whether the broker accepts the hub as a second client under the claimed node's login (its client id differs), and whether the gateway id in a packet must match the topic's `node/<id>` (D61) | whether the hub can share the physical node's login or needs its own |
+| The credentials sent first were for another broker (`mqtt.wikimesh.in.ua`), under a shared root `kyiv` and with encryption off (D62): is that the access meant for us, and can the hub's node read decoded packets and not only encrypted ones | which broker and topic layout v1 uses, and whether `dm` can work on it |
 
 ## 7. Briar extension
 

@@ -50,7 +50,7 @@
   `docs/briar-merge-request.md`). The Briar extension (`chatko_briar`, S26, D54) is tested against a fake of its `BriarApi` port. `briarctl` (S27, D55, `src/tools/briarctl`) is built and tried on the lab with a phone. One group works across Telegram, Briar and Meshtastic (a channel and DMs to two lab nodes) with the whole hub on the lab (S28, D56, `lab/three-networks/`). The
   production stack (S29, D57: `deploy/`, `docs/deployment.md`) has the hub in a container and a daily
   backup (`backup.sh`, `restore.sh`); it runs in production on the owner's VPS (S29 done) and is tried with a TLS client, a restore
-  and the arm64 images under QEMU; production mirrors the Telegram supergroup «Кризовий Чатко» and the Briar group of the same name, tested both ways (D60); no radio has connected yet: v1 uses the Kyiv broker with the login of a physical node of the owner (D58), which the owner does not have yet (S23). Every
+  and the arm64 images under QEMU; production mirrors the Telegram supergroup «Кризовий Чатко» and the Briar group of the same name, tested both ways (D60); no radio has connected yet: v1 uses the Kyiv broker with the login of a physical node of the owner (D58). The owner's node is flashed (2.8.1, new keys, region `EU_433`, D61) and the first credentials came for another broker, so nothing is connected yet (D62, S23). Every
   extension passes the contract suite in `chatko.extension_api.testing`. Phase 0 (spikes S1–S3) is closed (D30): the
   Briar relay on phones, the local Meshtastic lab in `lab/` (channel and direct messages, keys,
   ACKs, provisioning), briar-headless in Docker in `lab/briar/` and the plan for its private-group

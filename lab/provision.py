@@ -35,7 +35,7 @@ PRIVATE_PSK = hashlib.sha256(b"chatko-lab-family").digest()
 PRIVATE_INDEX = 1
 MQTT_ADDRESS = "mosquitto"  # the broker's name inside the compose network
 MQTT_ROOT = "msh/lab"
-REGION = config_pb2.Config.LoRaConfig.RegionCode.EU_868
+REGION = config_pb2.Config.LoRaConfig.RegionCode.EU_433
 REBOOT_WAIT = 10.0  # seconds; a node reboots 7 s after a commit, and Docker restarts it
 
 
@@ -89,7 +89,7 @@ def settings_messages(iface: TCPInterface, node: LabNode) -> list[admin_pb2.Admi
         m.set_config.lora.CopyFrom(lora)
         messages.append(m)
         if region_was_unset:
-            # Setting a duty-cycle region (EU_868) for the first time makes the firmware turn
+            # Setting a duty-cycle region (EU_433) for the first time makes the firmware turn
             # ignore_mqtt on, which drops every packet that came through MQTT. Send it again.
             messages.append(m)
 
