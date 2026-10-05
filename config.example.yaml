@@ -36,9 +36,10 @@ extensions:
                                    # other channel slots are turned off. Names: up to 11 bytes, no spaces
       - name: LongFast             # index 0: the primary channel of the Kyiv mesh; its PSK is not the
         psk: ${KYIV_PRIMARY_PSK}   # default one: take it from the QR code at https://meshtastic.kyiv.ua/join
-      - name: family
-        psk: ${MESH_FAMILY_PSK}    # base64, 16 or 32 bytes (AQ== is the default key); give it to people
-                                   # as a channel URL/QR code
+      # v1 sends to Meshtastic only as direct messages (D59), which need no private channel. To use
+      # `channel` sites too (design.md §6.2), add one here, and give its PSK to people as a channel URL/QR code:
+      # - name: family
+      #   psk: ${MESH_FAMILY_PSK}  # base64, 16 or 32 bytes (AQ== is the default key)
     contacts:                      # optional: public keys of members' nodes (base64, 32 bytes, from the
                                    # Meshtastic app); the node keeps them as favorites. An example key:
       "!a1b2c3d4": "B7yTEhZ73TRS3Jg9oECbzdbk+40JH8z+Gyvs7iM6heM="
@@ -69,8 +70,9 @@ groups:
     sites:
       telegram: { ext: telegram, chat: -1001234567890 }
       briar: { ext: briar, group: "<Briar group id>" }          # printed by `briarctl invitation list`
-      channel: { ext: kyiv, channel: family }                    # broadcast on the private channel (by name)
       radio: { ext: kyiv, dm: ["!a1b2c3d4", "!0badc0de"] }       # PKI direct messages to these nodes
+      # Not used in v1 (D59): a broadcast on a private channel, by name (it must be in `channels` above)
+      # channel: { ext: kyiv, channel: family }
 
   street:
     sites:

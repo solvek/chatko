@@ -5,11 +5,7 @@ always drops echoes and duplicates, whatever this function returns (docs/design.
 is described in docs/architecture.md §4.
 """
 
-from datetime import timedelta
-
 from chatko.routing_api import (
-    AccountKey,
-    EndpointRef,
     RoutedMessage,
     RoutingContext,
     Target,
@@ -19,8 +15,6 @@ from chatko.routing_api import (
 )
 
 api_version = (1, 0)  # optional: the version of chatko.routing_api this script is written for
-
-LATELY = timedelta(hours=1)
 
 
 def route(msg: RoutedMessage, ctx: RoutingContext) -> list[Target]:
@@ -35,26 +29,9 @@ def route(msg: RoutedMessage, ctx: RoutingContext) -> list[Target]:
             to_endpoint(site, text=text) for site in ctx.group("street").sites
         ]
 
-    # Everything else: all other sites of the message's group.
-    return [skip_radios_on_the_channel(target, ctx) for target in mirror(msg, ctx)]
-
-
-def skip_radios_on_the_channel(target: Target, ctx: RoutingContext) -> Target:
-    """Radios heard on the family channel lately get its copy there, not a direct message too."""
-    if target.endpoint != ctx.endpoint("family.radio"):
-        return target
-    channel = ctx.endpoint("family.channel")
-    quiet = [
-        node
-        for node in ctx.recipients(target.endpoint)
-        if target.includes(node) and not heard_lately(AccountKey("meshtastic", node), channel, ctx)
-    ]
-    return to_endpoint(target.endpoint, recipients=quiet)
-
-
-def heard_lately(account: AccountKey, endpoint: EndpointRef, ctx: RoutingContext) -> bool:
-    heard = ctx.last_heard(account, endpoint)
-    return heard is not None and ctx.now - heard < LATELY
+    # Everything else: all other sites of the message's group. (A group with both a `channel` and
+    # a `dm` site gives a radio on both two copies; design.md §6.2 says how to avoid that.)
+    return mirror(msg, ctx)
 
 
 # Optional. Without this function the core uses default_label: the person's label from the config

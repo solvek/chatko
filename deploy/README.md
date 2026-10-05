@@ -106,15 +106,15 @@ The hub's node connects to `mqtt.meshtastic.kyiv.ua:1883` (no TLS) with the logi
 physical node of the owner's: `KYIV_MQTT_USER` (the node's id in hex, no `!`) and `KYIV_MQTT_PASSWORD`
 in `.env`, root topic `node/<that id>`. In `config/chatko.yaml` replace the `mqtt:` line of the
 Meshtastic instance by the one in `config.example.yaml`, then `check-config`; the hub applies the
-change itself. The physical node needs MQTT on with the same login, the mesh's primary channel and
-the group's private channel with uplink and downlink on, "OK to MQTT" on and "Ignore MQTT" off.
+change itself. The physical node needs MQTT on with the same login, the mesh's primary channel
+with uplink and downlink on (a private channel only if `channel` endpoints are used; v1 has none, D59), "OK to MQTT" on and "Ignore MQTT" off.
 Watch for `connected` in `docker compose logs meshtasticd-kyiv`; if the broker refuses the login the node
 logs a connection failure every few seconds.
 
 ## Settings for a gateway of our own (D30, not used in v1)
 
 `EU_433` region; "Ignore MQTT" off, "OK to MQTT" on; channel 0 `LongFast` with the Kyiv primary PSK
-and channel 1 `family` with `MESH_FAMILY_PSK`, both with uplink and downlink on; MQTT enabled with
+with uplink and downlink on (and channel 1 `family` with `MESH_FAMILY_PSK` if `channel` endpoints are used); MQTT enabled with
 address `<host>:8883`, TLS on, the gateway's user and password from `.env`, root topic
 `msh/EU_433`, encryption on, JSON off; Wi-Fi to the internet. Watch the broker with:
 

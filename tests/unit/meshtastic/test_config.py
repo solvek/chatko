@@ -48,7 +48,7 @@ def test_the_example_section_is_valid() -> None:
     config = MeshtasticConfig.model_validate(raw)
 
     assert (config.connection.host, config.connection.port) == ("meshtasticd-kyiv", 4403)
-    assert config.channel_index("family") == 1
+    assert config.channel_index("LongFast") == 0
     assert config.min_send_interval_s == 4
 
 

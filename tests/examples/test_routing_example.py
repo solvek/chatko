@@ -6,7 +6,6 @@ and run `pytest` in `config/`.
 """
 
 import importlib.util
-from datetime import timedelta
 from pathlib import Path
 
 from chatko.application.routing import load_script
@@ -22,7 +21,6 @@ _spec.loader.exec_module(routing)
 
 NAT_TG = "telegram:111111111"
 NAT_RADIO = "meshtastic:!a1b2c3d4"
-OTHER_RADIO = "meshtastic:!0badc0de"
 
 
 def installation() -> FakeInstallation:
@@ -33,7 +31,6 @@ def installation() -> FakeInstallation:
             "family": {
                 "telegram": "telegram",
                 "briar": "briar",
-                "channel": "kyiv",
                 "radio": "kyiv",
             },
             "street": {"telegram": "telegram", "briar": "briar", "radio": "kyiv"},
@@ -63,7 +60,7 @@ def test_a_message_goes_to_the_other_sites_of_its_group() -> None:
 
     result = hub.route(routing, msg)
 
-    assert_routed_to(result, "family.briar", "family.channel", "family.radio")
+    assert_routed_to(result, "family.briar", "family.radio")
     assert {out.label for out in result} == {"NatAda"}
     assert result.to("family.radio").recipients == ("!a1b2c3d4", "!0badc0de")
 
@@ -103,7 +100,6 @@ def test_a_tagged_family_message_also_goes_to_the_street_without_the_tag() -> No
     assert_routed_to(
         result,
         "family.briar",
-        "family.channel",
         "family.radio",
         "street.telegram",
         "street.briar",
@@ -113,38 +109,11 @@ def test_a_tagged_family_message_also_goes_to_the_street_without_the_tag() -> No
     assert result.to("street.telegram").formatted == "NatAda: Збори о 18:00"
 
 
-def test_a_radio_heard_on_the_channel_lately_gets_no_direct_message() -> None:
-    hub = installation()
-    hub.hear(NAT_RADIO, endpoint="family.channel", ago=timedelta(minutes=20))
-    hub.hear(OTHER_RADIO, endpoint="family.channel", ago=timedelta(hours=2))
-
-    result = hub.route(routing, hub.message("family.telegram", "Привіт"))
-
-    assert result.to("family.radio").recipients == ("!0badc0de",)
-
-
-def test_a_radio_heard_elsewhere_still_gets_a_direct_message() -> None:
-    hub = installation()
-    hub.hear(NAT_RADIO, endpoint="longfast", ago=timedelta(minutes=1))
-
-    result = hub.route(routing, hub.message("family.telegram", "Привіт"))
-
-    assert result.to("family.radio").recipients == ("!a1b2c3d4", "!0badc0de")
-
-
 def test_a_direct_message_from_one_radio_reaches_the_other() -> None:
     hub = installation()
     msg = hub.message("family.radio", "Я тут", author=NAT_RADIO, from_recipient="!a1b2c3d4")
 
     result = hub.route(routing, msg)
 
-    assert_routed_to(result, "family.telegram", "family.briar", "family.channel", "family.radio")
+    assert_routed_to(result, "family.telegram", "family.briar", "family.radio")
     assert result.to("family.radio").recipients == ("!0badc0de",)
-
-
-def test_the_other_radio_heard_on_the_channel_gets_its_copy_there() -> None:
-    hub = installation()
-    hub.hear(OTHER_RADIO, endpoint="family.channel", ago=timedelta(minutes=5))
-    msg = hub.message("family.radio", "Я тут", author=NAT_RADIO, from_recipient="!a1b2c3d4")
-
-    assert hub.route(routing, msg).to("family.radio").recipients == ()

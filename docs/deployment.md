@@ -129,8 +129,8 @@ hex) and the root topic `node/<id>` on `mqtt.meshtastic.kyiv.ua`. The hub's virt
    those variables (it is in the file as a comment, and in `config.example.yaml`).
 3. `check-config` (§2); the hub applies the file by itself. The hub's node reboots once to save the
    new MQTT settings, and `docker compose … logs meshtasticd-kyiv` shows the connection.
-4. Send a text on the `family` channel from a radio and see it in the hub's log, and the other way
-   round. The answers to design.md §6.6 go into spikes.md.
+4. Send a direct message to the hub's node from a radio and see it in the hub's log, and the other
+   way round (a Telegram message reaches the radio with an ACK). The answers to design.md §6.6 go into spikes.md.
 
 Until the login exists the hub's node uses our own Mosquitto, which no radio can reach, and its port
 8883 is closed to the internet (`MQTT_TLS_BIND`, `127.0.0.1` by default). To use gateways of our own

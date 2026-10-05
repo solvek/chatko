@@ -20,8 +20,8 @@ Meshtastic channel is decided in those networks and in the config (D22).
 One installation serves **several independent groups**. Several installations can later work together,
 e.g. a hub in the cloud and a hub at home without internet (§9.6).
 
-v1 is one hub in the cloud that keeps a Briar group, a Telegram group and Meshtastic (a channel, or
-DMs to several nodes) in sync (D20).
+v1 is one hub in the cloud that keeps a Briar group, a Telegram group and Meshtastic (direct messages
+to several nodes; `channel` endpoints exist but v1 does not use them, D59) in sync (D20).
 
 ## 2. Concepts
 
@@ -313,8 +313,8 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
   receive our messages there. At least one of them has MQTT on and is **claimed** in the community's
   registry (D27), which gives it a login (its node id in hex) and the root topic `node/<node id>` on
   `mqtt.meshtastic.kyiv.ua`. That node is the gateway: it uplinks what it hears to the broker and
-  downlinks what arrives, with the mesh's primary channel and the group's private channel, uplink and
-  downlink on, "Ignore MQTT" off. The hub's virtual node connects to the same broker with the same
+  downlinks what arrives, with the mesh's primary channel (and the group's private channel, if `channel`
+  endpoints are used, which v1 does not do, D59), uplink and downlink on, "Ignore MQTT" off. The hub's virtual node connects to the same broker with the same
   login and root topic, so it hears the gateway's packets and the gateway hears its own (the config
   needs only the login in `.env`: `KYIV_MQTT_USER`, `KYIV_MQTT_PASSWORD`). No gateway and no broker
   of our own are needed, and nothing but SSH has to be open on the server. **Not yet tried:** the
@@ -324,9 +324,15 @@ radio nodes, and an always-online gateway of our own is not guaranteed.
   PKI direct messages, is the first question of §6.6 and decides `dm`. Our own broker with a gateway
   of our own (D30) stays possible: it is the lab's setup, and `MQTT_TLS_BIND=0.0.0.0` publishes
   Mosquitto's TLS port (deploy/README.md).
+- **v1 uses only `dm` (D59).** It needs no private channel and no PSK given to anyone, and a gateway
+  needs only the primary channel, so any gateway on the hub's broker will do. Direct messages are
+  confirmed by an ACK and retried; a `channel` broadcast is not. `channel` stays in the code and the
+  tests, for a group that wants a broadcast later. With only `dm`, the Kyiv broker's carrying of PKI
+  packets (§6.6) decides whether v1 works at all.
 - Both kinds can be used in one group. Then a person with a node on both gets the message twice, unless
   the routing script skips `dm` for nodes recently heard on the channel (`last_heard` and a target's
-  `recipients`, §9.5; `routing.example.py` does it).
+  `recipients`, §9.5; `tests/integration/test_meshtastic_lab_relay.py` and `lab/three-networks/routing.py`
+  do it).
 - With a physical hub node (later), both kinds work within its radio range without any gateway.
 - **"Ignore MQTT" must be off** on the person's radio, and on every relay between the gateway and it.
   A packet from the hub's virtual node is marked "via MQTT", and the mark travels in the LoRa header after

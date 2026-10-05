@@ -1332,3 +1332,26 @@ on the server.
 its PKI and downlink policy, and the owner's node having the group's private channel. The field test
 (S23) is the first connection and fills in spikes.md. The community may still decline a bot node.
 Nothing in the code changed: only the example config, the compose file's port binding and the docs.
+
+## D59. v1 sends to Meshtastic only as direct messages
+**Status:** accepted (2026-10-05, the owner).
+D20 and S28 had Meshtastic as a private `channel` and as `dm` to several nodes. The owner does not want
+channel broadcasts for now.
+**Decision:**
+- v1's sites for Meshtastic are `dm` lists. `config.example.yaml` has no private channel and no `channel`
+  site (they are comments), `routing.example.py` is the plain "all other sites" rule with the feed, the
+  tag and the labels, and `docs/deployment.md`'s check is a direct message.
+- `channel` endpoints stay in the extension, its tests and the lab (S28's `lab/three-networks/` still
+  uses both), so nothing is removed; turning one on is a config change.
+**Consequences:**
+- A gateway needs only the primary channel (`LongFast`, the Kyiv PSK) with uplink and downlink on. No
+  private PSK has to be given to people or to the gateway, so any node with MQTT on the hub's broker is
+  a gateway, not only ours (D58).
+- A direct message is confirmed by an ACK and retried (S21): a gateway that is away costs delay, not a
+  lost message. Each listed node gets its own message of three packets (text, ACK, ACK of the ACK),
+  which is the cost for many members on a shared `LongFast`.
+- The question of §6.6 whether the Kyiv broker carries PKI direct messages between clients now decides
+  whether the Meshtastic side of v1 works at all (the field test S23 answers it).
+- `MESH_FAMILY_PSK` is still made by `deploy/setup.sh` and passed to the container, for when a `channel`
+  endpoint is wanted; the example config no longer uses it.
+

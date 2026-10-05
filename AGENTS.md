@@ -79,7 +79,7 @@
   useful references.
 - mr-tbot/mesh-api was evaluated and rejected as a base (D2), and re-evaluated with the same result (D19).
 - v1 scope (D20): one hub in the cloud that syncs a Briar group, a Telegram group and Meshtastic
-  (a channel or DMs to several nodes) through a virtual node. Routing is an admin-written Python script
+  (direct messages to several nodes; `channel` endpoints are supported but not used, D59) through a virtual node. Routing is an admin-written Python script
   (D16), and so is author labelling (D21). The hub only relays: no member management, commands or
   control surface (D22); channels, PSKs, `dm` node lists and optional people are in the config.
   People create the Briar groups and invite the hub, which reveals its contacts there; a group the

@@ -25,7 +25,8 @@ Meshtastic LoRa channels. A hub copies every message to all the other places.
   login of a claimed physical node of the owner's, and that node (with MQTT on) carries the
   messages to and from the mesh; the community gives logins only to registered physical nodes. A broker
   of your own with a gateway of your own works too. chatko sends to radios as direct messages to each member's node (one packet per
-  node, with delivery confirmation), or as one broadcast on a private group channel. A hub within
+  node, with delivery confirmation; v1 uses only these), or as one broadcast on a private group channel
+  (supported, not used in v1). A hub within
   radio range will be able to use a physical node instead and need no gateway (not in v1).
 - **Radios must not ignore MQTT, and must allow it.** Messages from a cloud hub reach the air through
   MQTT, and a radio with "Ignore MQTT" on drops them (and does not relay them). Meshtastic turns this
