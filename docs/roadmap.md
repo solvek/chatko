@@ -73,7 +73,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S24 | 4 | briar-headless fork: private-group API (Kotlin; a phone at the end, *with owner*) | Opus 5.5 | xhigh | done |
 | S25 | 4 | briar-headless Docker image; upstream merge request | Sonnet 5.5 | high | done |
 | S26 | 4 | Briar extension: port, endpoints, posts in and out, own-post filter | Opus 5.5 | high | done |
-| S27 | 4 | `briarctl`: contacts, groups, invitations (command-line tool) | Sonnet 5.5 | high | todo |
+| S27 | 4 | `briarctl`: contacts, groups, invitations (command-line tool) | Sonnet 5.5 | high | done |
 | S28 | 4 | Three-network test in the cloud setup: Briar ⇄ Telegram ⇄ Meshtastic (`channel` and `dm`) (*with owner*) | Sonnet 5.5 | medium | todo |
 | S29 | 5 | Production deployment, backups, operations docs | Sonnet 5.5 | high | todo |
 | S30 | 5 | Release review: security, code, docs | Opus 5.5 | xhigh | todo |
@@ -462,6 +462,21 @@ small REST client and fake, plain and `--json` output, an `import-linter` contra
 from chatko, README steps for joining the hub to a group a person made and revealing its contacts
 there (D52), and for the fallback, a group with the hub as the creator. Done when: every command is
 tested against the fake and tried once against the lab `briar-headless` with a phone.
+*Built (D55):* `src/tools/briarctl` (architecture.md §3.10): the `BriarClient` port with its
+`httpx` client and `FakeBriarClient`, the commands of design.md §7.5, `--json`, `--yes`, settings
+from `BRIARCTL_URL` and `BRIAR_AUTH_TOKEN` (or `--token-file`), the exit codes 0, 1 and 2; the two
+`import-linter` contracts hold in both directions and a CI coverage gate of 85 % is added (the tool has
+100 %). 152 tests, and twenty-one deliberate mutations of the code each failed one (three survivors
+were fixed by a test or by removing redundant code). README steps are in `deploy/README.md` and
+`lab/README.md`. One addition to §7.5: `contact remove` also stops adding a pending contact (the lab
+showed there was no other way to drop one). Tried against the lab's `briar-headless` without the
+phone: link, contact list, group create, invite, members (with the invited contact), reveal's
+`NOT_MEMBER`, dissolve, a wrong token, an unreachable API, a pending contact added and removed. Then
+with the owner's phone (2026-10-05): the phone created a group and invited the hub, `invitation list` and
+`accept` joined it, `members` showed the creator once the phone had synced (about a minute),
+`group reveal` for the creator was accepted; `group create` and `invite` made a group the phone
+joined (`members` showed it, and a post from the phone reached the hub). `group dissolve` removed the
+hub's test groups. The group the phone made, "Chatko test", stays in the lab for S28.
 
 **S28. Three networks.** *With owner*: the cloud setup of D20 (a Briar group made by a person on a
 phone and joined with `briarctl`, D52; a Telegram group; Meshtastic in the lab or on the Kyiv mesh). Done when: one group works across all three networks,

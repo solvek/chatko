@@ -25,6 +25,7 @@ test = ["pytest>=8.3"]
 
 [project.scripts]
 chatko = "chatko.app.cli:main"
+briarctl = "briarctl.cli:main"
 
 # Built-in extensions are registered like third-party ones, in the `chatko.extensions` entry point
 # group (docs/architecture.md §2). Each extension session adds its line here.

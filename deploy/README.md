@@ -48,6 +48,39 @@ secrets (D28). `BRIAR_AUTH_TOKEN` is the API token for chatko and `briarctl`. A 
 the container exit and restart in a loop; the log shows it. The container is healthy once the API
 answers; Tor connects within a minute after that (`INFO: Bootstrapped` in the log).
 
+### Joining the hub to a Briar group (`briarctl`)
+
+The hub's contacts and groups are managed with `briarctl` (design.md §7.5, D55), from the checkout
+that chatko runs in, with the token of `.env`:
+
+```bash
+set -a; . ./.env; set +a
+```
+
+```bash
+uv run briarctl link
+```
+
+Give that link to each person; they add it in Briar ("Add contact at a distance"), and the hub
+adds theirs with `uv run briarctl contact add 'briar://…' --alias Nat`. Both sides must do it.
+Then a person creates the group in the app and invites the hub, and:
+
+```bash
+uv run briarctl invitation list
+```
+
+```bash
+uv run briarctl invitation accept '<group id>'
+```
+
+```bash
+uv run briarctl group reveal '<group id>' Nat Ada
+```
+
+The id goes into `chatko.yaml` as the Briar site's `group`. If a person cannot create the group,
+`uv run briarctl group create Family` makes one with the hub as its creator, and `group invite` adds
+contacts to it (D52). Every command also takes `--json`.
+
 
 ## Settings for our physical gateway (S23)
 

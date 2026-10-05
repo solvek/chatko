@@ -73,8 +73,8 @@ src/
     chatko_briar/      # Briar (§3.9): ids, config, api (the BriarApi port), http_api, extension, testing
                        # (FakeBriarApi)
   tools/
-    briarctl/        # the admin's CLI for the hub's Briar account (design.md §7.5); a separate program:
-                     # it imports neither chatko nor chatko_briar, and they never import it
+    briarctl/        # the admin's CLI for the hub's Briar account (§3.10, design.md §7.5); a separate
+                     # program: it imports neither chatko nor chatko_briar, and they never import it
 tests/
   unit/              # domain, the public APIs and application, with fakes
   contract/          # each extension against extension_api.testing
@@ -336,6 +336,26 @@ does, D24).
 `tests/unit/briar` tests the extension over it, and the adapter over `httpx.MockTransport` and a
 real local `websockets` server.
 
+### 3.10 `briarctl`
+
+The admin's command-line tool for the hub's Briar account (design.md §7.5, D55). It is not an
+extension and not part of the hub: a separate program in `src/tools/briarctl`, installed as the
+`briarctl` command, that imports neither `chatko` nor `chatko_briar` (so it has its own Briar ids
+and its own client) and is imported by neither (§7).
+
+| Module | Contents |
+|---|---|
+| `ids` | the ids as the URL-safe text everywhere in the tool: `normalize` (either base64 form, padded or not, 32 bytes) and `from_json` (the API's standard base64) |
+| `api` | the records (`Contact`, `PendingContact`, `Group`, `Member`, `Sharing`, `Invitation`), the errors (`BriarError`, `UnreachableError`, `RefusedError`, `NotFoundError`, `RejectedError` with the API's `code`), `rejection` (the API's `error` codes in words) and the `BriarClient` port, one method for each call the tool makes |
+| `http_client` | `HttpBriarClient`, the port over a synchronous `httpx.Client`: the token goes in the `Authorization` header only; maps 401, 404, other 4xx and 5xx/429, a failed connection and an answer it cannot read to the errors, none of which shows the token |
+| `commands` | one function for each command, taking a `Context` (the client and the `confirm` question) and the parsed arguments and returning an `Outcome`: what `--json` prints, the lines of the plain output, and whether some items failed. Contacts are found by id, alias or name |
+| `cli` | the `argparse` tree (`--json`, `--url` and `--token-file` work before or after the command), the settings from the flags and the environment, the output, the exit codes (0, 1, 2), and `main` over the real client and `input` |
+| `testing` | `FakeBriarClient`: contacts and private groups in memory with the API's rules (`NOT_CREATOR`, `NOT_SHAREABLE`, `NOT_MEMBER`, not found), and helpers for what other people do (`add_contact_record`, `receive_invitation`, `join`, `add_member`, `dissolve`) |
+
+`tests/unit/briarctl` runs each command through `cli.run` against the fake (`harness.briarctl`
+collects the output and exit code), tests the client over `httpx.MockTransport`, the settings and
+exit codes, and the fake's own rules.
+
 ## 4. Routing API
 
 What routing does is in [design.md §9](design.md#9-routing). `chatko.routing_api` (D36) re-exports
@@ -575,6 +595,7 @@ INFO]` logs to stderr and runs the installed extensions (`discover_extensions`).
 | Meshtastic | official `meshtastic` Python library over TCP to `meshtasticd` (serial, BLE and TCP to a physical node later), pinned below 2.8 because the adapter overrides its hooks (§3.8); image `meshtastic/meshtasticd`, tag pinned in the compose files |
 | MQTT broker | Mosquitto 2 in the compose files: users and an ACL per hub node and gateway, TLS on 8883 for gateways (D30). The hub's code never talks MQTT itself; its `meshtasticd` nodes do |
 | Briar | `httpx` + `websockets` to `briar-headless` (our fork: a pinned upstream tag plus the private-group patch, D29, D51; built with JDK 17, run in a Java 17 JRE image for amd64 and arm64 from `deploy/briar/`, D28, D53) |
+| `briarctl` | `argparse` and a synchronous `httpx` client; no dependency beyond the hub's (§3.10) |
 | License | GPL-3.0-or-later |
 
 ## 7. Quality gates
@@ -585,7 +606,7 @@ Every pull request must pass in CI (GitHub Actions; Linux, macOS and Windows for
 - `mypy --strict`;
 - `lint-imports` (the dependency rule);
 - `pytest` with branch coverage: **≥ 95 %** for `domain`, `application`, `extension_api` and
-  `routing_api`, **≥ 85 %** for each extension, **≥ 90 %** overall;
+  `routing_api`, **≥ 85 %** for each extension and for `briarctl`, **≥ 90 %** overall;
 - the contract test suite for every built-in extension.
 
 The checks are configured in `pyproject.toml`, run by `.github/workflows/ci.yml` and, except for the

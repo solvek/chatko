@@ -31,3 +31,4 @@ jobs:
       - run: uv run coverage report --fail-under=85 --include="src/extensions/chatko_telegram/*"
       - run: uv run coverage report --fail-under=85 --include="src/extensions/chatko_meshtastic/*"
       - run: uv run coverage report --fail-under=85 --include="src/extensions/chatko_briar/*"
+      - run: uv run coverage report --fail-under=85 --include="src/tools/briarctl/*"

@@ -179,7 +179,8 @@ uv run lab/spike_briar.py send 1 "hello"
 the contact appears within seconds after that. The first build takes about 2 min. `down -v` wipes the
 account, after which the phone has to add the new link again.
 
-The private-group commands (until `briarctl`, S27) take a group id in standard or URL-safe base64:
+The spike client's private-group commands (the admin uses `briarctl`, below) take a group id in standard
+or URL-safe base64:
 
 ```bash
 uv run lab/spike_briar.py invitations
@@ -193,3 +194,21 @@ uv run lab/spike_briar.py accept '<group>'
 `invite <group> <contactId> [--text T]`, `reveal <group> <contactId>`, `decline`, `posts`, `post <group> <text>` and
 `read <group> <messageId>` cover the rest of the API (design.md §7.4); `--url` talks to another
 peer, with its token in `BRIAR_TOKEN`.
+
+`briarctl` (design.md §7.5) is the admin's tool for the same account. It reads the token from
+`BRIAR_AUTH_TOKEN` (or a file with `--token-file`) and talks to `127.0.0.1:7000` unless `--url` says
+otherwise:
+
+```bash
+export BRIAR_AUTH_TOKEN="$(docker compose -f lab/briar/docker-compose.yml exec -T briar cat /data/auth_token)"
+```
+
+```bash
+uv run briarctl contact list
+```
+
+```bash
+uv run briarctl invitation list
+```
+
+`uv run briarctl --help` lists the commands; every command takes `--help` too.

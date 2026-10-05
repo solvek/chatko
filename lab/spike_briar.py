@@ -7,7 +7,7 @@ D23) and the private-group API of our fork (S24, design.md §7.4, D29).
 
 Talks to the lab briar-headless (lab/briar/) on 127.0.0.1:7000, or the API at --url. The token is
 read from the container unless BRIAR_TOKEN is set. A <group> is a group id in standard or URL-safe
-base64. Not chatko code: `briarctl` (S27) replaces the group commands.
+base64. Not chatko code: `briarctl` does the same for the admin; this stays for the spikes.
 
     uv run lab/spike_briar.py link                    # the hub's briar:// link
     uv run lab/spike_briar.py add <link> [--alias A]  # add a pending contact

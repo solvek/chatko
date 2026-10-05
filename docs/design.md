@@ -554,21 +554,33 @@ documents every endpoint and event.
 
 ### 7.5 `briarctl`
 
-A small command-line tool for the admin, run on the server (e.g. `docker compose exec chatko briarctl …`).
-It talks only to the `briar-headless` REST API, with the same token as the extension, and shares no code
-with chatko's core or extensions (D24).
+A small command-line tool for the admin, run on the machine that has the hub's `briar-headless`
+(`uv run briarctl …`, or from inside chatko's container once the hub runs in one). It talks only to the
+`briar-headless` REST API, with the same token as the extension, and shares no code with chatko's core
+or extensions (D24, D55).
 
 | Command | What it does |
 |---|---|
 | `briarctl link` | print the hub's `briar://` link |
-| `briarctl contact add <link> [--alias NAME]`, `contact list`, `contact remove <contact>` | manage the account's contacts |
+| `briarctl contact add <link> [--alias NAME]`, `contact list`, `contact remove <contact>` | manage the account's contacts; `list` also shows the contacts still being added, and `remove` also stops adding one of those (the API's only way to drop one that failed) |
 | `briarctl invitation list`, `invitation accept <group>`, `invitation decline <group>` | join a group a person created (the usual way, D52), or refuse; `list` shows the group's id for `chatko.yaml` |
 | `briarctl group list`, `group members <group>` | inspect groups; `members` shows which members are the hub's contacts and whether that is revealed, and for a group the hub created also the contacts invited but not joined yet |
 | `briarctl group reveal <group> <contact>…` | reveal the hub's relationship with members who are its contacts, so they sync the group directly (§7.3) |
-| `briarctl group create <name>`, `group invite <group> <contact>…` | the fallback: create a group with the hub as its creator (prints the id for `chatko.yaml`) and invite contacts to it |
+| `briarctl group create <name>`, `group invite <group> <contact>… [--text NOTE]` | the fallback: create a group with the hub as its creator (prints the id for `chatko.yaml`) and invite contacts to it |
 | `briarctl group dissolve <group>` | dissolve a group the hub created (to re-create it without someone), or leave a group someone else created |
 
-Output is plain text by default and JSON with `--json`, so it can be scripted.
+- **Settings.** The API is at `--url` or `$BRIARCTL_URL` (default `http://127.0.0.1:7000`). The token is
+  in `$BRIAR_AUTH_TOKEN` (the name in chatko's `.env`) or in the file given with `--token-file`; it
+  is never an argument, which other users could read in the process list, and no message shows it.
+- **Arguments.** A `<group>` is an id in either base64 form, with or without padding; a `<contact>` is
+  its id, or its alias or name when only one contact has it. A command for several contacts goes on
+  after one fails, prints why for each, and exits with 1 at the end.
+- **Output.** Plain text by default, JSON with `--json`, so it can be scripted. Ids are printed in the
+  URL-safe form of §7.1, ready for `chatko.yaml`.
+- **Asking first.** `contact remove` and `group dissolve` cannot be undone, so they ask, and `--yes`
+  skips the question; with no terminal to answer they do nothing.
+- **Exit codes.** 0 done; 1 the call or some of its items failed (the message is on stderr); 2 wrong
+  arguments or settings.
 
 ## 8. Author labels
 

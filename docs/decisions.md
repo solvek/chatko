@@ -1189,3 +1189,36 @@ and posts in the groups the admin lists.
 start, oldest first. A post marked read by another client of the same account is lost to the relay;
 the account has no other client. Whether the extension also runs against a real `briar-headless`
 and a phone is checked in S28.
+
+## D55. `briarctl`: a separate synchronous tool with its own client, settings from the environment, a question before anything that cannot be undone
+**Status:** accepted (S27).
+D24 and D52 set what `briarctl` does; S27 builds it as `src/tools/briarctl`, a package of the same
+distribution and the `briarctl` command.
+**Decision:**
+- It shares no code with chatko or `chatko_briar`: its own Briar ids, records, errors, `BriarClient`
+  port and `httpx` client (synchronous, since a command makes a few requests and exits), tested
+  against `FakeBriarClient`. Two `import-linter` contracts keep it apart in both directions; a
+  forbidden import in either direction broke them when tried. The duplicated code is about forty
+  lines of ids and the endpoint calls, which is less than what a shared package would cost.
+- Settings: `--url` or `BRIARCTL_URL` (default `http://127.0.0.1:7000`), the token from
+  `BRIAR_AUTH_TOKEN` or `--token-file`. There is no `--token`, because an argument is visible in the
+  process list. An address with a user name or password is refused. No error shows the token.
+- Ids and arguments: a group is an id in either base64 form and is always printed URL-safe, ready for
+  `chatko.yaml`. A contact is its id, or its alias or name when exactly one contact has it.
+- `--json` prints the tool's own records (`snake_case` keys, ids URL-safe), so a script can pass them
+  back. The text output is for people and may change.
+- A command for several contacts (`group reveal`, `group invite`) goes on after one fails, reports
+  each, and exits with 1; a failure of the whole call prints one line on stderr and exits with 1.
+  Wrong arguments and settings exit with 2.
+- `contact remove` and `group dissolve` ask first, `--yes` skips the question, and without a terminal
+  to answer (end of input) they do nothing. A dissolve or a leave cannot be undone, and neither can a
+  removed contact.
+- One addition to design.md §7.5, found in the lab: a contact whose link was wrong or whose other side
+  never added the hub's link stays "pending" for two days and then "failed", and the API's only way to
+  drop it is `DELETE /v1/contacts/add/pending`. So `contact list` shows the pending contacts and
+  `contact remove` stops adding one (by alias or id) when no real contact has that name. Nothing else
+  was added: no `reveal` for every member at once, no group names as arguments.
+**Consequences:** the tool works against the same `briar-headless` API as the extension and needs
+its own README steps (`deploy/README.md`, `lab/README.md`). `lab/spike_briar.py` stays as the spike
+client. Whether the whole flow works with a phone, a group a person made, is S27's last check and S28's
+first step.
