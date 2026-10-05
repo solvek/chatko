@@ -70,7 +70,8 @@ src/
                        # testing (FakeTelegramApi)
     chatko_meshtastic/ # Meshtastic (§3.8): config, api (the MeshApi port), library_api, provisioning,
                        # node (MeshNode), text (parts), extension, testing (FakeMeshApi)
-    chatko_briar/
+    chatko_briar/      # Briar (§3.9): ids, config, api (the BriarApi port), http_api, extension, testing
+                       # (FakeBriarApi)
   tools/
     briarctl/        # the admin's CLI for the hub's Briar account (design.md §7.5); a separate program:
                      # it imports neither chatko nor chatko_briar, and they never import it
@@ -315,6 +316,25 @@ restart. `tests/integration/test_meshtastic_lab_relay.py` runs the whole hub (`r
 extension on the lab's hub node and Telegram over `FakeTelegramApi`, and the lab's radio under a
 `MeshNode` as a member's radio (D50): both kinds of endpoint each way, a long message in parts,
 a radio that is away until it is heard, and a reset radio until the config has its new key.
+
+### 3.9 The Briar extension
+
+`chatko_briar` (design.md §7, D54), registered as `briar`. One instance is one `briar-headless`
+account; its endpoints are private groups. It manages no contacts, groups or invitations (`briarctl`
+does, D24).
+
+| Module | Contents |
+|---|---|
+| `ids` | Briar ids as 32 bytes and their two text forms: standard base64 in the API's JSON, URL-safe base64 without padding in URL paths, the config, logs and transport ids |
+| `config` | `BriarConfig(api, auth_token)` (an http(s) URL without credentials; a non-blank `SecretStr`) and `BriarGroup(group)`, the endpoint (a group id as `briarctl` prints it, checked to be 32 bytes) |
+| `api` | the `BriarApi` port: `subscribe()` (connects and authenticates the WebSocket, returns an `EventStream` with `next()` and `close()`), `groups()`, `messages(group)`, `post(group, text)`, `mark_read(group, message)`, `close()`. Its own types (`Group`, `GroupMessage` with `own` and `read`, the events `MessageAdded` and `GroupDissolved`) and errors: `UnreachableError` (retry; also a lost WebSocket), `RefusedError` (the token: the admin's), `GroupUnavailableError` (the hub is not a member), `DissolvedError`, `RejectedError` (a request that cannot work) |
+| `http_api` | `HttpBriarApi`, the port over `httpx` and `websockets`: the token goes in the `Authorization` header and as the WebSocket's first message, and never into an error text; maps 401, 404, `403 DISSOLVED`, other 4xx and 5xx/429 to the port's errors; skips WebSocket events it has no use for or cannot read |
+| `extension` | `BriarExtension`: one task that subscribes, catches up (lists every configured group, submits the unread posts of others, marks each read once `hub.submit` returned) and then reads events, and starts over with a backoff when the connection is lost, the token is refused or the hub could not take a post. A group added to the endpoints while running is caught up in the background. It skips joins, its own posts and posts already read, and remembers the ids of the last 4096 posts it handed over, so that the overlap of a catch-up and the WebSocket costs the hub no second look. Admin notices (one per group until it changes): the hub is not a member, the creator dissolved the group, the token is refused. `deliver` posts `label: text` cut to 31 744 bytes (`truncated`), answers `Failed` for a dissolved group, a rejected request, an unknown endpoint or a recipient, and `Retry` otherwise |
+| `testing` | `FakeBriarApi`: the port in memory (`add_group`, `arrive`, `dissolve`, `leave`, `drop_connection`, `push`, `fail`, `online`; `sent`, `texts`, `unread`, `connections`; `idle()` waits until the extension has taken every event). Like the real API it sends events only to a connected WebSocket and never sends the hub's own posts |
+
+`tests/contract/test_briar_extension.py` runs the contract suite over `FakeBriarApi`;
+`tests/unit/briar` tests the extension over it, and the adapter over `httpx.MockTransport` and a
+real local `websockets` server.
 
 ## 4. Routing API
 

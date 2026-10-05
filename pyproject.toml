@@ -11,10 +11,12 @@ dependencies = [
     "aiosqlite>=0.22.1",
     # The Meshtastic adapter overrides a few internals of TCPInterface (chatko_meshtastic.library_api):
     # take a new minor version deliberately, once the lab tests (`pytest -m lab`) pass with it.
+    "httpx>=0.28.1",
     "meshtastic>=2.7.11,<2.8",
     "pydantic>=2.9",
     "pyyaml>=6.0",
     "watchfiles>=1.0",
+    "websockets>=14",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +31,7 @@ chatko = "chatko.app.cli:main"
 [project.entry-points."chatko.extensions"]
 telegram = "chatko_telegram:TelegramExtension"
 meshtastic = "chatko_meshtastic:MeshtasticExtension"
+briar = "chatko_briar:BriarExtension"
 
 [dependency-groups]
 dev = [

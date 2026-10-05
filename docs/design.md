@@ -469,6 +469,11 @@ from these (§8).
 - **Dissolved.** When the hub joined someone else's group and its creator dissolves it, the extension
   posts an admin notice, and posts into it are refused (§7.4). Briar also marks such a group
   dissolved when the admin removes its creator from the hub's contacts.
+  Messages for it are then `Failed`, not held: the group does not come back (D54). The unread posts
+  that were already in it are still relayed.
+- **Not a member.** A configured group that the hub has not joined (the invitation is not accepted
+  yet) is reported to the admin with a hint to run `briarctl invitation accept`. Messages for it
+  wait, in order, until the hub joins (D54).
 
 ### 7.3 Relay through other members
 

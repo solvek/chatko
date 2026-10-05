@@ -1158,3 +1158,34 @@ check turns healthy about 25 s after the start, under QEMU as well.
 **Consequences:** the server needs Docker with BuildKit and the fork's source (or a copied image).
 Once the fork is public, `BRIAR_SRC`'s default can be its URL. S29 runs the image on the ARM64 host
 for real and backs up `data/briar` with `BRIAR_PASSWORD` kept among the backups' secrets.
+
+## D54. The Briar extension: catch-up after every connection, read flags as the hub's note, the hub never accepts invitations
+**Status:** accepted (S26).
+S24 built the private-group API and D52 settled who creates groups; S26 is the extension that reads
+and posts in the groups the admin lists.
+**Decision:**
+- One task per instance: `subscribe` (the WebSocket is open and authenticated before anything
+  else, so no event can fall into a gap), then a catch-up of every configured group, then events.
+  Any failure (a lost connection, a refused token, a post the hub could not take) closes the
+  stream and starts again with a backoff of 1 s doubling to 60 s, which includes a new catch-up.
+- A post is "handed over" when `hub.submit` returned, and only then marked read in Briar
+  (design.md §7.2). A failed mark leaves the post unread; the next catch-up submits it again and the
+  hub drops the copy by its transport id, the Briar message id in URL-safe base64.
+- The overlap of a catch-up and the WebSocket is also cut in the extension, by a bounded memory
+  (4096 ids) of the posts handed over. The hub's de-duplication stays the rule; the memory only saves
+  it work.
+- The hub's own posts are recognized by `authorStatus` `ourselves`, never submitted. Joins are not
+  relayed; a post with only white space is marked read and dropped (the core refuses an empty
+  message).
+- A group the hub is not a member of (invitation not accepted, or left) is reported to the admin
+  once, with the `briarctl invitation accept` hint, and messages for it `Retry`: they wait, in order,
+  until the admin accepts. A dissolved group is reported once and its posts `Failed`: the group does
+  not come back, and held messages would block newer ones for good. Its unread posts are still
+  handed over.
+- Posts longer than 31 744 bytes are cut with `…` and delivered as `truncated` (a post is a
+  single message, nothing else sends so much text).
+- The extension never accepts an invitation, whatever the group (D24, D52).
+**Consequences:** a hub that was down for days submits every unread post of its groups at the next
+start, oldest first. A post marked read by another client of the same account is lost to the relay;
+the account has no other client. Whether the extension also runs against a real `briar-headless`
+and a phone is checked in S28.

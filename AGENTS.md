@@ -47,7 +47,7 @@
   run nightly in CI by `.github/workflows/lab.yml`; S22, D50). Our briar-headless fork has the
   private-group API (S24, D51), tried with a phone; `deploy/briar/` builds its image for amd64 and
   arm64 for the server and the lab, and the upstream merge request waits for the owner (S25, D53,
-  `docs/briar-merge-request.md`). Every
+  `docs/briar-merge-request.md`). The Briar extension (`chatko_briar`, S26, D54) is tested against a fake of its `BriarApi` port, not yet against a real `briar-headless`. Every
   extension passes the contract suite in `chatko.extension_api.testing`. Phase 0 (spikes S1–S3) is closed (D30): the
   Briar relay on phones, the local Meshtastic lab in `lab/` (channel and direct messages, keys,
   ACKs, provisioning), briar-headless in Docker in `lab/briar/` and the plan for its private-group

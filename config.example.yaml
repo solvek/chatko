@@ -55,7 +55,7 @@ extensions:
   #   connection: { tcp: "meshtasticd-lab:4403" }
   #   ...
 
-  briar:                           # groups are made with `briarctl` (the hub is their creator)
+  briar:                           # the hub joins Briar groups with `briarctl` (a person makes the group, D52)
     type: briar
     api: http://briar:7000
     auth_token: ${BRIAR_AUTH_TOKEN}
@@ -67,7 +67,7 @@ groups:
   family:
     sites:
       telegram: { ext: telegram, chat: -1001234567890 }
-      briar: { ext: briar, group: "<Briar group id>" }          # printed by `briarctl group create`
+      briar: { ext: briar, group: "<Briar group id>" }          # printed by `briarctl invitation list`
       channel: { ext: kyiv, channel: family }                    # broadcast on the private channel (by name)
       radio: { ext: kyiv, dm: ["!a1b2c3d4", "!0badc0de"] }       # PKI direct messages to these nodes
 

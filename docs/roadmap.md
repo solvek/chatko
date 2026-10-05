@@ -72,7 +72,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S23 | 3 | Field test on the Kyiv mesh through our own gateway (*with owner*, needs an `EU_433` node) | Sonnet 5.5 | medium | todo |
 | S24 | 4 | briar-headless fork: private-group API (Kotlin; a phone at the end, *with owner*) | Opus 5.5 | xhigh | done |
 | S25 | 4 | briar-headless Docker image; upstream merge request | Sonnet 5.5 | high | done |
-| S26 | 4 | Briar extension: port, endpoints, posts in and out, own-post filter | Opus 5.5 | high | todo |
+| S26 | 4 | Briar extension: port, endpoints, posts in and out, own-post filter | Opus 5.5 | high | done |
 | S27 | 4 | `briarctl`: contacts, groups, invitations (command-line tool) | Sonnet 5.5 | high | todo |
 | S28 | 4 | Three-network test in the cloud setup: Briar ⇄ Telegram ⇄ Meshtastic (`channel` and `dm`) (*with owner*) | Sonnet 5.5 | medium | todo |
 | S29 | 5 | Production deployment, backups, operations docs | Sonnet 5.5 | high | todo |
@@ -449,6 +449,13 @@ in `chatko.yaml` as endpoints; posts in and out with author accounts; drop its o
 the read flag after every reconnect; an admin notice when a group is dissolved (design.md §7.2, D29).
 No contacts, groups or invitations (D24). Done when: design.md §7.1 (the extension's part) and §7.2
 are covered by tests, the extension passes the contract suite, coverage ≥ 85 %.
+*Done (D54):* `chatko_briar` (architecture.md §3.9): the `BriarApi` port over `httpx` and
+`websockets` with its fake, the config (`api`, `auth_token`; the endpoint `group`), and the
+extension with the catch-up after every connection, the read flag as the hub's note, own posts and
+joins dropped, admin notices for a group the hub is not in, a dissolved group and a refused token.
+It passes the contract suite; `tests/unit/briar` has the extension, the config, the ids and the
+adapter (REST over `httpx.MockTransport`, the WebSocket against a local `websockets` server). Not
+tried against a real `briar-headless` yet; S28 does it with a phone.
 
 **S27. briarctl.** The command-line tool of design.md §7.5 as the separate `briarctl` package: its own
 small REST client and fake, plain and `--json` output, an `import-linter` contract that keeps it apart
