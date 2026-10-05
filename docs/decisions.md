@@ -1355,3 +1355,22 @@ channel broadcasts for now.
 - `MESH_FAMILY_PSK` is still made by `deploy/setup.sh` and passed to the container, for when a `channel`
   endpoint is wanted; the example config no longer uses it.
 
+
+## D60. Production holds the real Briar account and the first group; development and the lab start from new ones
+**Status:** accepted (2026-10-05, the owner).
+S29 set production up next to development with every secret generated anew, while the one account that
+carried real state, the lab's briar-headless (a contact, an invitation to the people's group), stayed in
+the lab. The owner's rule: what is real lives in production, and development is the one that is made new.
+**Decision:**
+- Production's briar-headless runs the account that used to be the lab's (its data copied to
+  `data/briar`, its `BRIAR_PASSWORD` and `BRIAR_AUTH_TOKEN` in production's `.env`). Its contact and the
+  invitation came with it; the hub joined the people's group «Кризовий чатко» and revealed its contacts.
+  What was replaced is kept in `/opt/chatko/replaced-<date>/` (the empty account and the old `.env`).
+- The lab's briar-headless (`lab/briar`, port 7000) was recreated: a new account, new secrets in
+  `lab/briar/.env`, the old volume removed. The same account must never run in two places.
+- Production's `groups` has one group, `crisis`: the Telegram supergroup «Кризовий Чатко» and that Briar
+  group, with the default routing. Meshtastic joins when the Kyiv broker works (D58, D59).
+**Consequences:**
+- The hub's Briar link is the one the people already have; nothing is to be re-added.
+- The Briar account's nickname stays `chatko-lab`: the nickname is set only when an account is created.
+- Tested by the owner both ways, Telegram → Briar and Briar → Telegram.

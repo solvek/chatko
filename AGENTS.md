@@ -50,7 +50,7 @@
   `docs/briar-merge-request.md`). The Briar extension (`chatko_briar`, S26, D54) is tested against a fake of its `BriarApi` port. `briarctl` (S27, D55, `src/tools/briarctl`) is built and tried on the lab with a phone. One group works across Telegram, Briar and Meshtastic (a channel and DMs to two lab nodes) with the whole hub on the lab (S28, D56, `lab/three-networks/`). The
   production stack (S29, D57: `deploy/`, `docs/deployment.md`) has the hub in a container and a daily
   backup (`backup.sh`, `restore.sh`); it runs in production on the owner's VPS (S29 done) and is tried with a TLS client, a restore
-  and the arm64 images under QEMU; no radio has connected yet: v1 uses the Kyiv broker with the login of a physical node of the owner (D58), which the owner does not have yet (S23). Every
+  and the arm64 images under QEMU; production mirrors the Telegram supergroup «Кризовий Чатко» and the Briar group of the same name, tested both ways (D60); no radio has connected yet: v1 uses the Kyiv broker with the login of a physical node of the owner (D58), which the owner does not have yet (S23). Every
   extension passes the contract suite in `chatko.extension_api.testing`. Phase 0 (spikes S1–S3) is closed (D30): the
   Briar relay on phones, the local Meshtastic lab in `lab/` (channel and direct messages, keys,
   ACKs, provisioning), briar-headless in Docker in `lab/briar/` and the plan for its private-group
@@ -66,7 +66,7 @@
   Oracle or other VM). **Production runs from `/opt/chatko`** (compose project `chatko`, the
   production Telegram bot, a snapshot without `.git`; updating and the table of what differs are in
   `docs/deployment.md` §8). **This checkout is development:** its `.env` and `config/` have their own
-  keys and names (`COMPOSE_PROJECT_NAME=chatko-dev`, other host ports, node `chatko dev`) and no bot
+  keys and names (`COMPOSE_PROJECT_NAME=chatko-dev`, other host ports, node `chatko dev`, its own new Briar account) and no bot
   token until the owner makes a development bot. Never put production's token or groups here, and
   never touch `/opt/chatko` except to deploy. There is no hardware Meshtastic node yet, so a second
   virtual node (`meshtasticd`) plays the member's radio.

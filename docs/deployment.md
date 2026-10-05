@@ -234,11 +234,14 @@ One machine is both the server and the development machine, so the two are kept 
 | Compose project | `chatko` | `chatko-dev` (`COMPOSE_PROJECT_NAME` in its `.env`) |
 | Host ports | all on `127.0.0.1`: 8883 (Mosquitto), 4413, 7001 for briar-headless | 18883, 14413, 17000 |
 | Secrets | its own `.env`, with the production bot's token | its own `.env`; no bot token until a development bot exists |
+| Briar account | the real one (D60): the people's contacts and the group «Кризовий чатко» | a new one in `lab/briar` with no contacts |
+| Groups | `crisis`: Telegram supergroup «Кризовий Чатко» ⇄ the Briar group (default routing) | `dev` (Meshtastic only, until a development bot exists) |
 | Node | `chatko` / `CHKO`; broker user `hub` (Kyiv login later) | `chatko dev` / `DEV` |
 | Runs as | user `chatko` (the hub), systemd timer `chatko-backup.timer` | the local lab (`lab/`) and `uv run` |
 
-The lab (`lab/`, ports 1883, 4403–4405 and briar-headless on 7000) is development too and stays as it
-was. To update production from the development checkout, copy the changed files over (there is no
+The lab (`lab/`, ports 1883, 4403–4405 and briar-headless on 7000) is development too. Real state
+lives in production and development is the one made new (D60): never move a Briar account back, and never
+run one account in two places. To update production from the development checkout, copy the changed files over (there is no
 `.git` in `/opt/chatko`) and rebuild:
 
 ```bash
