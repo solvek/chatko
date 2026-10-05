@@ -41,7 +41,9 @@ def kyiv_channels() -> list[channel_pb2.ChannelSettings]:
     return list(channel_set.settings)
 
 
-def settings_messages(uplink: bool) -> list[admin_pb2.AdminMessage]:
+def settings_messages(
+    uplink: bool, test_channel: tuple[str, bytes] | None = None
+) -> list[admin_pb2.AdminMessage]:
     host, user, password = (os.environ[f"WIKIMESH_MQTT_{k}"] for k in ("HOST", "USER", "PASSWORD"))
     messages: list[admin_pb2.AdminMessage] = []
 
@@ -81,6 +83,16 @@ def settings_messages(uplink: bool) -> list[admin_pb2.AdminMessage]:
         m.set_channel.settings.uplink_enabled = uplink
         m.set_channel.settings.downlink_enabled = True
         messages.append(m)
+    if test_channel:  # a private channel of our own: the community's nodes do not subscribe to its name
+        name, psk = test_channel
+        m = admin_pb2.AdminMessage()
+        m.set_channel.index = 2
+        m.set_channel.role = channel_pb2.Channel.Role.SECONDARY
+        m.set_channel.settings.name = name
+        m.set_channel.settings.psk = psk
+        m.set_channel.settings.uplink_enabled = uplink
+        m.set_channel.settings.downlink_enabled = True
+        messages.append(m)
     return messages
 
 
@@ -88,13 +100,19 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--seconds", type=int, default=120, help="how long to listen")
     parser.add_argument("--uplink", action="store_true", help="let the node publish (off by default)")
+    parser.add_argument("--test-channel", metavar="NAME:PSK_BASE64", help="add a private channel at index 2")
     args = parser.parse_args()
+
+    test_channel = None
+    if args.test_channel:
+        name, _, psk = args.test_channel.partition(":")
+        test_channel = (name, base64.b64decode(psk))
 
     iface = connect(PORT)
     try:
         begin = admin_pb2.AdminMessage(begin_edit_settings=True)
         commit = admin_pb2.AdminMessage(commit_edit_settings=True)
-        for message in (begin, *settings_messages(args.uplink), commit):
+        for message in (begin, *settings_messages(args.uplink, test_channel), commit):
             send_admin(iface, message)
     finally:
         iface.close()

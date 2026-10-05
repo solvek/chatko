@@ -1412,7 +1412,6 @@ variable pair, not `KYIV_MQTT_*`), never into chat or the repository. If they ar
 check shows what the broker passes under `kyiv/#`, and whether the hub's node, which expects encrypted
 packets, can read decoded ones; the result goes into spikes.md and D58 is amended.
 **Consequences:** no code or config changes; the Meshtastic endpoints stay unconnected in production.
-**Progress (2026-10-05):** the login works and the owner's node reaches the broker through the phone's proxy (spikes.md S23 part 1).
-A stock `meshtasticd` does not read decoded envelopes from MQTT; whether it reads the owner's encrypted ones is still open, and so is
-what the broker does with downlink, so the hub is not connected to it.
-
+**Progress (2026-10-05):** the login works, the owner's node reaches the broker through the phone's proxy, and a stock `meshtasticd`
+2.7.26 with encryption off reads that node's packets and other gateways' decoded ones (spikes.md S23 part 1). Open: downlink to the owner's
+node, PKI direct messages and the broker's policy; the hub is not connected to this broker yet.

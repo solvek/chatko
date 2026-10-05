@@ -651,8 +651,13 @@ Still open, and where it is answered:
   neighbour repeated it), which does not mean MQTT failed. Firmware 2.8.1 had to turn *Ignore MQTT* off and *Ok to MQTT* on
   by hand (the first-time duty-cycle region pitfall).
 - *The lab's `wikimesh` probe* (`lab/spike_wikimesh.py`, a `meshtasticd` 2.7.26 with the Kyiv channels, encryption off, uplink off):
-  it connects, subscribes only to `…/e/LongFast/+`, `…/e/KyivUA/+` and `…/e/PKI/+` (not `c/`), receives the broker's envelopes,
-  **including the owner's node's**, but handles none: no router log line, node database stays empty. That held with decoded
-  envelopes and also with the owner's encrypted ones; why the encrypted ones were not handled is **open** (candidates: firmware
-  2.8.1 vs 2.7.26, packet signing, channel hash; to check next with the packets' channel hash and a 2.8.x probe).
+  it connects, subscribes to `…/e/<channel>/+` of its channels and `…/e/PKI/+` (not `c/`), and **reads the broker: its router logs
+  `Received text msg` for the owner's node's texts (sent on a private channel of our own, `chatkotest`, a random PSK on index 2 of both
+  nodes; the community's nodes do not subscribe to its name, so it stays private, unlike `LongFast`) and for a real person's text
+  (a decoded envelope from another gateway, accepted because the probe's own `encryption_enabled` is off).** The first runs looked like
+  "not handled" for two reasons: the log shows nothing about a received packet at `info`, and the probe's `ignore_mqtt` was **on** (the
+  first-time duty-cycle region pitfall; the router logged `Msg came in via MQTT` at `debug` and dropped the packet). The script
+  now has to write the LoRa config a second time like `lab/provision.py`; until then, `meshtastic --set lora.ignore_mqtt false`.
+  The 2.8.1 node's packets are handled by a 2.7.26 `meshtasticd`. Not yet checked: downlink (the hub's packet reaching the owner's node
+  through the phone's proxy) and PKI direct messages.
 - *A pitfall.* `meshtasticd` prints the MQTT password in its log at start; do not paste logs.
