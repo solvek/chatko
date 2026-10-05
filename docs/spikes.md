@@ -658,6 +658,18 @@ Still open, and where it is answered:
   "not handled" for two reasons: the log shows nothing about a received packet at `info`, and the probe's `ignore_mqtt` was **on** (the
   first-time duty-cycle region pitfall; the router logged `Msg came in via MQTT` at `debug` and dropped the packet). The script
   now has to write the LoRa config a second time like `lab/provision.py`; until then, `meshtastic --set lora.ignore_mqtt false`.
-  The 2.8.1 node's packets are handled by a 2.7.26 `meshtasticd`. Not yet checked: downlink (the hub's packet reaching the owner's node
-  through the phone's proxy) and PKI direct messages.
+  The 2.8.1 node's packets are handled by a 2.7.26 `meshtasticd`.
+- *Both ways, on a private channel (2026-10-05).* A text sent by the probe on `chatkotest` reached the owner's node and the app
+  once **both sides had MQTT encryption on**. With the probe's encryption off it published *decoded* envelopes, and the node's
+  serial log (`meshtastic --noproto`) said `Ignore decoded msg on MQTT, encryption enabled`: stock firmware drops a decoded
+  envelope when its own `encryption_enabled` is on (and accepts only decoded ones from others when it is off, which is why the
+  probe could read the community's decoded packets). **One node cannot do both**: to talk privately it needs encryption on, to read
+  the community's decoded traffic it needs it off. Privacy note: with encryption off even a private channel's text is plain on the
+  broker for anyone listening to `kyiv/#`; with it on only the channel name, the sender id, the size and the time are visible.
+  Downlink through the phone's proxy works; the node subscribes by itself after a channel change plus a reboot.
+  **Not stable yet:** of three encrypted texts sent in a row (the probe's 4th, 5th and 6th) only the last one appeared in the app,
+  although all three were on the broker and the node logged `Received MQTT topic …` for the one it was watching; the cause is open
+  (the phone's BLE or proxy reconnecting after the node's reboot, duplicate packet ids after the probe restarted, or the node
+  subscribing only after a serial client connected). To check: five texts 20 s apart, no serial client, a steady phone link,
+  and count. Not yet checked either: PKI direct messages, and the hub in a container.
 - *A pitfall.* `meshtasticd` prints the MQTT password in its log at start; do not paste logs.
