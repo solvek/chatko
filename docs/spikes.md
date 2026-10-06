@@ -677,4 +677,11 @@ Still open, and where it is answered:
   reached the probe (its router: `PKI Decryption worked`). Open: the app showed "Failed to deliver to mesh" on the owner's own texts although the
   probe received them, so the probe's ACK back did not count; the hub must ACK a member's direct message, and whether it does through the
   proxy is unchecked. **v1 keeps `dm` only (D59):** an ACK with retries survives the loss that a channel broadcast does not.
+- *The hub's ACK back to a member (2026-10-06, production).* Answers the open question above, and it was a channel mismatch: a delivery of the
+  hub's `dm` to the owner's node (2.7.26) was retried nine times (`did not acknowledge the message (MAX_RETRANSMIT)`), the app showed the text again
+  and again, and the node's own texts showed "Failed to deliver to mesh". The ACK of a PKI message travels on **channel index 0** of its sender,
+  and index 0 differed: the node's was the Kyiv `LongFast`, the hub's the private `chatko`, so neither side could read the other's ACK. After the
+  node's channels were reordered (`chatko` at 0, the Kyiv `LongFast` and `KyivUA` at 1 and 2; `lora.channel_num` kept at 1 so the frequency does not
+  follow the primary channel's name) the next delivery was ACKed at the first attempt and the stuck one finished. **Rule: two nodes that exchange
+  PKI direct messages through MQTT need the same channel (name and key) at index 0.** A channel with an empty name shows as `LongFast` in the app.
 - *A pitfall.* `meshtasticd` prints the MQTT password in its log at start; do not paste logs.
