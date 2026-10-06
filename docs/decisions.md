@@ -1432,3 +1432,11 @@ node id), and the broker's long-term terms.
 **Consequences:** a Telegram message in «Кризовий Чатко» reached Briar and the owner's node (ACKed, with the author's label). Still to try: a direct
 message from the node to the hub, a Briar message to both, range with a second radio, replacing the PSK, and the broker's terms (the login is one shared account).
 
+
+
+## D64. `#nomirror`, `#no-mirror` and `#nm` keep a message out of the relay
+**Status:** accepted (2026-10-06, the owner).
+**Decision:** a rule in the routing script (`routing.example.py`), not in the core or in an extension: a message whose text has one of
+these tags as a whole word (any case) gets no targets, so it stays where it was written. It works for every network, since routing sees
+only the text. Production's `config/routing.py` has the rule and the default routing otherwise.
+**Consequences:** the tag stays in the text; there is no per-group switch (a script can add one).

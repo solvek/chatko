@@ -5,6 +5,8 @@ always drops echoes and duplicates, whatever this function returns (docs/design.
 is described in docs/architecture.md §4.
 """
 
+import re
+
 from chatko.routing_api import (
     RoutedMessage,
     RoutingContext,
@@ -16,8 +18,15 @@ from chatko.routing_api import (
 
 api_version = (1, 0)  # optional: the version of chatko.routing_api this script is written for
 
+# A message with one of these tags as a word stays where it was written and is not relayed.
+_NO_MIRROR = re.compile(r"(?<!\w)#(?:nomirror|no-mirror|nm)(?!\w)", re.IGNORECASE)
+
 
 def route(msg: RoutedMessage, ctx: RoutingContext) -> list[Target]:
+    # #nomirror, #no-mirror or #nm: do not relay the message anywhere.
+    if _NO_MIRROR.search(msg.text):
+        return []
+
     # A feed: the mesh's LongFast chat goes to the owner's private chat with the bot.
     if msg.endpoint == ctx.source("longfast"):
         return [to_endpoint(ctx.source("owner"))]

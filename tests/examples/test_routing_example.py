@@ -117,3 +117,18 @@ def test_a_direct_message_from_one_radio_reaches_the_other() -> None:
 
     assert_routed_to(result, "family.telegram", "family.briar", "family.radio")
     assert result.to("family.radio").recipients == ("!0badc0de",)
+
+
+def test_a_message_with_a_no_mirror_tag_is_not_relayed() -> None:
+    hub = installation()
+    for text in ("#nomirror тут", "тут #no-mirror", "тут #NM, а далі", "(#nm)"):
+        msg = hub.message("family.telegram", text, author=NAT_TG)
+
+        assert list(hub.route(routing, msg)) == []
+
+
+def test_a_word_that_only_starts_like_a_no_mirror_tag_is_relayed() -> None:
+    hub = installation()
+    msg = hub.message("family.telegram", "#nmap і #nomirrors", author=NAT_TG)
+
+    assert_routed_to(hub.route(routing, msg), "family.briar", "family.radio")
