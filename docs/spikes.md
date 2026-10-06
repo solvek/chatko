@@ -667,9 +667,14 @@ Still open, and where it is answered:
   the community's decoded traffic it needs it off. Privacy note: with encryption off even a private channel's text is plain on the
   broker for anyone listening to `kyiv/#`; with it on only the channel name, the sender id, the size and the time are visible.
   Downlink through the phone's proxy works; the node subscribes by itself after a channel change plus a reboot.
-  **Not stable yet:** of three encrypted texts sent in a row (the probe's 4th, 5th and 6th) only the last one appeared in the app,
-  although all three were on the broker and the node logged `Received MQTT topic …` for the one it was watching; the cause is open
-  (the phone's BLE or proxy reconnecting after the node's reboot, duplicate packet ids after the probe restarted, or the node
-  subscribing only after a serial client connected). To check: five texts 20 s apart, no serial client, a steady phone link,
-  and count. Not yet checked either: PKI direct messages, and the hub in a container.
+  **Channel broadcast is lossy:** in two series of texts on the private channel the owner's app showed 4 of 8 (the probe's 4th to 6th)
+  and then 6 of 9 (`s1`…`s5`, `id-a`…`id-d`: `s1`, `s5` and `id-d` missing). Every text was on the broker (the probe publishes each one three
+  times, about 7 s apart), packet ids do not repeat after a restart of the probe, and the loss is somewhere between the broker, the phone's
+  proxy and the node; the cause is open, the pattern is not clear. A broadcast has no ACK, so the loss is silent.
+- *PKI direct messages (`lab/spike_wikimesh_dm.py`).* With the owner's public key given to the probe as a contact and the probe's NodeInfo
+  announced on the private channel, **5 of 5 direct texts from the probe to the owner's node were ACKed** (the sender's client got `NONE`; a plain
+  ACK is seen only with `onResponseAckPermitted`), all appeared in the app, and **3 of 3 direct texts the other way** (a word, an emoji, a reply)
+  reached the probe (its router: `PKI Decryption worked`). Open: the app showed "Failed to deliver to mesh" on the owner's own texts although the
+  probe received them, so the probe's ACK back did not count; the hub must ACK a member's direct message, and whether it does through the
+  proxy is unchecked. **v1 keeps `dm` only (D59):** an ACK with retries survives the loss that a channel broadcast does not.
 - *A pitfall.* `meshtasticd` prints the MQTT password in its log at start; do not paste logs.

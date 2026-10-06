@@ -1412,9 +1412,9 @@ variable pair, not `KYIV_MQTT_*`), never into chat or the repository. If they ar
 check shows what the broker passes under `kyiv/#`, and whether the hub's node, which expects encrypted
 packets, can read decoded ones; the result goes into spikes.md and D58 is amended.
 **Consequences:** no code or config changes; the Meshtastic endpoints stay unconnected in production.
-**Progress (2026-10-05):** the login works and a text goes both ways between the owner's node (through the phone's proxy) and a stock
-`meshtasticd` on a private channel of ours, with MQTT encryption **on** on both sides (spikes.md S23 part 1). A node with encryption on
-drops decoded envelopes, and one with it off reads the community's decoded traffic but exposes its own plain text on the broker, so the
-hub's node uses encryption on. Open: PKI direct messages, the hub itself on this broker, and a private channel for two nodes instead of
-`dm` (D59 would change for them).
+**Progress (2026-10-05/06):** the login works; a text goes both ways between the owner's node (through the phone's proxy) and a stock `meshtasticd`
+on a private channel of ours, with MQTT encryption **on** on both sides. A node with encryption on drops decoded envelopes, one with it off exposes
+its text on the broker, so the hub's node uses it on. Channel broadcasts were lossy (about a third); **direct messages were ACKed 5 of 5** and three came
+back (spikes.md S23 part 1), so D59 (`dm` only) stands. Open: the hub's ACK back to a member, the hub itself on this broker (production gets its own
+node id), and the broker's long-term terms.
 

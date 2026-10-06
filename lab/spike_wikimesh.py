@@ -2,11 +2,11 @@
 # requires-python = ">=3.12"
 # dependencies = ["meshtastic==2.7.11", "paho-mqtt==2.1.0"]
 # ///
-"""Spike S23 (D62): can a virtual node read the community broker with encryption off?
+"""Spike S23 (D62): a virtual node on the community broker.
 
 Provisions the lab's `wikimesh` probe (:4406) for the community broker named in the environment
 (`WIKIMESH_MQTT_HOST`, `_USER`, `_PASSWORD`; `.env`): region EU_433, the Kyiv channel from the
-community's QR, MQTT root `kyiv`, encryption **off**. With `--listen` (the default) the node only
+community's QR, MQTT root `kyiv`, encryption **on** (a stock node drops decoded envelopes when it is on). With `--listen` (the default) the node only
 reads: uplink is off on its channels, so it publishes nothing but its own presence is not announced
 by packets. It then prints what the node learned from the broker.
 
@@ -68,7 +68,7 @@ def settings_messages(
     mqtt.username = user
     mqtt.password = password
     mqtt.root = "kyiv"
-    mqtt.encryption_enabled = False
+    mqtt.encryption_enabled = True  # a node with it on drops decoded envelopes, one with it off exposes its text on the broker (S23)
     mqtt.json_enabled = False
     mqtt.tls_enabled = False
     messages.append(m)
@@ -80,7 +80,7 @@ def settings_messages(
             channel_pb2.Channel.Role.PRIMARY if index == 0 else channel_pb2.Channel.Role.SECONDARY
         )
         m.set_channel.settings.CopyFrom(settings)
-        m.set_channel.settings.uplink_enabled = uplink
+        m.set_channel.settings.uplink_enabled = False  # never announce the probe on the community's channels
         m.set_channel.settings.downlink_enabled = True
         messages.append(m)
     if test_channel:  # a private channel of our own: the community's nodes do not subscribe to its name
@@ -117,6 +117,16 @@ def main() -> int:
     finally:
         iface.close()
     print("provisioned; the node reboots, then listens for", args.seconds, "s")
+    time.sleep(15)
+    # The first duty-cycle region turns ignore_mqtt on after the first write: write it again.
+    iface = connect(PORT)
+    try:
+        again = admin_pb2.AdminMessage()
+        again.set_config.lora.CopyFrom(iface.localNode.localConfig.lora)
+        again.set_config.lora.ignore_mqtt = False
+        send_admin(iface, again)
+    finally:
+        iface.close()
     time.sleep(15)
 
     iface = connect(PORT)
