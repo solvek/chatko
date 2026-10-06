@@ -69,7 +69,7 @@ would have used it run on Opus 5.5 at `xhigh`, and `max` is the escape hatch if 
 | S20 | 3 | Meshtastic: `channel` endpoints, splitting, rate limit, de-duplication, `LongFast` source | Opus 5.5 | high | done |
 | S21 | 3 | Meshtastic: `dm` endpoints, ACKs and retries | Opus 5.5 | xhigh | done |
 | S22 | 3 | Meshtastic lab integration tests, radio ⇄ Telegram | Opus 5.5 | high | done |
-| S23 | 3 | Field test on the Kyiv mesh through our own gateway (*with owner*, needs an `EU_433` node) | Sonnet 5.5 | medium | in progress: production relays Telegram → Briar + a direct message to the owner's node, ACKed (D63); the reverse directions and radio range are still to try |
+| S23 | 3 | Field test on the Kyiv mesh through our own gateway (*with owner*, needs an `EU_433` node) | Sonnet 5.5 | medium | in progress: production relays Telegram → Briar + a direct message to the owner's node, ACKed (D63); the reverse directions and radio range are still to try; the plan and current state are in `docs/meshtastic-testing.md` |
 | S24 | 4 | briar-headless fork: private-group API (Kotlin; a phone at the end, *with owner*) | Opus 5.5 | xhigh | done |
 | S25 | 4 | briar-headless Docker image; upstream merge request | Sonnet 5.5 | high | done |
 | S26 | 4 | Briar extension: port, endpoints, posts in and out, own-post filter | Opus 5.5 | high | done |

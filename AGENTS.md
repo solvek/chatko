@@ -21,6 +21,8 @@
 - `docs/architecture.md`: layers, packages, extension API, technology, quality gates.
 - `docs/decisions.md`: why things are the way they are.
 - `docs/spikes.md`: phase-0 experiments and their results. Record results there.
+- `docs/meshtastic-testing.md`: the current state of the Meshtastic tests with real radios and brokers,
+  the firmware rules that decide them, and the test plan. Kept current, not append-only.
 - `docs/roadmap.md`: the plan by working session, with the model and effort for each. Mark sessions
   done there.
 - `config.example.yaml`, `routing.example.py`, `.env.example`: configuration format.
