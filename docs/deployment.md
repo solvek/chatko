@@ -262,5 +262,8 @@ run one account in two places. To update production from the development checkou
 rsync -a --exclude='.git/' --exclude='.venv/' --exclude='__pycache__/' --exclude='.*_cache/' \
     --exclude='/config/' --exclude='/data/' --exclude='/.env' --exclude='/backups/' \
     --exclude='/replaced-*/' --exclude='/lab/briar/.env' ~/Projects/chatko/ /opt/chatko/
-cd /opt/chatko && docker compose -f deploy/docker-compose.yml up -d --build chatko
+cd /opt/chatko && BRIAR_SRC=~/Projects/briar docker compose -f deploy/docker-compose.yml up -d --build chatko
 ```
+
+`BRIAR_SRC` is only there so that compose finds the build context of the `briar` service (it reads every one); the
+briar image is not rebuilt.
