@@ -116,7 +116,17 @@ def main() -> int:
             send_admin(iface, message)
     finally:
         iface.close()
-    print("provisioned; the node reboots, then listens for", args.seconds, "s")
+    print("provisioned; the node reboots")
+    time.sleep(15)
+    iface = connect(PORT)  # the firmware turned ignore_mqtt on when the region was set: write the LoRa config again
+    try:
+        again = admin_pb2.AdminMessage()
+        again.set_config.lora.CopyFrom(iface.localNode.localConfig.lora)
+        again.set_config.lora.ignore_mqtt = False
+        send_admin(iface, again)
+    finally:
+        iface.close()
+    print("ignore_mqtt turned off; listening for", args.seconds, "s")
     time.sleep(15)
     # The first duty-cycle region turns ignore_mqtt on after the first write: write it again.
     iface = connect(PORT)
