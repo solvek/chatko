@@ -1458,6 +1458,8 @@ under `node/050c0a66` to the gateways' topics and theirs into it.
 **Consequences:** direct messages both ways and the feed work through the owner's phone proxy. Open: a direct message through someone
 else's gateway (the owner's node without internet), the hub's own login (registering `!c4a7c001` on the site), and new-account
 notices only for nodes of the hub's endpoints.
+**Update (2026-10-06, the same evening):** the hub's node was claimed on the site and has its own login (`c4a7c001`, root
+`node/c4a7c001`, routing on); the broker copies between its topic and the owner's node's. New-account notices: D66.
 
 ## D66. The notice for a new account is only for accounts seen at a site of a group
 **Status:** accepted (2026-10-06, the owner).

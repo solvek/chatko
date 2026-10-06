@@ -23,11 +23,11 @@ gateway must have, and which of it we can choose.
 
 | Part | State |
 |---|---|
-| Broker | `mqtt.meshtastic.kyiv.ua:1883`, no TLS, the login and topic of the owner's claimed node: user `050c0a66`, root `node/050c0a66`, routing on for the node on the site (D65). Host, TLS, root and login are in `.env` (`KYIV_MQTT_*`). The wikimesh broker (`mqtt.wikimesh.in.ua`, root `kyiv`, D62, D63) is a commented line away |
+| Broker | `mqtt.meshtastic.kyiv.ua:1883`, no TLS. The hub's node has its own login since 15:22 UTC: user `c4a7c001`, root `node/c4a7c001`, claimed on the site with routing on (D65); the broker copies between its topic, the owner's node's and the gateways'. Host, TLS, root and login are in `.env` (`KYIV_MQTT_*`). The wikimesh broker (`mqtt.wikimesh.in.ua`, root `kyiv`, D62, D63) is a commented line away |
 | Hub's node | virtual (`meshtasticd` 2.7.26), `!c4a7c001`, long name `chatko`, MQTT encryption **on**; channel 0 the Kyiv `LongFast`, channel 1 `chatko` (private PSK) |
-| Owner's node | `!050c0a66` (`SergiAdv`), nRF52840 on 2.7.26; channels `LongFast` (0), `KyivUA` (1), `chatko` (2); on the same broker, login and root through the phone app's MQTT proxy, encryption on; fixed position; registered on `meshtastic.kyiv.ua` |
+| Owner's node | `!050c0a66` (`SergiAdv`), nRF52840 on 2.7.26; channels `LongFast` (0), `KyivUA` (1), `chatko` (2); on the same broker with its own login (`050c0a66`, root `node/050c0a66`) through the phone app's MQTT proxy, encryption on; fixed position; registered on `meshtastic.kyiv.ua` |
 | Group | `crisis` has `dm: ["!050c0a66"]` (D59: direct messages only) |
-| Feed | the source `longfast` (`channel: LongFast`) goes to the owner's chat with the bot (`config/routing.py`); `admin_notices.new_accounts` is off, since the hub hears hundreds of nodes there |
+| Feeds | the sources `longfast` (`channel: LongFast`) and `kyivbot` (`dm: ["!bfffffff"]`, the site's bot that sends the claim code) go to the owner's chat with the bot (`config/routing.py`); `admin_notices.new_accounts` tells only accounts seen at a group's site (D66) |
 | Second node | not yet |
 
 ## 3. What has been tried
@@ -200,6 +200,13 @@ through a gateway that knows the hub's node, which needs a channel the gateway s
   that no node has (`chatkoacl`).
 - So with the root `node/050c0a66` and MQTT encryption on, a node hears the community's encrypted
   traffic and is heard by it, and direct messages from radios without internet reach the broker.
+
+**Claiming the hub's node (2026-10-06).** The hub's virtual node `!c4a7c001`, on the broker under the owner's login, showed up on
+`meshtastic.kyiv.ua` from its NodeInfo (0 hops: the site reads the broker). The site wants the key received 5 times: the node
+sends NodeInfo at boot, so its `meshtasticd` was restarted every 12 minutes (one sent per boot only if the last was over 10
+minutes ago). The claim code is a PKI direct message from `KyivBot` (`!bfffffff`): the hub had its key from its NodeInfo on the
+broker (and it is in `contacts`), and a source `kyivbot` was set up to pass the message to the owner. With the node's own login and
+routing turned on for it, the hub left the owner's login.
 
 ## 8. Options for a member without internet
 
