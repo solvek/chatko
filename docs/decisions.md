@@ -1440,3 +1440,21 @@ message from the node to the hub, a Briar message to both, range with a second r
 these tags as a whole word (any case) gets no targets, so it stays where it was written. It works for every network, since routing sees
 only the text. Production's `config/routing.py` has the rule and the default routing otherwise.
 **Consequences:** the tag stays in the text; there is no per-group switch (a script can add one).
+
+## D65. The hub moves to the Kyiv broker under the owner's claimed node, with the Kyiv `LongFast` as channel 0
+**Status:** accepted (2026-10-06, the owner); supersedes D63's broker and channels, carries out D58.
+The owner's node `!050c0a66` was registered on `meshtastic.kyiv.ua` and got a login to `mqtt.meshtastic.kyiv.ua` with the topic
+`node/050c0a66`. A passive survey (docs/meshtastic-testing.md §7) showed what the wikimesh broker lacks: most Kyiv gateways publish
+encrypted, so they carry PKI direct messages from radios to MQTT, and with routing on for the node the broker copies what is published
+under `node/050c0a66` to the gateways' topics and theirs into it.
+**Decision:**
+- The hub's node connects with that login and topic (`KYIV_MQTT_HOST`, `_TLS`, `_ROOT`, `_USER`, `_PASSWORD` in `.env`, passed by
+  `deploy/docker-compose.yml`), MQTT encryption on. The owner's node uses the same login and topic while it has internet.
+- Channel 0 is the Kyiv `LongFast` on the hub and on the owner's node, since the ACK of a direct message travels on channel 0 and the
+  community's gateways learn the hub from its NodeInfo there. The private `chatko` stays as a secondary channel. The hub is now a
+  visible node on the public `LongFast` (D58's question to the community stays open).
+- The source `longfast` feeds the mesh's public chat to the owner's chat with the bot; it can be commented out, the routing script
+  checks for it. `admin_notices.new_accounts` is off, since on `LongFast` the hub hears hundreds of nodes.
+**Consequences:** direct messages both ways and the feed work through the owner's phone proxy. Open: a direct message through someone
+else's gateway (the owner's node without internet), the hub's own login (registering `!c4a7c001` on the site), and new-account
+notices only for nodes of the hub's endpoints.
