@@ -1418,3 +1418,17 @@ its text on the broker, so the hub's node uses it on. Channel broadcasts were lo
 back (spikes.md S23 part 1), so D59 (`dm` only) stands. Open: the hub's ACK back to a member, the hub itself on this broker (production gets its own
 node id), and the broker's long-term terms.
 
+
+## D63. Production runs on the community broker with a private channel and a `dm` to the owner's node
+**Status:** accepted (2026-10-06, the owner); refines D58 and D62.
+**Decision:**
+- Production's hub node (`kyiv`, its own id and keys) connects to `mqtt.wikimesh.in.ua` with the owner's login (`WIKIMESH_MQTT_USER`, `WIKIMESH_MQTT_PASSWORD`
+  in `.env`; `deploy/docker-compose.yml` passes them), root `kyiv`, MQTT encryption **on**.
+- Its only channel is a **private** one, `chatkotest`, with a PSK from `.env` (`WIKIMESH_PRIVATE_PSK`), not the community's LongFast: the hub does not
+  announce itself on the community's channel, and a PKI direct message needs one channel with uplink. The PSK is the test one from the tests and must be replaced.
+- The group `crisis` gets a `radio` site, `dm: ["!4d80f899"]` (the owner's node), whose public key is in the node's `contacts`. The owner's node learned the
+  hub's key by importing it as a contact (a `meshtastic.org/v/#…` link made from the hub's public key); a hub whose key the node does not know is not ACKed.
+- Our own Mosquitto stays in the stack, unused. The development lab is shut down.
+**Consequences:** a Telegram message in «Кризовий Чатко» reached Briar and the owner's node (ACKed, with the author's label). Still to try: a direct
+message from the node to the hub, a Briar message to both, range with a second radio, replacing the PSK, and the broker's terms (the login is one shared account).
+

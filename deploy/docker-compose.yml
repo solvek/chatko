@@ -31,6 +31,9 @@ services:
       KYIV_PRIMARY_PSK: ${KYIV_PRIMARY_PSK:-}
       MESH_FAMILY_PSK: ${MESH_FAMILY_PSK:-}
       MESH_KYIV_PRIVATE_KEY: ${MESH_KYIV_PRIVATE_KEY:-}
+      WIKIMESH_MQTT_USER: ${WIKIMESH_MQTT_USER:-}
+      WIKIMESH_MQTT_PASSWORD: ${WIKIMESH_MQTT_PASSWORD:-}
+      WIKIMESH_PRIVATE_PSK: ${WIKIMESH_PRIVATE_PSK:-}
       BRIAR_AUTH_TOKEN: ${BRIAR_AUTH_TOKEN:-}
     volumes:
       - ../config:/app/config:ro   # chatko.yaml and routing.py; the hub reloads them when they change
