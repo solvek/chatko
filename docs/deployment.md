@@ -140,6 +140,20 @@ check it with `mosquitto_pub -h <server> -p 8883 --cafile server.crt -u gateway1
 (the certificate is `config/mosquitto/tls/server.crt`): it must connect, and refuse anonymous clients
 and wrong passwords.
 
+### The radio nodes
+
+A member's (or the owner's) physical node needs the same channel 0 as the hub's node, or the ACKs of direct messages
+are lost and the hub retries a delivery again and again (spikes.md S23, D63). `deploy/configure-node.sh` sets a node over USB
+in one go: region `EU_433`, slot 1, Ignore MQTT off, OK to MQTT on, channel 0 the private channel, channels 1 and 2 the Kyiv
+`LongFast` and `KyivUA`, and, for a node with internet, its MQTT client (encryption on, proxy to client on):
+
+```bash
+CHATKO_PSK=<the key in .env as WIKIMESH_PRIVATE_PSK> deploy/configure-node.sh --port /dev/ttyACM0
+```
+
+The key goes on the command line: run it on your own machine and never commit it. A node with MQTT encryption on drops the
+community's decoded envelopes, so it does not list the community's nodes; that is the price of the private traffic with the hub.
+
 ## 5. Operations
 
 Every command below runs in `/opt/chatko`; `dc` stands for `docker compose -f deploy/docker-compose.yml`.

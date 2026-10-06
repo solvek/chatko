@@ -36,6 +36,15 @@ extensions:
                                    # other channel slots are turned off. Names: up to 11 bytes, no spaces
       - name: LongFast             # index 0: the primary channel of the Kyiv mesh; its PSK is not the
         psk: ${KYIV_PRIMARY_PSK}   # default one: take it from the QR code at https://meshtastic.kyiv.ua/join
+      # The community broker mqtt.wikimesh.in.ua instead (D62, D63): host mqtt.wikimesh.in.ua, username
+      # ${WIKIMESH_MQTT_USER}, password ${WIKIMESH_MQTT_PASSWORD}, root_topic kyiv, and a **private channel
+      # as index 0** instead of LongFast:
+      # - name: chatko
+      #   psk: ${WIKIMESH_PRIVATE_PSK}   # base64, 32 bytes (`python3 -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"`)
+      # The ACK of a direct message travels on channel 0 of its sender, so the hub's channel 0 and channel 0 of
+      # every node that exchanges direct messages with it must be the same (name and key): the nodes get theirs
+      # from `deploy/configure-node.sh`. A private channel 0 means the community's gateways can carry the
+      # members' PKI direct messages but not the ACKs; with the Kyiv LongFast as channel 0 (above) they carry both.
       # v1 sends to Meshtastic only as direct messages (D59), which need no private channel. To use
       # `channel` sites too (design.md §6.2), add one here, and give its PSK to people as a channel URL/QR code:
       # - name: family
