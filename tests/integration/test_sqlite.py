@@ -19,7 +19,13 @@ from chatko.domain import (
     Target,
     fingerprint,
 )
-from chatko.infrastructure.sqlite import Database, SchemaError, SqliteHistory, SqliteStore
+from chatko.infrastructure.sqlite import (
+    Database,
+    SchemaError,
+    SqliteAccounts,
+    SqliteHistory,
+    SqliteStore,
+)
 from chatko.infrastructure.sqlite.migrations import MIGRATIONS
 
 T0 = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
@@ -55,6 +61,26 @@ async def test_reopening_keeps_the_data_and_applies_no_migration_twice(tmp_path:
     await reopened.close()
 
 
+async def test_accounts_known_before_migration_2_are_not_new_at_a_site(tmp_path: Path) -> None:
+    # They were told about under the old rule, or the admin did not ask (D66).
+    path = tmp_path / "chatko.db"
+    async with aiosqlite.connect(path) as connection:
+        await connection.executescript(MIGRATIONS[0] + "PRAGMA user_version = 1;")
+        await connection.execute(
+            "INSERT INTO accounts VALUES ('telegram', '1', 'Ада', NULL, ?, ?)",
+            ("2026-10-01T12:00:00.000000Z", "2026-10-01T12:00:00.000000Z"),
+        )
+        await connection.commit()
+
+    database = await Database.open(path)
+    accounts = SqliteAccounts(database)
+
+    assert await database.version() == len(MIGRATIONS)
+    assert not await accounts.note(ADA, T0, at_site=True)
+    assert await accounts.note(Account(AccountKey("telegram", "2")), T0, at_site=True)
+    await database.close()
+
+
 async def test_a_database_of_a_newer_chatko_is_refused(tmp_path: Path) -> None:
     path = tmp_path / "chatko.db"
     async with aiosqlite.connect(path) as connection:
@@ -71,7 +97,9 @@ async def test_a_failed_transaction_is_rolled_back() -> None:
 
     async def fail_after_writing() -> None:
         async with database.transaction() as db:
-            await db.execute("INSERT INTO accounts VALUES ('telegram', '9', 'x', NULL, 'a', 'a')")
+            await db.execute(
+                "INSERT INTO accounts VALUES ('telegram', '9', 'x', NULL, 'a', 'a', NULL)"
+            )
             raise RuntimeError("boom")
 
     with pytest.raises(RuntimeError, match="boom"):

@@ -195,10 +195,10 @@ class SqliteAccounts:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    async def note(self, account: Account, at: datetime) -> bool:
+    async def note(self, account: Account, at: datetime, *, at_site: bool = False) -> bool:
         async with self._database.transaction() as db:
             cursor = await db.execute(
-                "SELECT last_seen FROM accounts WHERE kind = ? AND external_id = ?",
+                "SELECT last_seen, first_at_site FROM accounts WHERE kind = ? AND external_id = ?",
                 (account.key.kind, account.key.external_id),
             )
             row = await cursor.fetchone()
@@ -206,7 +206,7 @@ class SqliteAccounts:
             if row is None:
                 await db.execute(
                     "INSERT INTO accounts (kind, external_id, display_name, short_name, "
-                    "first_seen, last_seen) VALUES (?, ?, ?, ?, ?, ?)",
+                    "first_seen, last_seen, first_at_site) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         account.key.kind,
                         account.key.external_id,
@@ -214,21 +214,24 @@ class SqliteAccounts:
                         account.short_name,
                         when,
                         when,
+                        when if at_site else None,
                     ),
                 )
-                return True
+                return at_site
+            new = at_site and row[1] is None
             await db.execute(
-                "UPDATE accounts SET display_name = ?, short_name = ?, last_seen = ? "
-                "WHERE kind = ? AND external_id = ?",
+                "UPDATE accounts SET display_name = ?, short_name = ?, last_seen = ?, "
+                "first_at_site = ? WHERE kind = ? AND external_id = ?",
                 (
                     account.display_name,
                     account.short_name,
                     max(when, row[0]),
+                    when if new else row[1],
                     account.key.kind,
                     account.key.external_id,
                 ),
             )
-            return False
+            return new
 
 
 def _delivery_key(delivery: Delivery) -> tuple[str, str, str, str]:

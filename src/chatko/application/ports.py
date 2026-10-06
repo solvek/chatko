@@ -107,9 +107,11 @@ class HistoryRepository(Protocol):
 class AccountRegistry(Protocol):
     """The accounts the hub has seen (design.md §8, the notice for a new account)."""
 
-    async def note(self, account: Account, at: datetime) -> bool:
-        """Remember the account, with its latest names. Returns whether this is the first time the
-        hub sees its key."""
+    async def note(self, account: Account, at: datetime, *, at_site: bool = False) -> bool:
+        """Remember the account, with its latest names. `at_site` says it is seen at a site of a
+        group now. Returns whether this is the first time the hub sees its key at a site: an
+        account seen only elsewhere (a source, a channel no group uses) is remembered but never
+        new until it shows up at a site."""
         ...
 
 

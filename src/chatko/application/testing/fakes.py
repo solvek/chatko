@@ -170,12 +170,15 @@ class InMemoryAccounts:
     def __init__(self) -> None:
         self.accounts: dict[AccountKey, Account] = {}
         self.last_seen: dict[AccountKey, datetime] = {}
+        self.first_at_site: dict[AccountKey, datetime] = {}
 
-    async def note(self, account: Account, at: datetime) -> bool:
-        new = account.key not in self.accounts
+    async def note(self, account: Account, at: datetime, *, at_site: bool = False) -> bool:
         self.accounts[account.key] = account
         self.last_seen[account.key] = max(at, self.last_seen.get(account.key, at))
-        return new
+        if not at_site or account.key in self.first_at_site:
+            return False
+        self.first_at_site[account.key] = at
+        return True
 
 
 @dataclass(frozen=True, slots=True)

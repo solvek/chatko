@@ -1458,3 +1458,13 @@ under `node/050c0a66` to the gateways' topics and theirs into it.
 **Consequences:** direct messages both ways and the feed work through the owner's phone proxy. Open: a direct message through someone
 else's gateway (the owner's node without internet), the hub's own login (registering `!c4a7c001` on the site), and new-account
 notices only for nodes of the hub's endpoints.
+
+## D66. The notice for a new account is only for accounts seen at a site of a group
+**Status:** accepted (2026-10-06, the owner).
+With the hub's node on the Kyiv `LongFast` (D65), every node it heard was a "new account" and the owner's chat got a notice for each:
+hundreds on a public channel, and production turned `new_accounts` off.
+**Decision:** `NewAccounts` still notes every account, but tells the admin only when an account shows up at a site of a group for the
+first time. The `AccountRegistry` keeps when that was (`first_at_site`, SQLite migration 2); an account first heard at a source (a feed
+such as `longfast`) or at no endpoint is told about once it appears at a site. Accounts known before migration 2 count as told.
+**Consequences:** production turns `new_accounts` on again. A node that only listens is never told about, which is what the notice is for:
+filling `people` with the members of the groups.

@@ -64,4 +64,11 @@ MIGRATIONS: tuple[str, ...] = (
         PRIMARY KEY (kind, external_id)
     );
     """,
+    # 2: when an account was first seen at a site of a group; the notice for a new account is only
+    # for those (D66). The accounts known before were told about under the old rule, or the admin
+    # did not ask: they are not told again.
+    """
+    ALTER TABLE accounts ADD COLUMN first_at_site TEXT;
+    UPDATE accounts SET first_at_site = first_seen;
+    """,
 )

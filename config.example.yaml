@@ -106,7 +106,7 @@ sources:
 # Where the hub posts admin notices: errors, foreign Telegram groups.
 admin_notices:
   to: owner
-  new_accounts: false              # true: a notice for every account seen for the first time (to fill `people`)
+  new_accounts: false              # true: a notice for every account first seen at a site of a group (to fill `people`)
 
 # Optional: one label per human across networks. Everyone else gets a label generated from their name.
 people:

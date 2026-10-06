@@ -12,7 +12,7 @@ from chatko.application.testing import (
     RecordingNotices,
 )
 from chatko.domain import Account, AccountKey
-from tests.unit.application.rig import ADA, FAMILY_CHANNEL, NAT, TOPOLOGY, Rig
+from tests.unit.application.rig import ADA, FAMILY_CHANNEL, LONGFAST, NAT, TOPOLOGY, Rig
 
 RADIO = Account(AccountKey("fake", "!a1b2c3d4"), "Base Camp", "BC1")
 SILENT = Account(AccountKey("fake", "!0badc0de"))
@@ -45,12 +45,35 @@ async def test_a_new_account_is_told_once_with_its_names() -> None:
     ]
 
 
-async def test_an_account_heard_nowhere_in_particular_and_without_names() -> None:
+async def test_an_account_without_names_is_told_by_its_key() -> None:
     accounts, _, notices = watch()
 
+    await accounts.saw(SILENT, FAMILY_CHANNEL)
+
+    assert notices.notices[0].text.startswith(
+        "A new account at family.channel: fake:!0badc0de. To give"
+    )
+
+
+async def test_an_account_heard_at_no_site_is_noted_but_not_told() -> None:
+    # A mesh's public channel (a source) or a packet at no endpoint: there can be hundreds (D66).
+    accounts, registry, notices = watch()
+
+    await accounts.saw(RADIO, LONGFAST)
     await accounts.saw(SILENT)
 
-    assert notices.notices[0].text.startswith("A new account: fake:!0badc0de. To give")
+    assert {RADIO.key, SILENT.key} <= registry.accounts.keys()
+    assert notices.notices == []
+
+
+async def test_an_account_heard_elsewhere_first_is_told_once_it_shows_up_at_a_site() -> None:
+    accounts, _, notices = watch()
+
+    await accounts.saw(RADIO, LONGFAST)
+    await accounts.saw(RADIO, FAMILY_CHANNEL)
+    await accounts.saw(RADIO, FAMILY_CHANNEL)
+
+    assert [n.key for n in notices.notices] == ["account:fake:!a1b2c3d4"]
 
 
 async def test_a_person_of_the_config_is_noted_but_not_told() -> None:
@@ -76,7 +99,7 @@ async def test_a_failing_registry_is_logged_and_never_raises(
 ) -> None:
     accounts, registry, _ = watch()
 
-    async def broken(account: Account, at: datetime) -> bool:
+    async def broken(account: Account, at: datetime, *, at_site: bool = False) -> bool:
         raise OSError("disk full")
 
     registry.note = broken  # type: ignore[method-assign]

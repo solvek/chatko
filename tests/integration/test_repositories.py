@@ -293,16 +293,31 @@ class TestHistory:
 
 
 class TestAccounts:
-    async def test_the_first_time_an_account_is_noted_it_is_new(self, repos: Repos) -> None:
-        assert await repos.accounts.note(ADA, T0)
-        assert not await repos.accounts.note(ADA, T0 + timedelta(minutes=1))
+    async def test_the_first_time_an_account_is_noted_at_a_site_it_is_new(
+        self, repos: Repos
+    ) -> None:
+        assert await repos.accounts.note(ADA, T0, at_site=True)
+        assert not await repos.accounts.note(ADA, T0 + timedelta(minutes=1), at_site=True)
 
     async def test_another_account_is_new(self, repos: Repos) -> None:
-        await repos.accounts.note(ADA, T0)
+        await repos.accounts.note(ADA, T0, at_site=True)
 
-        assert await repos.accounts.note(Account(AccountKey("telegram", "2")), T0)
+        assert await repos.accounts.note(Account(AccountKey("telegram", "2")), T0, at_site=True)
 
     async def test_an_account_noted_with_new_names_is_not_new_again(self, repos: Repos) -> None:
+        await repos.accounts.note(ADA, T0, at_site=True)
+
+        assert not await repos.accounts.note(Account(ADA.key, "Ada Lovelace"), T0, at_site=True)
+
+    async def test_an_account_seen_only_elsewhere_is_never_new(self, repos: Repos) -> None:
+        assert not await repos.accounts.note(ADA, T0)
+        assert not await repos.accounts.note(ADA, T0 + timedelta(minutes=1))
+
+    async def test_an_account_seen_elsewhere_first_is_new_at_its_first_site(
+        self, repos: Repos
+    ) -> None:
         await repos.accounts.note(ADA, T0)
 
-        assert not await repos.accounts.note(Account(ADA.key, "Ada Lovelace"), T0)
+        assert await repos.accounts.note(ADA, T0 + timedelta(minutes=1), at_site=True)
+        assert not await repos.accounts.note(ADA, T0 + timedelta(minutes=2), at_site=True)
+        assert not await repos.accounts.note(ADA, T0 + timedelta(minutes=3))

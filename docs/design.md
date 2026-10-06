@@ -636,7 +636,9 @@ The label generator:
 
 People in the config are optional. They give a person one name in every network (their Telegram,
 Briar and Meshtastic accounts all signed `NatAda`). To find account ids, the admin can turn on an admin
-notice for every account the hub sees for the first time.
+notice for every account the hub sees at a site of a group for the first time. Accounts seen only
+elsewhere (a feed such as a mesh's public channel, a node heard at no endpoint) are remembered but get
+no notice, since a public channel has hundreds (D66); one that later shows up at a site gets it then.
 
 The routing script can replace this logic with its own `label(message, target, ctx)` function (§9.5),
 e.g. a different label per network, a `~` mark for accounts not in the config, the full name in
