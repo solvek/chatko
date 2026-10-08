@@ -589,7 +589,7 @@ async def test_gives_up_waiting_for_old_texts(rig: Rig) -> None:
     rig.node._timings = replace(FAST, outgoing_ttl=0.0)
     rig.api.ack_texts = False
     first = await rig.node.send_text("one", to=ADA)
-    await asyncio.sleep(0.01)
+    await asyncio.sleep(0.05)  # longer than the Windows clock tick (about 16 ms)
 
     await rig.node.send_text("two", to=ADA)
 
