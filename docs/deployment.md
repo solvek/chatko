@@ -249,7 +249,7 @@ One machine is both the server and the development machine, so the two are kept 
 | Host ports | all on `127.0.0.1`: 8883 (Mosquitto), 4413, 7001 for briar-headless | 18883, 14413, 17000 |
 | Secrets | its own `.env`, with the production bot's token | its own `.env`; no bot token until a development bot exists |
 | Briar account | the real one (D60): the people's contacts and the group «Кризовий чатко» | a new one in `lab/briar` with no contacts |
-| Groups | `crisis`: Telegram supergroup «Кризовий Чатко» ⇄ the Briar group (default routing) | `dev` (Meshtastic only, until a development bot exists) |
+| Groups | `crisis`: Telegram supergroup «Кризовий Чатко» ⇄ the Briar group ⇄ DMs to the owner's node (default routing); `test`: the Telegram supergroup and the Briar group «Chatko test», joined only to the owner's node by `routing.py` (D67) | `dev` (Meshtastic only, until a development bot exists) |
 | Node | `chatko` / `CHKO` (`!c4a7c001`); on the community broker `mqtt.wikimesh.in.ua`, root `kyiv`, encryption on, a private channel `chatkotest` and `dm` to the owner's node (D63) | `chatko dev` / `DEV` |
 | Runs as | user `chatko` (the hub), systemd timer `chatko-backup.timer` | the local lab (`lab/`) and `uv run` |
 

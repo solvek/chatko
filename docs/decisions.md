@@ -1470,3 +1470,14 @@ first time. The `AccountRegistry` keeps when that was (`first_at_site`, SQLite m
 such as `longfast`) or at no endpoint is told about once it appears at a site. Accounts known before migration 2 count as told.
 **Consequences:** production turns `new_accounts` on again. A node that only listens is never told about, which is what the notice is for:
 filling `people` with the members of the groups.
+
+## D67. A test group in production shares the owner's node with `crisis` through the routing script
+**Status:** accepted (2026-10-08, the owner).
+The owner wants the Telegram supergroup «Chatko test» in production for tests, joined only to their Meshtastic node: not to Briar and not
+to «Кризовий Чатко». The node's `dm` endpoint (`crisis.radio`) is a site of `crisis`, and an endpoint is a site of exactly one group
+(`Topology`), so a second group cannot list it.
+**Decision:** the group `test` has two sites, `test.telegram` and `test.briar` (the Briar group «Chatko test», which the hub had joined), mirrored by default. Production's `routing.py` adds `crisis.radio` to the targets of what a test site receives
+and both test sites to the targets of what `crisis.radio` receives (after the `#nomirror` check). The core stays as it
+is: a routing script may target any endpoint (`ctx.endpoint`).
+**Consequences:** a direct message from the node reaches both Telegram groups and Briar (as before); a message of the test group reaches
+the other test site and the node. `crisis`'s Telegram and Briar sites do not reach the test group.
